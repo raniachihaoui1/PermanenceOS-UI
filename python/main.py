@@ -19,6 +19,7 @@ def main() -> None:
 
     print(f"Model: {settings.openai_model}")
     print(f"OpenAI-Compatible Base URL: {settings.openai_base_url}")
+    print(f"DEBUG_GRAPH: {settings.debug_graph}")
     print(f"MCP Config Path: {settings.mcp_config_path}")
     print(f"MCP Server Key: {settings.mcp_server_key}")
     print(f"MCP Endpoint: {settings.mcp_endpoint}")
@@ -35,6 +36,7 @@ def main() -> None:
         openai_api_key=settings.openai_api_key,
         openai_base_url=settings.openai_base_url,
         openai_model=settings.openai_model,
+        debug_graph=settings.debug_graph,
         timeout_seconds=settings.request_timeout_seconds,
         max_iterations=settings.max_iterations,
     )

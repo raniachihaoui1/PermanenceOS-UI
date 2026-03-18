@@ -123,12 +123,17 @@ def run_agent(
     openai_api_key: str,
     openai_base_url: str,
     openai_model: str,
+    debug_graph: bool,
     timeout_seconds: float,
     max_iterations: int,
 ) -> str:
-    print("[graph] Initializing agent graph")
-    print(f"[graph] Model: {openai_model}")
-    print(f"[graph] Max iterations: {max_iterations}")
+    def dbg(message: str) -> None:
+        if debug_graph:
+            print(message)
+
+    dbg("[graph] Initializing agent graph")
+    dbg(f"[graph] Model: {openai_model}")
+    dbg(f"[graph] Max iterations: {max_iterations}")
 
     llm = ChatOpenAI(
         api_key=openai_api_key,
@@ -139,7 +144,7 @@ def run_agent(
     )
 
     def reason_node(state: AgentState) -> AgentState:
-        print(f"[graph][reason] Enter node | iteration={state['iteration']} | messages={len(state['messages'])}")
+        dbg(f"[graph][reason] Enter node | iteration={state['iteration']} | messages={len(state['messages'])}")
         system_prompt = SYSTEM_PROMPT.format(tool_catalog=state["tool_catalog"])
         llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}] + state["messages"]
 
@@ -149,7 +154,7 @@ def run_agent(
             raise RuntimeError("LLM response content must be a string")
 
         parsed = _normalize_llm_decision(_parse_llm_json(content))
-        print(f"[graph][reason] Parsed decision: {parsed}")
+        dbg(f"[graph][reason] Parsed decision: {parsed}")
 
         action = parsed["action"]
         if action == "final":
@@ -160,7 +165,7 @@ def run_agent(
             state["final_response"] = final_response
             state["pending_tool_name"] = None
             state["pending_tool_arguments"] = None
-            print("[graph][reason] Decision=final")
+            dbg("[graph][reason] Decision=final")
             return state
 
         if action == "tool":
@@ -173,13 +178,13 @@ def run_agent(
 
             state["pending_tool_name"] = tool_name
             state["pending_tool_arguments"] = arguments
-            print(f"[graph][reason] Decision=tool | tool_name={tool_name} | arguments={arguments}")
+            dbg(f"[graph][reason] Decision=tool | tool_name={tool_name} | arguments={arguments}")
             return state
 
         raise RuntimeError("LLM action must be either 'final' or 'tool'")
 
     def tool_node(state: AgentState) -> AgentState:
-        print("[graph][tool] Enter node")
+        dbg("[graph][tool] Enter node")
         if state["pending_tool_name"] is None or state["pending_tool_arguments"] is None:
             raise RuntimeError("Tool node called without pending tool call")
 
@@ -187,13 +192,13 @@ def run_agent(
         if state["iteration"] > state["max_iterations"]:
             raise RuntimeError("Max iterations exceeded")
 
-        print(
+        dbg(
             f"[graph][tool] Calling tool | iteration={state['iteration']} | "
             f"name={state['pending_tool_name']} | args={state['pending_tool_arguments']}"
         )
 
         tool_output = mcp_client.call_tool(state["pending_tool_name"], state["pending_tool_arguments"])
-        print(f"[graph][tool] Tool output: {tool_output}")
+        dbg(f"[graph][tool] Tool output: {tool_output}")
 
         state["messages"].append(
             {
@@ -221,9 +226,9 @@ def run_agent(
 
     def route_after_reason(state: AgentState) -> str:
         if state["final_response"] is not None:
-            print("[graph][route] reason -> finish")
+            dbg("[graph][route] reason -> finish")
             return "finish"
-        print("[graph][route] reason -> run_tool")
+        dbg("[graph][route] reason -> run_tool")
         return "run_tool"
 
     graph = StateGraph(AgentState)
@@ -241,14 +246,14 @@ def run_agent(
     graph.add_edge("tool", "reason")
 
     app = graph.compile()
-    print("[graph] Graph compiled")
+    dbg("[graph] Graph compiled")
 
     final_state = app.invoke(build_initial_state(user_prompt, tools, max_iterations))
-    print(f"[graph] Final state: {final_state}")
+    dbg(f"[graph] Final state: {final_state}")
     final_response = final_state.get("final_response")
     if not isinstance(final_response, str):
         raise RuntimeError("Agent finished without a final response")
 
-    print("[graph] Completed successfully")
+    dbg("[graph] Completed successfully")
 
     return final_response

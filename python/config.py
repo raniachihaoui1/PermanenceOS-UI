@@ -15,6 +15,7 @@ class Settings:
     openai_api_key: str
     openai_base_url: str
     openai_model: str
+    debug_graph: bool
     mcp_config_path: str
     mcp_server_key: str
     mcp_endpoint: str
@@ -31,6 +32,20 @@ def _required_env(name: str) -> str:
     if not value:
         raise ValueError(f"Missing or empty required environment variable: {name}")
     return value
+
+
+def _parse_bool_env(name: str, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+
+    raise ValueError(f"Invalid value for {name}: {raw_value}. Allowed values are 'true' or 'false'.")
 
 
 def _validate_openai_base_url(base_url: str) -> str:
@@ -102,6 +117,7 @@ def load_settings() -> Settings:
         openai_api_key=_required_env("OPENAI_API_KEY"),
         openai_base_url=_validate_openai_base_url(_required_env("OPENAI_BASE_URL")),
         openai_model=_required_env("OPENAI_MODEL"),
+        debug_graph=_parse_bool_env("DEBUG_GRAPH", False),
         mcp_config_path=str(mcp_json_path),
         mcp_server_key=mcp_server_key,
         mcp_endpoint=mcp_endpoint,
