@@ -1,3 +1,56 @@
+# =============================================================================
+# agent_graph.py — The "brain" of the AI agent
+# =============================================================================
+#
+# WHAT THIS FILE DOES:
+#   This file defines how the AI agent thinks and acts. The agent follows a
+#   simple loop:
+#
+#     1. REASON  — The AI reads your question and the list of available tools,
+#                  then decides what to do next: either call a tool or give a
+#                  final answer.
+#
+#     2. TOOL    — If the AI decided to call a tool, this step runs that tool
+#                  (e.g. a Grasshopper calculation) and hands the result back
+#                  to the AI so it can keep going.
+#
+#     3. REPEAT  — Steps 1–2 repeat until the AI has everything it needs to
+#                  give a complete final answer.
+#
+#   The structure of this loop is called a "graph" (hence the filename). The
+#   graph is built with a library called LangGraph.
+#
+# KEY PIECES YOU MIGHT WANT TO CHANGE:
+#
+#   SYSTEM_PROMPT (line ~25)
+#     This is the instruction sheet the AI reads before every conversation.
+#     Change this text to give the AI a different personality, more specific
+#     rules, or a different output format. For example:
+#       - "Always respond in bullet points."
+#       - "You are an expert structural engineer assistant."
+#       - "Return results as a JSON object."
+#
+#   max_iterations (passed in from main.py)
+#     This is the maximum number of tool calls the agent is allowed to make
+#     before it is forced to stop. Raise it if your task needs many tool calls;
+#     lower it to keep things fast and cheap.
+#
+#   route_after_reason (line ~195)
+#     This is the decision function that chooses which step comes next in the
+#     graph. If you wanted the agent to do something different after calling a
+#     tool — for example, a validation step before looping back — you would
+#     add a new node and wire it in here.
+#
+#   Adding a new node
+#     To add a new step to the agent loop (e.g. a "summarize" step after the
+#     final answer), you would:
+#       1. Write a new function like `def summarize_node(state): ...`
+#       2. Register it:  graph.add_node("summarize", summarize_node)
+#       3. Wire it in:   graph.add_edge("reason", "summarize")
+#                        graph.add_edge("summarize", END)
+#
+# =============================================================================
+
 from __future__ import annotations
 
 import json
