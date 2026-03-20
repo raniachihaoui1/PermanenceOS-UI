@@ -9,12 +9,12 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-
 @dataclass(frozen=True)
 class Settings:
-    openai_api_key: str
-    openai_base_url: str
-    openai_model: str
+    llm_provider: str
+    api_key: str
+    base_url: str
+    llm_model: str
     debug_graph: bool
     mcp_config_path: str
     mcp_server_key: str
@@ -24,7 +24,7 @@ class Settings:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def _required_env(name: str) -> str:
@@ -48,15 +48,15 @@ def _parse_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"Invalid value for {name}: {raw_value}. Allowed values are 'true' or 'false'.")
 
 
-def _validate_openai_base_url(base_url: str) -> str:
-    parsed = urlparse(base_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("OPENAI_BASE_URL must be a valid http/https URL")
+# def _validate_openai_base_url(base_url: str) -> str:
+#     parsed = urlparse(base_url)
+#     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+#         raise ValueError("OPENAI_BASE_URL must be a valid http/https URL")
 
-    if not parsed.path.rstrip("/").endswith("/v1"):
-        raise ValueError("OPENAI_BASE_URL must include '/v1' for OpenAI-compatible Chat Completions")
+#     if not parsed.path.rstrip("/").endswith("/v1"):
+#         raise ValueError("OPENAI_BASE_URL must include '/v1' for OpenAI-compatible Chat Completions")
 
-    return base_url
+#     return base_url
 
 
 def _load_mcp_server_from_json(config_path: Path) -> tuple[str, str]:
@@ -113,10 +113,42 @@ def load_settings() -> Settings:
     timeout_value = os.environ.get("REQUEST_TIMEOUT_SECONDS", "30")
     max_iterations_value = os.environ.get("MAX_ITERATIONS", "4")
 
+    llm_provider = _required_env("LLM_PROVIDER").strip().lower()
+
+    # Load settings for the selected LLM provider
+    if llm_provider == "local":
+        api_key = "No API Key Required"
+        base_url=_required_env("LOCAL_LLM_ENDPOINT")
+        llm_model = "local"
+
+    elif llm_provider == "cloudflare":
+        api_key=_required_env("CF_API_TOKEN")
+        base_url = f"https://api.cloudflare.com/client/v4/accounts/{_required_env('CF_ACCOUNT_ID')}/ai/v1"
+        llm_model=_required_env("CF_MODEL")
+
+    elif llm_provider == "openai":
+        api_key=_required_env("OPENAI_API_KEY")
+        base_url="https://api.openai.com/v1"
+        llm_model=_required_env("OPENAI_MODEL")
+
+    elif llm_provider == "google":
+        api_key=_required_env("GOOGLE_API_KEY")
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai"
+        llm_model=_required_env("GOOGLE_MODEL")
+
+    elif llm_provider == "anthropic":
+        api_key=_required_env("ANTHROPIC_API_KEY")
+        base_url="https://api.anthropic.com/v1/"
+        llm_model=_required_env("ANTHROPIC_MODEL")
+
+    else:
+        raise ValueError(f"Unsupported LLM_PROVIDER: {llm_provider}")
+
     return Settings(
-        openai_api_key=_required_env("OPENAI_API_KEY"),
-        openai_base_url=_validate_openai_base_url(_required_env("OPENAI_BASE_URL")),
-        openai_model=_required_env("OPENAI_MODEL"),
+        llm_provider=llm_provider,
+        api_key=api_key,
+        base_url=base_url,
+        llm_model=llm_model,
         debug_graph=_parse_bool_env("DEBUG_GRAPH", False),
         mcp_config_path=str(mcp_json_path),
         mcp_server_key=mcp_server_key,

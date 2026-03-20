@@ -17,8 +17,9 @@ def main() -> None:
     args = parse_args()
     settings = load_settings()
 
-    print(f"Model: {settings.openai_model}")
-    print(f"OpenAI-Compatible Base URL: {settings.openai_base_url}")
+    print(f"Provider: {settings.llm_provider}")
+    print(f"Model: {settings.llm_model}")
+    print(f"Base URL: {settings.base_url}")
     print(f"DEBUG_GRAPH: {settings.debug_graph}")
     print(f"MCP Config Path: {settings.mcp_config_path}")
     print(f"MCP Server Key: {settings.mcp_server_key}")
@@ -33,9 +34,9 @@ def main() -> None:
         user_prompt=args.prompt,
         tools=tools,
         mcp_client=mcp_client,
-        openai_api_key=settings.openai_api_key,
-        openai_base_url=settings.openai_base_url,
-        openai_model=settings.openai_model,
+        api_key=settings.api_key,
+        base_url=settings.base_url,
+        llm_model=settings.llm_model,
         debug_graph=settings.debug_graph,
         timeout_seconds=settings.request_timeout_seconds,
         max_iterations=settings.max_iterations,
