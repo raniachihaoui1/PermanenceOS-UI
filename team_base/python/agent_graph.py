@@ -1,55 +1,6 @@
 # =============================================================================
 # agent_graph.py — The "brain" of the AI agent
 # =============================================================================
-#
-# WHAT THIS FILE DOES:
-#   This file defines how the AI agent thinks and acts. The agent follows a
-#   simple loop:
-#
-#     1. REASON  — The AI reads your question and the list of available tools,
-#                  then decides what to do next: either call a tool or give a
-#                  final answer.
-#
-#     2. TOOL    — If the AI decided to call a tool, this step runs that tool
-#                  (e.g. a Grasshopper calculation) and hands the result back
-#                  to the AI so it can keep going.
-#
-#     3. REPEAT  — Steps 1–2 repeat until the AI has everything it needs to
-#                  give a complete final answer.
-#
-#   The structure of this loop is called a "graph" (hence the filename). The
-#   graph is built with a library called LangGraph.
-#
-# KEY PIECES YOU MIGHT WANT TO CHANGE:
-#
-#   SYSTEM_PROMPT (in nodes/reason_node.py)
-#     This is the instruction sheet the AI reads before every conversation.
-#     Change this text to give the AI a different personality, more specific
-#     rules, or a different output format. For example:
-#       - "Always respond in bullet points."
-#       - "You are an expert structural engineer assistant."
-#       - "Return results as a JSON object."
-#
-#   max_iterations (passed in from main.py)
-#     This is the maximum number of tool calls the agent is allowed to make
-#     before it is forced to stop. Raise it if your task needs many tool calls;
-#     lower it to keep things fast and cheap.
-#
-#   route_after_reason (in nodes/route_after_reason.py)
-#     This is the decision function that chooses which step comes next in the
-#     graph. If you wanted the agent to do something different after calling a
-#     tool — for example, a validation step before looping back — you would
-#     add a new node and wire it in here.
-#
-#   Adding a new node
-#     To add a new step to the agent loop (e.g. a "summarize" step after the
-#     final answer), you would:
-#       1. Write a new function like `def summarize_node(state): ...`
-#       2. Register it:  graph.add_node("summarize", summarize_node)
-#       3. Wire it in:   graph.add_edge("reason", "summarize")
-#                        graph.add_edge("summarize", END)
-#
-# =============================================================================
 
 from __future__ import annotations
 
@@ -62,8 +13,14 @@ from langgraph.graph import END, START, StateGraph
 from execution_graph_ascii import print_execution_graph_ascii
 from mcp_client import McpClient
 from nodes.classifier_node import CLASSIFIER_RESPONSE_FORMAT, create_classifier_node
+from nodes.domain_registry import AVAILABLE_DOMAINS, DOMAIN_REGISTRY
 from nodes.reason_node import create_reason_node
-from nodes.routing import WorkflowState, create_route_after_reason, create_route_after_classifier
+from nodes.routing import (
+    WorkflowState,
+    create_route_after_reason,
+    create_route_after_classifier,
+    create_route_after_run_domain,
+)
 from nodes.tool_node import create_tool_node, get_llm_response_format
 
 
@@ -118,14 +75,13 @@ def build_initial_state(user_prompt: str, tools: list[dict[str, Any]], max_itera
 def _build_workflow_initial_state(user_prompt: str) -> WorkflowState:
     '''
     The parent graph starts with just the user prompt. The classifier fills in
-    the route, and the runner nodes fill in the domain-specific answers.
+    selected_domains, and the runner nodes fill in domain-specific answers.
     '''
 
     return {
         "user_prompt": user_prompt,
-        "route": None,
-        "volume_response": None,
-        "area_response": None,
+        "selected_domains": [],
+        "domain_responses": {},
         "final_response": None,
     }
 
@@ -161,16 +117,19 @@ def _group_tools_by_domain(tools: list[dict[str, Any]]) -> dict[str, list[dict[s
     '''
 
     grouped_tools: dict[str, list[dict[str, Any]]] = {
-        "volume": [],
-        "area": [],
+        domain: [] for domain in AVAILABLE_DOMAINS
     }
 
     for tool in tools:
         tool_name = str(tool.get("name", "")).lower()
-        if "volume" in tool_name:
-            grouped_tools["volume"].append(tool)
-        elif "area" in tool_name:
-            grouped_tools["area"].append(tool)
+        for domain_name in AVAILABLE_DOMAINS:
+            domain_config = DOMAIN_REGISTRY[domain_name]
+            match_tokens = domain_config.get("tool_name_contains", [])
+            if not isinstance(match_tokens, list):
+                continue
+            if any(str(token).lower() in tool_name for token in match_tokens):
+                grouped_tools[domain_name].append(tool)
+                break
 
     return grouped_tools
 
@@ -281,6 +240,11 @@ def _create_domain_runner_node(
     '''
 
     def run_domain(state: WorkflowState) -> WorkflowState:
+        if domain_name not in state["selected_domains"]:
+            # Fan-out may trigger non-selected domain nodes in a larger registry.
+            # Returning no updates keeps this branch a no-op.
+            return {}
+
         response = _run_domain_agent(
             domain_name=domain_name,
             user_prompt=state["user_prompt"],
@@ -294,15 +258,9 @@ def _create_domain_runner_node(
             max_iterations=max_iterations,
         )
 
-        # Important for parallel fan-out: return only the field this branch owns.
-        # If each branch returns the entire state, LangGraph treats unchanged keys
-        # (like user_prompt/route) as concurrent writes and raises an error.
-        if domain_name == "volume":
-            return {"volume_response": response}
-        elif domain_name == "area":
-            return {"area_response": response}
-        else:
-            raise RuntimeError(f"Unsupported domain runner: {domain_name}")
+        # Important for parallel fan-out: each branch returns only its own
+        # domain result so the reducer can merge branch outputs safely.
+        return {"domain_responses": {domain_name: response}}
 
     return run_domain
 
@@ -312,26 +270,25 @@ def _combine_results_node(state: WorkflowState) -> WorkflowState:
     Turn the branch outputs back into one final answer for the user.
     '''
 
-    route = state["route"]
+    selected_domains = state["selected_domains"]
+    domain_responses = state.get("domain_responses", {})
 
-    if route == "volume":
-        final_response = state["volume_response"]
-    elif route == "area":
-        final_response = state["area_response"]
-    elif route == "both":
-        volume_response = state["volume_response"]
-        area_response = state["area_response"]
-        if volume_response is None or area_response is None:
-            raise RuntimeError("Both-route workflow finished without both branch results")
+    if not selected_domains:
+        raise RuntimeError("Workflow combine step received no selected domains")
 
-        final_response = (
-            "Volume result:\n"
-            f"{volume_response}\n\n"
-            "Area result:\n"
-            f"{area_response}"
-        )
+    missing_domains = [domain for domain in selected_domains if domain not in domain_responses]
+    if missing_domains:
+        raise RuntimeError(f"Workflow combine step is missing responses for: {missing_domains}")
+
+    if len(selected_domains) == 1:
+        final_response = domain_responses[selected_domains[0]]
     else:
-        raise RuntimeError("Workflow combine step received an invalid route")
+        sections: list[str] = []
+        for domain in selected_domains:
+            domain_config = DOMAIN_REGISTRY.get(domain, {})
+            label = str(domain_config.get("label", domain.title()))
+            sections.append(f"{label} result:\n{domain_responses[domain]}")
+        final_response = "\n\n".join(sections)
 
     if not isinstance(final_response, str):
         raise RuntimeError("Workflow combine step did not produce a final response")
@@ -340,15 +297,27 @@ def _combine_results_node(state: WorkflowState) -> WorkflowState:
     return state
 
 
-def _fan_out_both_node(state: WorkflowState) -> WorkflowState:
+def _wait_for_parallel_join_node(state: WorkflowState) -> WorkflowState:
     '''
-    This is a tiny pass-through node used only to make the graph shape easy to
-    read: classify -> fan_out_both -> (run_volume_both and run_area_both).
+    This node is a safe sink for each parallel branch in multi-domain mode.
 
-    The parallel behavior is created by giving this node two outgoing edges.
+    Why it exists:
+    - In multi-domain routes, each branch should finish quietly until all
+      selected domains are complete.
+    - Using this sink avoids accidentally triggering combine early.
     '''
 
-    return state
+    # Return no state updates. This node is only a parking place for branches
+    # while per-domain conditional routing decides when combine can run.
+    return {}
+
+
+def _build_domain_name_map() -> dict[str, str]:
+    """
+    Build a reusable map from domain key to graph node name.
+    """
+
+    return {domain: f"run_{domain}" for domain in AVAILABLE_DOMAINS}
 
 
 def run_agent(
@@ -397,56 +366,66 @@ def run_agent(
     )
 
     classifier_node = create_classifier_node(llm=classifier_llm, dbg=dbg)
-    run_volume_node = _create_domain_runner_node(
-        domain_name="volume",
-        tools=grouped_tools["volume"],
-        mcp_client=mcp_client,
-        api_key=api_key,
-        base_url=base_url,
-        llm_model=llm_model,
-        debug_graph=debug_graph,
-        timeout_seconds=timeout_seconds,
-        max_iterations=max_iterations,
-    )
-    run_area_node = _create_domain_runner_node(
-        domain_name="area",
-        tools=grouped_tools["area"],
-        mcp_client=mcp_client,
-        api_key=api_key,
-        base_url=base_url,
-        llm_model=llm_model,
-        debug_graph=debug_graph,
-        timeout_seconds=timeout_seconds,
-        max_iterations=max_iterations,
-    )
+    domain_node_names = _build_domain_name_map()
+    run_domain_nodes: dict[str, Callable[[WorkflowState], WorkflowState]] = {}
+    for domain in AVAILABLE_DOMAINS:
+        run_domain_nodes[domain] = _create_domain_runner_node(
+            domain_name=domain,
+            tools=grouped_tools[domain],
+            mcp_client=mcp_client,
+            api_key=api_key,
+            base_url=base_url,
+            llm_model=llm_model,
+            debug_graph=debug_graph,
+            timeout_seconds=timeout_seconds,
+            max_iterations=max_iterations,
+        )
+
     route_after_classifier = create_route_after_classifier(dbg=dbg)
+    route_after_run_domain = {
+        domain: create_route_after_run_domain(domain_name=domain, dbg=dbg)
+        for domain in AVAILABLE_DOMAINS
+    }
 
     # This outer graph does only orchestration. The actual reasoning and tool
     # calls happen inside the reusable domain sub-agents created above.
     graph = StateGraph(WorkflowState)
     graph.add_node("classify", classifier_node)
-    graph.add_node("fan_out_both", _fan_out_both_node)
-    graph.add_node("run_volume_only", run_volume_node)
-    graph.add_node("run_area_only", run_area_node)
-    graph.add_node("run_volume_both", run_volume_node)
-    graph.add_node("run_area_both", run_area_node)
+    graph.add_node("wait_for_parallel_join", _wait_for_parallel_join_node)
+    for domain in AVAILABLE_DOMAINS:
+        graph.add_node(domain_node_names[domain], run_domain_nodes[domain])
     graph.add_node("combine", _combine_results_node)
     graph.add_edge(START, "classify")
+
+    classify_targets: dict[str, str] = {}
+    for domain in AVAILABLE_DOMAINS:
+        node_name = domain_node_names[domain]
+        classify_targets[node_name] = node_name
+
     graph.add_conditional_edges(
         "classify",
         route_after_classifier,
-        {
-            "run_volume_only": "run_volume_only",
-            "run_area_only": "run_area_only",
-            "fan_out_both": "fan_out_both",
-        },
+        classify_targets,
     )
-    graph.add_edge("run_volume_only", "combine")
-    graph.add_edge("run_area_only", "combine")
-    graph.add_edge("fan_out_both", "run_volume_both")
-    graph.add_edge("fan_out_both", "run_area_both")
-    # Join point: combine runs only after both parallel branches finish.
-    graph.add_edge(["run_volume_both", "run_area_both"], "combine")
+
+    # For single-domain requests, these conditional edges send control directly
+    # to combine. For multi-domain requests, they route to a sink and wait for the
+    # explicit parallel join edge below.
+    for domain in AVAILABLE_DOMAINS:
+        graph.add_conditional_edges(
+            domain_node_names[domain],
+            route_after_run_domain[domain],
+            {
+                "combine": "combine",
+                "wait_for_parallel_join": "wait_for_parallel_join",
+            },
+        )
+
+    # Join point for multi-domain dispatch: combine runs only after all known
+    # domain nodes have reported completion (selected domains compute results,
+    # non-selected domains no-op).
+    graph.add_edge([domain_node_names[domain] for domain in AVAILABLE_DOMAINS], "combine")
+
     graph.add_edge("combine", END)
 
     app = graph.compile()
