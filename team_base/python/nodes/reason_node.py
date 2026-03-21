@@ -10,21 +10,39 @@ You can either answer directly or request one MCP tool call.
 Available tools:
 {tool_catalog}
 
-Return strictly valid JSON with exactly one of the following shapes:
-1) {{\"final_response\": \"...\"}}
-2) {{\"tool_call\": {{\"name\": \"<tool-name>\", \"arguments\": {{...}}}}}}
-3) {{\"tool_calls\": [{{\"name\": \"<tool-name>\", \"arguments\": {{...}}}}, ...]}}
+Return strictly valid JSON with exactly this shape:
+{{
+  \"action\": \"final\" | \"tool\",
+  \"final_response\": \"...\",
+  \"tool_calls\": [{{\"name\": \"<tool-name>\", \"arguments\": {{...}}}}, ...]
+}}
 Output rules:
 - Return JSON only, with no prose or explanation.
 - Do not use markdown code fences.
 - Do not use XML tags like <function_calls>.
 - Do not include any text before or after the JSON object.
 - Do not include flags such as ```json or ```python.
-- If you return tool calls, they must be inside one JSON object using either \"tool_call\" or \"tool_calls\".
+- If action is \"final\", set tool_calls to [] and put the answer in final_response.
+- If action is \"tool\", set final_response to \"\" and put one or more tool calls in tool_calls.
 """
 
 
+def _strip_markdown_code_fence(content: str) -> str:
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return stripped
+
+    lines = stripped.splitlines()
+    if len(lines) < 3:
+        return stripped
+    if not lines[-1].strip().startswith("```"):
+        return stripped
+
+    return "\n".join(lines[1:-1]).strip()
+
+
 def _parse_llm_json(content: str) -> dict[str, Any]:
+    content = _strip_markdown_code_fence(content)
     try:
         parsed = json.loads(content)
         if not isinstance(parsed, dict):
@@ -52,6 +70,33 @@ def _parse_llm_json(content: str) -> dict[str, Any]:
 
 
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
+    action = parsed.get("action")
+    if action == "final":
+        return {
+            "action": "final",
+            "final_response": parsed["final_response"],
+        }
+
+    if action == "tool":
+        tool_calls = parsed.get("tool_calls")
+        if not isinstance(tool_calls, list) or not tool_calls:
+            raise RuntimeError("LLM tool decision must include a non-empty 'tool_calls' array")
+
+        normalized_tool_calls: list[dict[str, Any]] = []
+        for tool in tool_calls:
+            if not isinstance(tool, dict):
+                raise RuntimeError("Each tool call must be an object")
+            normalized_tool_calls.append(
+                {
+                    "tool_name": tool["name"],
+                    "arguments": tool["arguments"],
+                }
+            )
+        return {
+            "action": "tool",
+            "tool_calls": normalized_tool_calls,
+        }
+
     if "final_response" in parsed:
         return {
             "action": "final",

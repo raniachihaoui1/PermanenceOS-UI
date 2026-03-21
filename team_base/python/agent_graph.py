@@ -144,7 +144,7 @@ def run_agent(
     dbg(f"[graph] Model: {llm_model}")
     dbg(f"[graph] Max iterations: {max_iterations}")
 
-    model_kwargs = get_llm_response_format()
+    model_kwargs = get_llm_response_format(tools)
 
     # Initialize the language model with the specified parameters.
     llm = ChatOpenAI(
