@@ -123,24 +123,24 @@ pip install -r requirements.txt
 
 ### Configure (OpenAI-Compatible Only)
 
-Set environment variables before running:
 
-- `OPENAI_API_KEY` (if using your endpoint does not require an API key, put in a placeholder such as `"lm-studio"`)
-- `OPENAI_BASE_URL` (must include `/v1`, example: `"http://localhost:1234/v1"`)
-- `OPENAI_MODEL` (example: `"qwen2.5-7b-instruct"`)
+#### Environment Variables (.env)
+You will need to set the appropriate environment variables in a `.env` file based on the LLM provider you are using. An example `.env` file is provided as `.env.example`.
 
-The app auto-loads `.env` from repository root before reading these values.
-`OPENAI_API_KEY` must be non-empty, use a placeholder value such as `"lm-studio"` if your endpoint does not require an API key.
+We currently support the following LLM providers: "local", "google", "cloudflare", "openai", and "anthropic". You should set the `LLM_PROVIDER` variable in your `.env` file to the provider you want to use. Depending on the provider, you will also need to set additional environment variables such as API keys and model names. We do not expect you to use multiple providers simultaneously, however you should coordinate with your team to ensure consistency in the LLM provider being used for the project.
 
+I suggest starting with using the "cloudflare" provider, as it offers a free tier and does not require a credit card, and serves open weight models. This makes it a convenient option for initial testing and development without incurring costs, adds control to the llm performance, and helps future proof your setup. For more information, see the Cloudflare Workers AI documentation at https://developers.cloudflare.com/workers-ai/.
+
+Additionally, you can set the `DEBUG_GRAPH` and `MAX_ITERATIONS` environment variables in your `.env` file to control the debugging output and the maximum number of iterations for the StateGraph, respectively. `DEBUG_GRAPH` should be set to "true" to enable step traces, and `MAX_ITERATIONS` should be set to an integer value representing the maximum number of iterations.
+
+#### MCP Endpoint Configuration
 MCP endpoint settings are loaded from `mcp.json` in the repository root.
 The agent uses the first server entry in `mcpServers`.
 Supported endpoint fields in that server entry are `url` or `args[0]`.
 
-Optional:
+If you need to run tools from multiple MCP endpoints, you can add additional server entries in the `mcpServers` array in `mcp.json`. The agent will use the first server entry by default, but you can modify the agent code to select a different server entry if needed.
 
-- `REQUEST_TIMEOUT_SECONDS` (default `30`)
-- `MAX_ITERATIONS` (default `4`)
-- `DEBUG_GRAPH` (default `false`; set `true` to print StateGraph step traces)
+mcp.json is included in the .gitignore file since the file's contents will be unique to each developer's environment. An example `mcp.json` file is provided in the repository as `mcp.example.json`. You can use this example file as a template to create your own `mcp.json` with the appropriate MCP endpoint settings for your environment (see above for details on copying from Grasshopper).
 
 ### Run
 
@@ -169,5 +169,14 @@ graph TD
 
 You will need to modify `python/agent_graph.py` if you want to change the default workflow of the Python agent. This file defines how the agent processes prompts, interacts with MCP tools, and generates responses. The implementation here is designed to be minimal and fail-fast, meaning it does not include retries, fallbacks, or recovery layers. You can extend or modify this graph to suit your specific needs for the studio project.
 
-Also, the current implementation exposes all tools to the agent without any filtering or access control. As part of your thoughtful agent design, you will be expected to implement appropriate filtering and routing of tool access to ensure that the agent only uses the tools it is authorized to use, and are best for the specific task at hand. For example the default implementation exposes volume and area calculations for spheres, cones, cylinders, cubes, triangular pyramids and square pyramids. Your agent could first determine if the user's prompt is area or volume based, and then only expose the relevant tools for either volume or area. Or your agent could first determine if the user is asking about a specific shape, and then only expose the tools relevant to that shape. It is up to you to implement this filtering and routing logic in your agent graph.
+Also, the current implementation runs two sub-graphs in parallel: one for volume calculations and one for area calculations. Each sub-graph is responsible for invoking the appropriate MCP tools for its domain, and the results are then combined into a final response. The sub-graphs use the same code structure and logic, but operate on different sets of tools specific to their respective domains, using the name of the domain to determine which tools to use. For example, the volume sub-graph will only use tools with `volume` in their name, and the area sub-graph will only use tools with `area` in their name.
 
+The agent first classifies the user's prompt to determine whether it is related to volume or area. Based on this classification, it routes the prompt to the appropriate sub-graph, which then invokes the relevant MCP tools for that domain. Once the sub-graphs complete their processing, the results are combined into a final response that is returned to the user.
+
+We attempted to write this example such that additional parallel sub-graphs could be added easily by following the same pattern: classify the prompt, route to the appropriate sub-graph, run the domain-specific MCP tools, and then combine the results. However, this is still a simple implementation, and we expect more complex state management, error handling, and orchestration logic to be required for the more sophisticated agents you will develop over the course.
+
+As much as possible, we have attempted to containerize the graph nodes to make them modular and reusable. Each node in the graph is designed to perform a specific task, and by containerizing them, you can easily swap out or update individual nodes without affecting the rest of the graph. 
+
+**Before vibe coding, or editing any part of the example file, make sure you understand the structure of the agent graph and the role of each node.** This will help you avoid introducing errors and ensure that your modifications are consistent with the overall design of the agent. LangGraph has a comprehensive set of documentation and examples that can help you understand how to work with graph nodes, define workflows, and manage state transitions. You can find more information in the LangGraph documentation at https://docs.langchain.com/oss/python/langgraph/quickstart.
+
+Asking questions and reviewing the documentation now will save you valuable time and effort later when you are modifying the agent graph or adding new functionality. It only gets more complicated from here, so make sure you start from a strong foundation of knowledge.
