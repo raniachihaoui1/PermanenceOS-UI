@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from typing import Any, Callable
+from langchain_openai import ChatOpenAI
 
 from mcp_client import McpClient
 
@@ -104,6 +105,28 @@ def get_llm_response_format(tools: list[dict[str, Any]]) -> dict[str, Any]:
             },
         }
     }
+
+
+def create_chat_llm(
+    api_key: str,
+    base_url: str,
+    llm_model: str,
+    timeout_seconds: float,
+    model_kwargs: dict[str, Any] | None = None,
+) -> ChatOpenAI:
+    '''
+    Both the classifier and the domain sub-agents use the same model settings.
+    This helper keeps that setup in one place so the code stays easy to read.
+    '''
+
+    return ChatOpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        model=llm_model,
+        timeout=timeout_seconds,
+        temperature=0,
+        model_kwargs=model_kwargs or {},
+    )
 
 
 def create_tool_node(

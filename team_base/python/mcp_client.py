@@ -48,7 +48,7 @@ class McpClient:
         self._rpc(
             "initialize",
             {
-                "protocolVersion": "2024-11-05",
+                # "protocolVersion": "2024-11-05",
                 "clientInfo": {
                     "name": "aia26-studio-python-agent",
                     "version": "0.1.0",

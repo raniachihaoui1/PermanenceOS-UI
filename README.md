@@ -157,10 +157,14 @@ The agent graph is in `python/agent_graph.py` and defines the default workflow f
 ```mermaid
 graph TD
     A[Start] --> B[Receive Prompt]
-    B --> C[Process Prompt with LangGraph]
-    C --> D[Call MCP Tools]
-    D --> E[Generate Response]
-    E --> F[End]
+    B --> C[Classify Prompt as Area or Volume]
+    C --> D[Run Volume Sub-Graph]
+    C --> E[Run Area Sub-Graph]
+    D --> F[Run Volume MCP Tools]
+    E --> G[Run Area MCP Tools]
+    F --> H[Wait for Parallel MCP Tool Responses]
+    G --> H[Wait for Parallel MCP Tool Responses]
+    H --> I[Generate Response]
 ```
 
 You will need to modify `python/agent_graph.py` if you want to change the default workflow of the Python agent. This file defines how the agent processes prompts, interacts with MCP tools, and generates responses. The implementation here is designed to be minimal and fail-fast, meaning it does not include retries, fallbacks, or recovery layers. You can extend or modify this graph to suit your specific needs for the studio project.
