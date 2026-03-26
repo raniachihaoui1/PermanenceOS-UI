@@ -10,6 +10,13 @@ def combine_results_node(state: WorkflowState) -> WorkflowState:
     '''
     Turn the branch outputs back into one final answer for the user.
     '''
+    def dbg(message: str) -> None:
+        '''
+        Prints a debug message if debug_graph is True.
+        '''
+        if state.get("debug_graph", False):
+            print(message)
+
 
     selected_domains = state["selected_domains"]
     domain_responses = state.get("domain_responses", {})
@@ -38,19 +45,25 @@ def combine_results_node(state: WorkflowState) -> WorkflowState:
         llm_model=state.get("llm_model", ""),
         timeout_seconds=state.get("timeout_seconds", 30),
     )
-    print(
-        f"""
-        api_key={state.get("api_key", "")}
-        base_url={state.get("base_url", "")}
-        llm_model={state.get("llm_model", "")}
-        timeout_seconds={state.get("timeout_seconds", 30)}
-        input={final_response}
-
-        """
+    dbg(
+        "\n".join([
+            f"api_key={state.get('api_key', '')}",
+            f"base_url={state.get('base_url', '')}",
+            f"llm_model={state.get('llm_model', '')}",
+            f"timeout_seconds={state.get('timeout_seconds', 30)}",
+            f"input={final_response}",
+        ])
     )
-    final_response = llm.invoke(final_response)
+    system_prompt = "You are a helpful assistant that combines multiple domain-specific results into a single coherent response, based on the user's original prompt."
+    user_original_prompt = state.get("user_prompt", "")
 
-
+    result = llm.invoke(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Original prompt: {user_original_prompt}\n\nDomain results:\n{final_response}"},
+        ]
+    )
+    final_response = result.content
     if not isinstance(final_response, str):
         raise RuntimeError("Workflow combine step did not produce a final response")
 

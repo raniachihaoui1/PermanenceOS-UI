@@ -34,6 +34,11 @@ class WorkflowState(TypedDict):
     selected_domains: list[str]
     domain_responses: Annotated[dict[str, str], _merge_domain_responses]
     final_response: str | None
+    api_key: str
+    base_url: str
+    llm_model: str
+    timeout_seconds: float
+    debug_graph: bool
 
 
 def create_route_after_reason(dbg: Callable[[str], None]) -> Callable[[dict[str, Any]], str]:

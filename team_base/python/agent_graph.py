@@ -21,7 +21,14 @@ from nodes.routing import (
 )
 
 
-def _build_workflow_initial_state(user_prompt: str) -> WorkflowState:
+def _build_workflow_initial_state(
+    user_prompt: str,
+    api_key: str,
+    base_url: str,
+    llm_model: str,
+    timeout_seconds: float,
+    debug_graph: bool,
+) -> WorkflowState:
     '''
     The parent graph starts with just the user prompt. The classifier fills in
     selected_domains, and the runner nodes fill in domain-specific answers.
@@ -31,7 +38,12 @@ def _build_workflow_initial_state(user_prompt: str) -> WorkflowState:
         "user_prompt": user_prompt,
         "selected_domains": [],
         "domain_responses": {},
+        "debug_graph": debug_graph,
         "final_response": None,
+        "api_key": api_key,
+        "base_url": base_url,
+        "llm_model": llm_model,
+        "timeout_seconds": timeout_seconds,
     }
 
 
@@ -130,8 +142,17 @@ def run_agent(
     app = graph.compile()
     dbg("[graph] Graph compiled")
 
-    final_state = app.invoke(_build_workflow_initial_state(user_prompt))
-    dbg(f"[graph] Final state: {final_state}")
+    final_state = app.invoke(
+        _build_workflow_initial_state(
+            user_prompt=user_prompt,
+            api_key=api_key,
+            base_url=base_url,
+            llm_model=llm_model,
+            timeout_seconds=timeout_seconds,
+            debug_graph=debug_graph,
+        )
+    )
+    dbg("[graph] Final state received")
     final_response = final_state.get("final_response")
     if not isinstance(final_response, str):
         raise RuntimeError("Agent finished without a final response")

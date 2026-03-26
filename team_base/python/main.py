@@ -41,7 +41,9 @@ def main() -> None:
         llm_provider=settings.llm_provider,
     )
     print("\nAgent response:\n")
-    print(response)
+    # Replace problematic Unicode characters for Windows terminal compatibility
+    safe_response = response.encode('ascii', errors='replace').decode('ascii')
+    print(safe_response)
 
     mcp_client.close()
 
