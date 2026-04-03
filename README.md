@@ -178,10 +178,10 @@ mcp.json is included in the .gitignore file since the file's contents will be un
 ### Run
 
 ```bash
-python python/main.py "Use available tools to solve this prompt"
+python team_01/python/main.py "Use available tools to solve this prompt"
 ```
 
-The script prints selected model/base URL, MCP endpoint information, discovered tool count, and final response. If DEBUG_GRAPH is set to true, it will also print step traces of the StateGraph execution, and the intermediate states of the agent as it processes the prompt.
+The script prints selected model/base URL, MCP endpoint information, discovered tool count, and final response. If DEBUG_GRAPH is set to true, it will also print step traces of the StateGraph execution, and the intermediate states of the agent as it processes the prompt. This example is for team 1, so make sure to change the path to the main.py file for your respective team when running the script.
 
 ### Default Agent Graph
 
