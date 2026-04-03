@@ -9,6 +9,8 @@ Each team will have a separate branch in the repository where they will develop 
 
 Feel free to add any additional files or directories within your team's folder as needed for your development, but please do not modify any files outside of your team's designated area. If you need to add shared resources or documentation that is relevant to all teams, please coordinate with the instructors to determine the best way to include that information without causing conflicts in the codebase.
 
+Check out this link for information about managing branches on Github Desktop: https://docs.github.com/en/desktop/making-changes-in-a-branch/managing-branches-in-github-desktop
+
 ## Team Base Directory
 
 The `team_base` directory contains the base example files for each team to start with. This includes the Grasshopper Cluster files for MCP Tool definitions and results, as well as the working test Grasshopper definition that is set up to run the Swiftlet MCP Server. We have copied these into each team's respective directory to provide a starting point for your development. But if you need to refer back to the original base files, you can always find them in the `team_base` directory.
@@ -24,6 +26,8 @@ Each week, each team must make a single pull request to merge their changes from
 The instructors will review the pull requests each week and only approve them if they only contain changes within the team's designated folder and branch. If any changes are found outside of the team's designated area, the pull request will be rejected, and the team will not be able to merge their changes into the main branch until the following week. This is to ensure that each team's work remains isolated and does not interfere with the work of other teams until we are ready to merge everything together at the end of the studio project.
 
 We will not be testing your tools or agents on a weekly basis, until near the end of the studio project when we will be running a final evaluation. However, it is important that you follow the guidelines and structure outlined in this README and the project documentation to ensure that your tools and agents are developed in a way that is compatible with the overall project requirements and can be successfully integrated into the final codebase.
+
+Check out this link for information about making pull requests on Github Desktop: https://docs.github.com/en/desktop/working-with-your-remote-repository-on-github-or-github-enterprise/creating-an-issue-or-pull-request-from-github-desktop
 
 ## Coordination with Other Teams
 
