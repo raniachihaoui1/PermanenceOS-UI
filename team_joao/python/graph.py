@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     iteration: int                       # current tool-call count
     max_iterations: int                  # safety cap (set from .env)
     tool_catalog: str                    # formatted list of available MCP tools
+    layout_json_string: str              # current layout as a JSON string, injected into tool calls
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "iteration": 0,
         "max_iterations": ctx.max_iterations,
         "tool_catalog": _format_tool_catalog(ctx.tools),
+        "layout_json_string": json.dumps(ctx.layout_data),
     }
 
 

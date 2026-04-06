@@ -29,6 +29,12 @@ def build_tool_node(mcp_client: Any, allowed_tools: list[dict[str, Any]], edited
             # Strip null values that some LLMs include for unused optional fields
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
+            # Always inject layout_json from Python state rather than trusting the LLM
+            # to reproduce it — LLMs can introduce subtle JSON syntax errors when
+            # re-serialising complex nested objects as string arguments.
+            if "layout_json" in tool_args:
+                tool_args["layout_json"] = state["layout_json_string"]
+
             tool_output = mcp_client.call_tool(tool_name, tool_args)
 
             # Persist the updated layout returned by the MCP tool

@@ -1,1 +1,82 @@
-
+{
+  "metadata": {
+    "layout_id": "layout_01",
+    "units": "meters",
+    "author": "group_A"
+  },
+  "spaces": [
+    {
+      "id": "space_1",
+      "name": "living_room",
+      "geometry": {
+        "polygon": [
+          [
+            0,
+            0
+          ],
+          [
+            5,
+            0
+          ],
+          [
+            5,
+            4
+          ],
+          [
+            0,
+            4
+          ]
+        ],
+        "area": 20
+      },
+      "attributes": {
+        "windows": 2,
+        "doors": 1
+      },
+      "objects": [
+        {
+          "id": "obj_1",
+          "name": "sofa",
+          "position": [
+            2,
+            2
+          ],
+          "rotation": 90
+        }
+      ]
+    }
+  ],
+  "adjacencies": [],
+  "structure": {
+    "columns": [
+      {
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "position": [
+          5,
+          4
+        ]
+      }
+    ],
+    "slabs": [
+      {
+        "material": "concrete",
+        "thickness": 0.25
+      }
+    ]
+  },
+  "circulation": [],
+  "semantic_requirements": {
+    "needs": [
+      "kitchen next to living_room"
+    ],
+    "cant_haves": [
+      "bathroom next to kitchen"
+    ]
+  },
+  "extensions": {}
+}
