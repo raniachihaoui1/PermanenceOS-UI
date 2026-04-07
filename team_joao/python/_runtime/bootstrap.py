@@ -1,10 +1,8 @@
 from __future__ import annotations
-
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
 from _runtime.config import load_settings
 from _runtime.mcp_client import McpClient
 from _runtime.llm import create_chat_llm, get_llm_response_format
@@ -13,7 +11,6 @@ from _runtime.llm import create_chat_llm, get_llm_response_format
 @dataclass
 class Context:
     """Everything the agent graph needs to run — passed from main.py into graph.py."""
-
     llm: Any
     mcp_client: McpClient
     tools: list[dict[str, Any]]

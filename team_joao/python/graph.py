@@ -1,4 +1,10 @@
 from __future__ import annotations
+import json
+from typing import Any, TypedDict
+from langgraph.graph import END, START, StateGraph
+from nodes.reason import build_reason_node
+from nodes.tools import build_tool_node
+
 
 # =============================================================================
 # graph.py — Define the agent graph: state, nodes, and edges.
@@ -9,25 +15,17 @@ from __future__ import annotations
 # - run_agent   : called from main.py; builds and runs the graph once
 # =============================================================================
 
-import json
-from typing import Any, TypedDict
-
-from langgraph.graph import END, START, StateGraph
-
-from nodes.reason import build_reason_node
-from nodes.tools import build_tool_node
-
 
 # ---------------------------------------------------------------------------
 # State — the data that every node can read and write.
 # ---------------------------------------------------------------------------
 
-class AgentState(TypedDict):
+class AgentState():
     messages: list[dict[str, Any]]       # full conversation history
     pending_tool_calls: list[dict[str, Any]] | None  # tool calls queued by the reason node
     final_response: str | None           # set when the agent is done
     iteration: int                       # current tool-call count
-    max_iterations: int                  # safety cap (set from .env)
+    max_iterations: int                  # safety cap to stop the process (set from .env)
     tool_catalog: str                    # formatted list of available MCP tools
     layout_json_string: str              # current layout as a JSON string, injected into tool calls
 
@@ -47,14 +45,19 @@ def _route(state: AgentState) -> str:
 # ---------------------------------------------------------------------------
 
 def build_graph(ctx: Any) -> Any:
+    # Create the state graph
+    # Use the reason and tool nodes
     reason = build_reason_node(ctx.llm)
     tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
 
+    # Initialize the graph
     graph = StateGraph(AgentState)
 
+    # Add the nodes
     graph.add_node("reason", reason)
     graph.add_node("tool", tool)
 
+    # Add the edges
     graph.add_edge(START, "reason")
     graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "finish": END})
     graph.add_edge("tool", "reason")
@@ -72,8 +75,9 @@ def run_agent(prompt: str, ctx: Any) -> str:
     initial_state = _build_initial_state(prompt, ctx)
     final_state = app.invoke(initial_state)
 
-    print("\nWorkflow graph (ASCII):")
-    app.get_graph().print_ascii()
+    # Uncomment these two lines to see the graph structure in the terminal
+    #print("\nWorkflow graph:")
+    #app.get_graph().print_ascii()
 
     final_response = final_state.get("final_response")
     if not isinstance(final_response, str):
@@ -86,12 +90,17 @@ def run_agent(prompt: str, ctx: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
+
+    # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
+
+    # Engineer the user message
     user_message = (
         "Context: the current layout is JSON below. Valid room names are spaces[].name.\n\n"
         f"User request:\n{prompt}\n\n"
         f"Current layout JSON:\n{layout_text}"
     )
+
     return {
         "messages": [{"role": "user", "content": user_message}],
         "pending_tool_calls": None,
@@ -102,7 +111,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "layout_json_string": json.dumps(ctx.layout_data),
     }
 
-
+# Helper funtion to prepare the tool catalog for the LLM
 def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
     lines = []
     for tool in tools:

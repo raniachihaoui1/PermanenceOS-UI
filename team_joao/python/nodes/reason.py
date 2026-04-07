@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 from typing import Any
-
 from _runtime.llm import call_llm
 
 
@@ -26,6 +24,7 @@ Return strictly valid JSON with exactly this shape:
   "final_response": "...",
   "tool_calls": [{{"name": "<tool-name>", "arguments": {{...}}}}, ...]
 }}
+
 Output rules:
 - Return JSON only, with no prose or explanation.
 - Do not use markdown code fences.
@@ -38,15 +37,18 @@ Output rules:
 # Reason node — the LLM decision step in the graph.
 # ---------------------------------------------------------------------------
 
-def build_reason_node(llm: Any):
+def build_reason_node(llm):
     """Return a reason node function ready to be added to a LangGraph StateGraph."""
 
-    def reason_node(state: dict[str, Any]) -> dict[str, Any]:
+    def reason_node(state):
         result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
 
+        # If the LLM decided no more actions are needed (action is final), set the final response in the stateand cleanup pending tool calls
         if result["action"] == "final":
             state["final_response"] = result["final_response"]
             state["pending_tool_calls"] = None
+
+        # If the LLM decided the action is to use a tool, set the pending tool calls
         else:
             state["pending_tool_calls"] = result["tool_calls"]
 
