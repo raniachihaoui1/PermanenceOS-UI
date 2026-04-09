@@ -72,7 +72,9 @@ You will need to make sure that the tool names and the calculation logic are in 
 
 ![Tool Name List in Result Cluster](./readme_images/tool_name_list.png)
 
-It is important the output variables are named in a way that matches the Tool's description in the definition cluster, so that when the LLM MCP Client receives the output, it can correctly interpret and utilize the results based on the tool's intended functionality. You may need to expirement with the descriptions and output variable names to find the right balance of clarity and functionality for the LLM MCP Client to effectively use the tools you have created, especially if you are trying to capture more complex data or more nuanced results.
+It is important the output variables are named in a way that matches the Tool's description in the definition cluster, so that when the LLM MCP Client receives the output, it can correctly interpret and utilize the results based on the tool's intended functionality. You may need to experiment with the descriptions and output variable names to find the right balance of clarity and functionality for the LLM MCP Client to effectively use the tools you have created, especially if you are trying to capture more complex data or more nuanced results.
+
+You will also need to make sure that the OK output of the Tool Response node is connected to the Gate Or node's input in the result cluster, so that when a tool call is successfully processed, it allows the result to be logged correctly in the Data Recorder node.
 
 ### Running the Swiftlet Server
 
@@ -213,3 +215,17 @@ As much as possible, we have attempted to containerize the graph nodes to make t
 **Before vibe coding, or editing any part of the example file, make sure you understand the structure of the agent graph and the role of each node.** This will help you avoid introducing errors and ensure that your modifications are consistent with the overall design of the agent. LangGraph has a comprehensive set of documentation and examples that can help you understand how to work with graph nodes, define workflows, and manage state transitions. You can find more information in the LangGraph documentation at https://docs.langchain.com/oss/python/langgraph/quickstart.
 
 Asking questions and reviewing the documentation now will save you valuable time and effort later when you are modifying the agent graph or adding new functionality. It only gets more complicated from here, so make sure you start from a strong foundation of knowledge.
+
+## Studio Organization and Communication
+
+### Team Numbers
+
+Between weeks 1 and 2, organize yourselves into six teams of 4 or 5 people, and provide your team members to the instructors.  We will use the **Team Numbers** tab of the Google Sheet to keep track of the team members and their respective team numbers. These will not change for the duration of the studio, finalize your team composition before the end of week 1.
+
+### Package List
+
+Since the goal of the studio is to build a shared repository of MCP Tools that can be used by agents developed by different teams, we need to keep a list of the packages required by each team. We will use the **Package List** tab of the Google Sheet to document the packages used by each team, along with their versions.  This list must be kept minimal and should only include packages that are absolutely necessary.  All packages added must be tested against the packages already added by other teams to ensure compatibility and prevent conflicts. If you need to use a package that is not already listed, please coordinate with the instructors to test the new package against the existing ones before adding it to the list. 
+
+### Presentation Signups
+
+Sign up for your presentation slot on the **Presentation Signups** tab of the Google Sheet for the order during the weekly studio sessions.
