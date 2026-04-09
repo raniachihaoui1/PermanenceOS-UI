@@ -1,0 +1,143 @@
+{
+  "metadata": {
+    "layout_id": "layout_02",
+    "units": "meters",
+    "author": "group_A"
+  },
+
+  "spaces": [
+    {
+      "id": "space_1",
+      "name": "living_room",
+      "geometry": {
+        "polygon": [[0,0], [5,0], [5,4], [0,4]],
+        "area": 20
+      },
+      "attributes": { "windows": 2, "doors": 1 },
+      "objects": [
+        { "id": "obj_1", "name": "sofa", "position": [2,2], "rotation": 90 }
+      ]
+    },
+
+    {
+      "id": "space_2",
+      "name": "kitchen",
+      "geometry": {
+        "polygon": [[5,0], [8,0], [8,4], [5,4]],
+        "area": 12
+      },
+      "attributes": { "windows": 1, "doors": 1 },
+      "objects": [
+        { "id": "obj_2", "name": "kitchen_counter", "position": [6.5,1] }
+      ]
+    },
+
+    {
+      "id": "space_3",
+      "name": "corridor",
+      "geometry": {
+        "polygon": [[0,4], [8,4], [8,6], [0,6]],
+        "area": 16
+      },
+      "attributes": { "windows": 0, "doors": 4 },
+      "objects": []
+    },
+
+    {
+      "id": "space_4",
+      "name": "bedroom",
+      "geometry": {
+        "polygon": [[0,6], [4,6], [4,10], [0,10]],
+        "area": 16
+      },
+      "attributes": { "windows": 1, "doors": 1 },
+      "objects": [
+        { "id": "obj_3", "name": "bed", "position": [2,8] }
+      ]
+    },
+
+    {
+      "id": "space_5",
+      "name": "bathroom",
+      "geometry": {
+        "polygon": [[4,6], [6,6], [6,10], [4,10]],
+        "area": 8
+      },
+      "attributes": { "windows": 0, "doors": 1 },
+      "objects": [
+        { "id": "obj_4", "name": "toilet", "position": [5,7] }
+      ]
+    },
+
+    {
+      "id": "space_6",
+      "name": "office",
+      "geometry": {
+        "polygon": [[6,6], [8,6], [8,10], [6,10]],
+        "area": 8
+      },
+      "attributes": { "windows": 1, "doors": 1 },
+      "objects": [
+        { "id": "obj_5", "name": "desk", "position": [7,8] }
+      ]
+    },
+
+    {
+      "id": "space_7",
+      "name": "laundry",
+      "geometry": {
+        "polygon": [[8,0], [10,0], [10,4], [8,4]],
+        "area": 8
+      },
+      "attributes": { "windows": 0, "doors": 1 },
+      "objects": [
+        { "id": "obj_6", "name": "washing_machine", "position": [9,1] }
+      ]
+    }
+  ],
+
+  "adjacencies": [
+    { "space_1": "space_1", "space_2": "space_2", "intensity": 0.9 },
+    { "space_1": "space_1", "space_2": "space_3", "intensity": 0.8 },
+    { "space_1": "space_2", "space_2": "space_3", "intensity": 0.8 },
+    { "space_1": "space_3", "space_2": "space_4", "intensity": 0.9 },
+    { "space_1": "space_3", "space_2": "space_5", "intensity": 0.9 },
+    { "space_1": "space_3", "space_2": "space_6", "intensity": 0.7 },
+    { "space_1": "space_2", "space_2": "space_7", "intensity": 0.6 }
+  ],
+
+  "structure": {
+    "columns": [
+      { "position": [0,0] },
+      { "position": [5,4] },
+      { "position": [8,4] }
+    ],
+    "slabs": [
+      { "material": "concrete", "thickness": 0.25 }
+    ]
+  },
+
+  "circulation": [
+    { "from": "space_1", "to": "space_3", "type": "door" },
+    { "from": "space_2", "to": "space_3", "type": "door" },
+    { "from": "space_3", "to": "space_4", "type": "door" },
+    { "from": "space_3", "to": "space_5", "type": "door" },
+    { "from": "space_3", "to": "space_6", "type": "door" },
+    { "from": "space_2", "to": "space_7", "type": "door" }
+  ],
+
+  "semantic_requirements": {
+    "needs": [
+      "kitchen next to living_room",
+      "bathroom near bedroom",
+      "office near quiet zone",
+      "laundry near kitchen"
+    ],
+    "cant_haves": [
+      "bathroom next to kitchen",
+      "bedroom next to laundry"
+    ]
+  },
+
+  "extensions": {}
+}
