@@ -29,6 +29,8 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             tool_name = call["name"]
             if tool_name not in allowed_names:
                 raise RuntimeError(f"Tool '{tool_name}' is not in the allowed tools list")
+            
+            print(f"Calling tool: {tool_name} with arguments: {call['arguments']}")
 
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
@@ -66,6 +68,7 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
                 "role": "user",
                 "content": f"Tool result: {tool_output}",
             })
+            print(f"Tool result: {tool_output}")
 
         state["pending_tool_calls"] = None
         return state
