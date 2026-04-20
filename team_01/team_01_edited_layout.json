@@ -1,0 +1,151 @@
+{
+  "layoutId": "Layout-101",
+  "outline": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      9.0,
+      0.0
+    ],
+    [
+      9.0,
+      5.0
+    ],
+    [
+      0.0,
+      5.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "rooms": [
+    {
+      "id": "room-2",
+      "name": "Bedroom 1",
+      "geometry": [
+        [
+          5.0,
+          0.0
+        ],
+        [
+          9.0,
+          0.0
+        ],
+        [
+          9.0,
+          5.0
+        ],
+        [
+          5.0,
+          5.0
+        ],
+        [
+          5.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 20.0
+      }
+    }
+  ],
+  "doors": [],
+  "windows": [
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          8.0,
+          0.0
+        ],
+        [
+          6.0,
+          0.0
+        ]
+      ]
+    }
+  ],
+  "furniture": [],
+  "mep": [
+    {
+      "id": "mep-1",
+      "name": "Living Room AC",
+      "geometry": [
+        [
+          2.5,
+          4.5
+        ],
+        [
+          3.5,
+          4.5
+        ],
+        [
+          3.5,
+          4.8
+        ],
+        [
+          2.5,
+          4.8
+        ],
+        [
+          2.5,
+          4.5
+        ]
+      ],
+      "attributes": {
+        "system": "hvac"
+      }
+    },
+    {
+      "id": "mep-2",
+      "name": "Main Breaker Box",
+      "geometry": [
+        [
+          0.2,
+          0.2
+        ],
+        [
+          0.8,
+          0.2
+        ],
+        [
+          0.8,
+          0.5
+        ],
+        [
+          0.2,
+          0.5
+        ],
+        [
+          0.2,
+          0.2
+        ]
+      ],
+      "attributes": {
+        "system": "electrical"
+      }
+    }
+  ],
+  "structure": [
+    {
+      "id": "wall-1",
+      "name": "North Interior Wall",
+      "geometry": [
+        [
+          5.0,
+          0.0
+        ],
+        [
+          5.0,
+          5.0
+        ]
+      ],
+      "attributes": {}
+    }
+  ]
+}
