@@ -24,6 +24,35 @@
   ],
   "rooms": [
     {
+      "id": "room-1",
+      "name": "Living Room",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          5.0,
+          0.0
+        ],
+        [
+          5.0,
+          5.0
+        ],
+        [
+          0.0,
+          5.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 25.0
+      }
+    },
+    {
       "id": "room-2",
       "name": "Bedroom 1",
       "geometry": [
@@ -53,24 +82,162 @@
       }
     }
   ],
-  "doors": [],
+  "doors": [
+    {
+      "id": "door-1",
+      "name": "Bedroom Door",
+      "geometry": [
+        [
+          5.0,
+          2.0
+        ],
+        [
+          5.0,
+          2.9
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-1",
+          "room-2"
+        ]
+      }
+    }
+  ],
   "windows": [
+    {
+      "id": "window-1",
+      "name": "Living Room Window",
+      "geometry": [
+        [
+          0.0,
+          2.0
+        ],
+        [
+          0.0,
+          3.5
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
     {
       "id": "window-2",
       "name": "South Window",
       "geometry": [
         [
-          8.0,
+          4.0,
           0.0
         ],
         [
-          6.0,
+          1.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          4.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          4.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          4.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          4.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "id": "window-2",
+      "name": "South Window",
+      "geometry": [
+        [
+          4.0,
+          0.0
+        ],
+        [
+          1.0,
           0.0
         ]
       ]
     }
   ],
-  "furniture": [],
+  "furniture": [
+    {
+      "id": "furn-1",
+      "name": "Main Couch",
+      "geometry": [
+        [
+          2.0,
+          3.0
+        ],
+        [
+          4.0,
+          3.0
+        ],
+        [
+          4.0,
+          4.0
+        ],
+        [
+          2.0,
+          4.0
+        ],
+        [
+          2.0,
+          3.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    }
+  ],
   "mep": [
     {
       "id": "mep-1",
