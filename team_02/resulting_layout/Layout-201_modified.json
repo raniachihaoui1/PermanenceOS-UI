@@ -389,36 +389,6 @@
       }
     },
     {
-      "id": "furn-2",
-      "name": "Coffee Table",
-      "geometry": [
-        [
-          2.5,
-          3.0
-        ],
-        [
-          3.5,
-          3.0
-        ],
-        [
-          3.5,
-          4.0
-        ],
-        [
-          2.5,
-          4.0
-        ],
-        [
-          2.5,
-          3.0
-        ]
-      ],
-      "attributes": {
-        "roomId": "room-1",
-        "type": "table"
-      }
-    },
-    {
       "id": "furn-3",
       "name": "Dining Table",
       "geometry": [
