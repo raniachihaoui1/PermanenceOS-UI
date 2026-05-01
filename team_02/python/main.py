@@ -1,6 +1,5 @@
 import argparse
-from pathlib import Path
-from _runtime.bootstrap import bootstrap, select_layout
+from _runtime.bootstrap import bootstrap
 from graph import run_agent
 
 
@@ -11,12 +10,11 @@ def main():
     parser.add_argument("prompt", help="Your instruction for the agent (e.g. 'delete the kitchen')")
     args = parser.parse_args()
 
-    # Prompt the user to select a layout file
-    repo_root = Path(__file__).resolve().parents[2]
-    layout_path = select_layout(repo_root)
-
-    # Initialize and run the agent with the selected layout
-    ctx = bootstrap(layout_path=layout_path)
+    # No layout is pre-selected. The agent will call the `select_layout`
+    # pseudo-tool (handled in nodes/tools.py) when the user's request
+    # actually needs a layout — at which point the user is prompted in
+    # the terminal to choose a JSON file from layout_input/.
+    ctx = bootstrap()
     response = run_agent(args.prompt, ctx)
 
     # Print the final response

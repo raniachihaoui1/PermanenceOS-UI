@@ -17,6 +17,28 @@ class Context:
     layout_data: dict[str, Any]
     max_iterations: int
     edited_layout_path: Path
+    layout_input_dir: Path  # Where the select_layout pseudo-tool looks for JSON files
+
+
+# Python-side pseudo-tool. Not an MCP tool — it's intercepted in nodes/tools.py
+# and runs locally (terminal prompt → file read → state update). Listed in the
+# tool catalog so the LLM knows it exists and can choose to call it.
+SELECT_LAYOUT_TOOL: dict[str, Any] = {
+    "name": "select_layout",
+    "description": (
+        "Prompt the user (in the terminal) to pick a layout JSON file from the "
+        "layout_input/ directory and load it into the agent's context. Takes no "
+        "arguments. Call this once, before any other tool, when (and only when) "
+        "the user's request requires a layout. After this returns successfully, "
+        "subsequent layout-dependent tool calls will operate on the chosen layout."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
 
 
 def select_layout(repo_root: Path) -> Path:
@@ -61,26 +83,40 @@ def bootstrap(layout_path: Path | None = None) -> Context:
     """Load settings, connect to the MCP server, discover tools, and build the LLM.
 
     Call this once from main.py and pass the returned Context into run_agent().
-    
+
     Args:
-        layout_path: Optional Path to a specific layout file. If not provided,
-                    will use the default layout_input/layout_schema.json.
+        layout_path: Optional Path to a specific layout file to pre-load. If
+                    omitted (the normal case), no layout is loaded at startup —
+                    the agent will call the `select_layout` pseudo-tool, which
+                    prompts the user in the terminal, when (and only when) the
+                    request actually needs a layout.
     """
     settings = load_settings()
 
-    # Determine which layout file to use
-    repo_root = Path(__file__).resolve().parents[3]
-    if layout_path is None:
-        layout_path = repo_root / "layout_input" / "layout_schema.json"
-    
-    # Read the layout schema that will be given to the agent as context
-    layout_data: dict[str, Any] = json.loads(layout_path.read_text(encoding="utf-8"))
+    # Where the `select_layout` pseudo-tool looks for available JSON files.
+    # Resolves to <team_02>/randomized_layouts/ — the team-local folder that
+    # holds the input layouts (layout_201.json, layout_202.json, ...).
+    team_dir = Path(__file__).resolve().parents[2]
+    layout_input_dir = team_dir / "randomized_layouts"
+
+    # Optionally pre-load a specific file (kept for tests / scripted use).
+    # Default flow leaves layout_data empty until the LLM calls select_layout.
+    if layout_path is not None:
+        layout_data: dict[str, Any] = json.loads(layout_path.read_text(encoding="utf-8"))
+    else:
+        layout_data = {}
 
     # Connect to the Grasshopper MCP server and list available tools
     mcp_client = McpClient(settings.mcp_endpoint, settings.request_timeout_seconds)
     mcp_client.initialize()
-    tools = mcp_client.list_tools()
-    print(f"Discovered MCP tools: {[t.get('name') for t in tools]}")
+    mcp_tools = mcp_client.list_tools()
+    print(f"Discovered MCP tools: {[t.get('name') for t in mcp_tools]}")
+
+    # Combine MCP tools with our Python-side pseudo-tool. From the LLM's
+    # perspective they're all just tools it can choose to call; the tool node
+    # routes select_layout locally instead of forwarding it to the MCP server.
+    tools = mcp_tools + [SELECT_LAYOUT_TOOL]
+    print(f"Plus Python-side pseudo-tool: {SELECT_LAYOUT_TOOL['name']}")
 
     # Build the LLM with a structured-output schema tailored to the available tools
     llm = create_chat_llm(
@@ -91,7 +127,6 @@ def bootstrap(layout_path: Path | None = None) -> Context:
         model_kwargs=get_llm_response_format(tools),
     )
 
-    team_dir = Path(__file__).resolve().parents[2]
     team_name = team_dir.name
     edited_layout_path = team_dir / f"{team_name}_edited_layout.json"
 
@@ -102,4 +137,5 @@ def bootstrap(layout_path: Path | None = None) -> Context:
         layout_data=layout_data,
         max_iterations=settings.max_iterations,
         edited_layout_path=edited_layout_path,
+        layout_input_dir=layout_input_dir,
     )
