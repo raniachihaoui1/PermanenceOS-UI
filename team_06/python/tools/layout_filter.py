@@ -10,6 +10,9 @@ Returns dicts for direct Python function calls.
 
 import json
 
+# ---------------------------------------------------------------------------
+# Load JSON from string for backward compatibility with old state format
+# ---------------------------------------------------------------------------
 def load_json_from_string(json_string):
     try:
         data = json.loads(json_string)
@@ -17,21 +20,12 @@ def load_json_from_string(json_string):
         raise ValueError(f"Invalid JSON string: {e}")
     return data
 
-
+# ---------------------------------------------------------------------------
+# Select layout by checking which input parameter is not empty/None.
+# Priority: layout_id > apartment_area > description_search
+# Returns dict with matching layout or error dict
+# ---------------------------------------------------------------------------
 def select_layout(all_layouts, layout_id=None, apartment_area=None, description_search=None):
-    """
-    Select layout by checking which input parameter is not empty/None.
-    Uses priority: layout_id > apartment_area > description_search
-    
-    Args:
-        all_layouts: List of layout dicts (injected from state)
-        layout_id: Search by layoutId (optional, exact match)
-        apartment_area: Search by area (optional, approximate match)
-        description_search: Search by description substring (optional, case-insensitive)
-    
-    Returns:
-        Dict with matching layout, or error dict
-    """
     # Handle if all_layouts is a string (for backward compatibility)
     if isinstance(all_layouts, str):
         layouts_list = load_json_from_string(all_layouts)
@@ -59,8 +53,10 @@ def select_layout(all_layouts, layout_id=None, apartment_area=None, description_
         return {"error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Search by layoutId (exact match)
+# ---------------------------------------------------------------------------
 def _search_by_layout_id(layouts_list, layout_id):
-    """Search by layoutId (exact match)"""
     for layout in layouts_list:
         if isinstance(layout, str):
             try:
@@ -74,8 +70,10 @@ def _search_by_layout_id(layouts_list, layout_id):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Search by apartment area (approximate match within 0.5)
+# ---------------------------------------------------------------------------
 def _search_by_area(layouts_list, apartment_area):
-    """Search by apartment area (approximate match within 0.5)"""
     for layout in layouts_list:
         if isinstance(layout, str):
             try:
@@ -90,8 +88,10 @@ def _search_by_area(layouts_list, apartment_area):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Search by description substring (case-insensitive)
+# ---------------------------------------------------------------------------
 def _search_by_description(layouts_list, description_search):
-    """Search by description substring (case-insensitive)"""
     for layout in layouts_list:
         if isinstance(layout, str):
             try:
@@ -106,11 +106,11 @@ def _search_by_description(layouts_list, description_search):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Print all layouts to debug what values exist.
+# Useful for seeing what layoutIds, names, and areas are available.
+# ---------------------------------------------------------------------------
 def debug_layouts(layouts_list):
-    """
-    Print all layouts to debug what values exist.
-    Useful for seeing what layoutIds, names, and areas are available.
-    """
     try:
         print("=== Available Layouts ===")
         for i, layout in enumerate(layouts_list):

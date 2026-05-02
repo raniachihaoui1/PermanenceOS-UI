@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import json
 from pathlib import Path
@@ -103,33 +102,28 @@ def run_agent(prompt: str, ctx: Any) -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Construct the initial state for the agent graph based on the input prompt and context.
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
-    """Construct the initial state for the agent graph."""
-
-    # Load all available layouts from the sample layouts file
-    repo_root = Path(__file__).resolve().parents[2]
-    layouts_path = repo_root / "team_06" / "layout_inputs" / "sample_layouts.json"
+    # Load all available layouts
+    repo_root = Path(__file__).resolve().parent.parent
+    layouts_path = repo_root / "layout_inputs" / "sample_layouts.json"
     all_layouts = json.loads(layouts_path.read_text(encoding="utf-8"))
-
+    
     # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
-
-    # Merge local tools with MCP tools and format for LLM
-    local_tools = get_local_tools()
-    all_tools = local_tools + ctx.tools
-    tool_catalog = _format_tool_catalog(all_tools)  
     
-    print(f"=== START CATALOG ===")
-    print(tool_catalog)
-    print(f"=== END CATALOG ({len(all_tools)} tools) ===")
+    # Get local tools
+    local_tools = get_local_tools()
+    
+    # Combine local tools with MCP tools for the tool catalog
+    combined_tools = local_tools + ctx.tools
+    tool_catalog = _format_tool_catalog(combined_tools)
 
     # Engineer the user message
     user_message = (
         "Context: the current layout is JSON below. "
         "Valid room names are rooms[].name.\n\n"
-        f"{layout_text}\n\n"
-        f"Available tools:\n{tool_catalog}"
+        f"User request:\n{prompt}\n\n"
+        f"Current layout JSON:\n{layout_text}"
     )
 
     return {
@@ -142,7 +136,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "layout_json_string": layout_text,
         "all_layouts": all_layouts,
     }
-    
+
 # Helper funtion to prepare the tool catalog for the LLM
 def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
     lines = []
@@ -152,3 +146,4 @@ def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
         schema = json.dumps(tool.get("inputSchema", {}))
         lines.append(f"- {name}: {description} | inputSchema={schema}")
     return "\n".join(lines)
+
