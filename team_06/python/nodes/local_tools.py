@@ -1,0 +1,97 @@
+# ============================================================================
+# local_tools.py — Local Python tools executed directly in the graph.
+#
+# These are tools that don't go through MCP — they're called directly
+# from the local_tool node for simpler, faster execution.
+# ============================================================================
+
+from __future__ import annotations
+import json
+from typing import Any
+
+from tools.layout_filter import select_layout
+
+
+
+# ---------------------------------------------------------------------------
+# Local tools catalog — tools available directly (not via MCP).
+# ---------------------------------------------------------------------------
+
+def get_local_tools() -> list[dict[str, Any]]:
+    """Return definitions of all local (non-MCP) tools."""
+    return [
+        {
+            "name": "layout_filter",
+            "description": "Search and filter layouts by ID, apartment area, or description",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "layout_id": {
+                        "type": "string",
+                        "description": "Search by layoutId (exact match)"
+                    },
+                    "apartment_area": {
+                        "type": "number",
+                        "description": "Search by apartment area (approximate match within 0.5)"
+                    },
+                    "description_search": {
+                        "type": "string",
+                        "description": "Search by description substring (case-insensitive)"
+                    }
+                },
+                "required": []
+            }
+        }
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Local tool node — executes local Python tools.
+# ---------------------------------------------------------------------------
+
+def build_local_tool_node():
+    """Return a local tool node function ready to be added to a LangGraph StateGraph."""
+
+    def local_tool_node(state):
+        """Execute pending local tool calls and append results to conversation history."""
+
+        # Iterate over the pending local tool calls
+        for call in state["pending_tool_calls"]:
+            tool_name = call["name"]
+            
+            print(f"Calling local tool: {tool_name} with arguments: {call['arguments']}")
+
+            # Cleanup any null values accidentally included by the LLM
+            tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
+
+            # Execute the appropriate local tool
+            if tool_name == "layout_filter":
+                tool_output = select_layout(
+                    all_layouts=state["all_layouts"],
+                    layout_id=tool_args.get("layout_id"),
+                    apartment_area=tool_args.get("apartment_area"),
+                    description_search=tool_args.get("description_search")
+                )
+            else:
+                tool_output = {"error": f"Unknown local tool: {tool_name}"}
+
+            # Append the tool call and its result to the conversation history
+            state["messages"].append({
+                "role": "assistant",
+                "content": json.dumps({
+                    "action": "tool",
+                    "final_response": "",
+                    "tool_calls": [{"name": tool_name, "arguments": tool_args}],
+                }),
+            })
+            
+            state["messages"].append({
+                "role": "user",
+                "content": f"Tool result: {json.dumps(tool_output)}",
+            })
+            print(f"Local tool result: {tool_output}")
+
+        state["pending_tool_calls"] = None
+        return state
+
+    return local_tool_node

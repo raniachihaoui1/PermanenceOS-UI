@@ -1,9 +1,12 @@
+
 from __future__ import annotations
 import json
+from pathlib import Path
 from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from nodes.reason import build_reason_node
 from nodes.tools import build_tool_node
+from nodes.local_tools import get_local_tools, build_local_tool_node
 
 
 # =============================================================================
@@ -28,6 +31,7 @@ class AgentState():
     max_iterations: int                  # safety cap to stop the process (set from .env)
     tool_catalog: str                    # formatted list of available MCP tools
     layout_json_string: str              # current layout as a JSON string, injected into tool calls
+    all_layouts: list[dict[str, Any]]    # all available layouts, injected into local tool calls
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +41,13 @@ class AgentState():
 def _route(state: AgentState) -> str:
     if state["final_response"] is not None:
         return "finish"
+    
+    # Check if any pending tool calls are local tools
+    if state["pending_tool_calls"]:
+        for call in state["pending_tool_calls"]:
+            if call["name"] == "layout_filter":
+                return "local_tool"
+    
     return "run_tool"
 
 
@@ -49,6 +60,7 @@ def build_graph(ctx: Any) -> Any:
     # Use the reason and tool nodes
     reason = build_reason_node(ctx.llm)
     tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
+    local_tool = build_local_tool_node()
 
     # Initialize the graph
     graph = StateGraph(AgentState)
@@ -56,11 +68,13 @@ def build_graph(ctx: Any) -> Any:
     # Add the nodes
     graph.add_node("reason", reason)
     graph.add_node("tool", tool)
+    graph.add_node("local_tool", local_tool)
 
     # Add the edges
     graph.add_edge(START, "reason")
-    graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "finish": END})
+    graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "local_tool": "local_tool", "finish": END})
     graph.add_edge("tool", "reason")
+    graph.add_edge("local_tool", "reason")
 
     return graph.compile()
 
@@ -89,17 +103,33 @@ def run_agent(prompt: str, ctx: Any) -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Construct the initial state for the agent graph based on the input prompt and context.
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
+    """Construct the initial state for the agent graph."""
+
+    # Load all available layouts from the sample layouts file
+    repo_root = Path(__file__).resolve().parents[2]
+    layouts_path = repo_root / "team_06" / "layout_inputs" / "sample_layouts.json"
+    all_layouts = json.loads(layouts_path.read_text(encoding="utf-8"))
 
     # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
+
+    # Merge local tools with MCP tools and format for LLM
+    local_tools = get_local_tools()
+    all_tools = local_tools + ctx.tools
+    tool_catalog = _format_tool_catalog(all_tools)  
+    
+    print(f"=== START CATALOG ===")
+    print(tool_catalog)
+    print(f"=== END CATALOG ({len(all_tools)} tools) ===")
 
     # Engineer the user message
     user_message = (
         "Context: the current layout is JSON below. "
         "Valid room names are rooms[].name.\n\n"
-        f"User request:\n{prompt}\n\n"
-        f"Current layout JSON:\n{layout_text}"
+        f"{layout_text}\n\n"
+        f"Available tools:\n{tool_catalog}"
     )
 
     return {
@@ -108,10 +138,11 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "final_response": None,
         "iteration": 0,
         "max_iterations": ctx.max_iterations,
-        "tool_catalog": _format_tool_catalog(ctx.tools),
-        "layout_json_string": json.dumps(ctx.layout_data),
+        "tool_catalog": tool_catalog,
+        "layout_json_string": layout_text,
+        "all_layouts": all_layouts,
     }
-
+    
 # Helper funtion to prepare the tool catalog for the LLM
 def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
     lines = []
