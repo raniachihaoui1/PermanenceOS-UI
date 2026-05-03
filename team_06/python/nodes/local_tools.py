@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from tools.embedding_matcher import match_layouts
 from tools.layout_filter import select_layout
 
 
@@ -41,6 +42,30 @@ def get_local_tools() -> list[dict[str, Any]]:
                 },
                 "required": []
             }
+        },
+        {
+            "name": "layout_matcher",
+            "description": "Find best matching layouts using semantic search. Embed user query and compare to layout descriptions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "User's natural language description of desired apartment (e.g., 'cozy 2-bedroom with open kitchen')"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of top results to return (default: 3)",
+                        "default": 3
+                    },
+                    "min_score": {
+                        "type": "number",
+                        "description": "Minimum similarity score 0-1 to include results (default: 0.3)",
+                        "default": 0.3
+                    }
+                },
+                "required": ["query"]
+            }
         }
     ]
 
@@ -71,6 +96,13 @@ def build_local_tool_node():
                     layout_id=tool_args.get("layout_id"),
                     apartment_area=tool_args.get("apartment_area"),
                     description_search=tool_args.get("description_search")
+                )
+            elif tool_name == "layout_matcher":
+                tool_output = match_layouts(
+                    query=tool_args.get("query"),
+                    all_descriptions=state["all_descriptions"],  # Pass from state
+                    top_k=tool_args.get("top_k", 3),
+                    min_score=tool_args.get("min_score", 0.3)
                 )
             else:
                 tool_output = {"error": f"Unknown local tool: {tool_name}"}

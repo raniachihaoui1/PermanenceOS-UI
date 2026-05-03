@@ -31,7 +31,7 @@ class AgentState():
     tool_catalog: str                    # formatted list of available MCP tools
     layout_json_string: str              # current layout as a JSON string, injected into tool calls
     all_layouts: list[dict[str, Any]]    # all available layouts, injected into local tool calls
-
+    all_descriptions: list[dict[str, Any]]  #layout descriptions for embedding search
 
 # ---------------------------------------------------------------------------
 # Routing — decides which node runs next after "reason".
@@ -44,7 +44,7 @@ def _route(state: AgentState) -> str:
     # Check if any pending tool calls are local tools
     if state["pending_tool_calls"]:
         for call in state["pending_tool_calls"]:
-            if call["name"] == "layout_filter":
+            if call["name"] in ["layout_filter", "layout_matcher"]:
                 return "local_tool"
     
     return "run_tool"
@@ -103,10 +103,14 @@ def run_agent(prompt: str, ctx: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
-    # Load all available layouts
     repo_root = Path(__file__).resolve().parent.parent
+    # Load all available layouts
     layouts_path = repo_root / "layout_inputs" / "sample_layouts.json"
     all_layouts = json.loads(layouts_path.read_text(encoding="utf-8"))
+    
+    # Load layout descriptions
+    descriptions_path = repo_root / "layout_inputs" / "sample_descriptions.json"
+    all_descriptions = json.loads(descriptions_path.read_text(encoding="utf-8"))
     
     # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
@@ -135,6 +139,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "tool_catalog": tool_catalog,
         "layout_json_string": layout_text,
         "all_layouts": all_layouts,
+        "all_descriptions": all_descriptions,
     }
 
 # Helper funtion to prepare the tool catalog for the LLM
