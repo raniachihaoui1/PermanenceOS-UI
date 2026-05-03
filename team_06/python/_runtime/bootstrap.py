@@ -6,6 +6,7 @@ from typing import Any
 from _runtime.config import load_settings
 from _runtime.mcp_client import McpClient
 from _runtime.llm import create_chat_llm, get_llm_response_format
+from nodes.local_tools import get_local_tools
 
 
 @dataclass
@@ -35,7 +36,13 @@ def bootstrap() -> Context:
     mcp_client = McpClient(settings.mcp_endpoint, settings.request_timeout_seconds)
     mcp_client.initialize()
     tools = mcp_client.list_tools()
-    print(f"Discovered MCP tools: {[t.get('name') for t in tools]}")
+    
+    # Log all available tools (both MCP and local)
+    mcp_tool_names = [t.get('name') for t in tools]
+    local_tool_names = [t.get('name') for t in get_local_tools()]
+    print(f"Discovered MCP tools: {mcp_tool_names}")
+    print(f"Discovered local tools: {local_tool_names}")
+    print(f"Total tools available: {len(tools) + len(get_local_tools())}")
 
     # Build the LLM with a structured-output schema tailored to the available tools
     llm = create_chat_llm(
