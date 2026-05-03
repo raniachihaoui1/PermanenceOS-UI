@@ -72,9 +72,16 @@ def build_local_tool_node():
     def local_tool_node(state):
         """Execute pending local tool calls and append results to conversation history."""
 
+        remaining_calls = []  # Tools that aren't local (to pass to run_tool)
+        
         # Iterate over the pending local tool calls
         for call in state["pending_tool_calls"]:
             tool_name = call["name"]
+            
+            # Skip non-local tools
+            if tool_name not in ["layout_filter", "layout_matcher"]:
+                remaining_calls.append(call)
+                continue
             
             print(f"Calling local tool: {tool_name} with arguments: {call['arguments']}")
 
@@ -97,6 +104,19 @@ def build_local_tool_node():
             else:
                 tool_output = {"error": f"Unknown local tool: {tool_name}"}
 
+            # Store results in state for downstream tool calls
+            if tool_name == "layout_matcher" and isinstance(tool_output, dict):
+                # Extract the best matching layout ID
+                matches = tool_output.get("matches", [])
+                if matches:
+                    best_match = matches[0]
+                    state["layout_id"] = best_match.get("layoutId")
+            
+            elif tool_name == "layout_filter" and isinstance(tool_output, dict):
+                # Store the full layout schema
+                state["layout_schema"] = tool_output
+                state["layout_id"] = tool_output.get("layoutId")
+
             # Append the tool call and its result to the conversation history
             state["messages"].append({
                 "role": "assistant",
@@ -113,7 +133,8 @@ def build_local_tool_node():
             })
             print(f"Local tool result: {tool_output}")
 
-        state["pending_tool_calls"] = None
+        # Keep remaining (non-local) tool calls for the run_tool node
+        state["pending_tool_calls"] = remaining_calls if remaining_calls else None
         return state
 
     return local_tool_node

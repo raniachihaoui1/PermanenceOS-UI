@@ -35,9 +35,16 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
-            # Inject layout_json
+            # Inject layout_json if the tool expects it
             if "layout_json" in tool_args:
                 tool_args["layout_json"] = state["layout_json_string"]
+            
+            # For visualise_layout, inject layout_schema (filtered layout if available, otherwise full layout)
+            if tool_name == "visualise_layout" and "layout_schema" in tool_args:
+                if state.get("layout_schema"):
+                    tool_args["layout_schema"] = json.dumps(state["layout_schema"])
+                else:
+                    tool_args["layout_schema"] = state["layout_json_string"]
 
             # Call the tool
             tool_output = mcp_client.call_tool(tool_name, tool_args)

@@ -50,6 +50,7 @@ def schema_to_rhino_geometry(schema: Dict[str, Any]) -> Dict[str, Any]:
     
     return result
 
+"""
 geom = schema_to_rhino_geometry(schema)
 outline = geom["outline"]
 rooms = geom["rooms"]
@@ -57,3 +58,4 @@ programs = geom["programs"]
 doors = geom["doors"]
 facades = geom["facades"]
 circulation = geom["circulation"]
+"""

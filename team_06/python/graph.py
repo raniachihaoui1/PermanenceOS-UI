@@ -32,6 +32,8 @@ class AgentState():
     layout_json_string: str              # current layout as a JSON string, injected into tool calls
     all_layouts: list[dict[str, Any]]    # all available layouts, injected into local tool calls
     all_descriptions: list[dict[str, Any]]  #layout descriptions for embedding search
+    layout_id: str | None                # current selected layout ID
+    layout_schema: dict[str, Any] | None # current selected layout schema dict
 
 # ---------------------------------------------------------------------------
 # Routing — decides which node runs next after "reason".
@@ -140,6 +142,8 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "layout_json_string": layout_text,
         "all_layouts": all_layouts,
         "all_descriptions": all_descriptions,
+        "layout_id": None,
+        "layout_schema": None,
     }
 
 # Helper funtion to prepare the tool catalog for the LLM

@@ -9,6 +9,17 @@ from _runtime.llm import call_llm
 
 SYSTEM_PROMPT = """You are an assistant that helps users work with a building layout.
 
+## Tool Workflow
+
+When layout_matcher returns matches (e.g., layout-3, layout-4):
+1. Extract the best matching layoutId from the results
+2. IMMEDIATELY call layout_filter(layout_id="<the layoutId>") to get the full schema
+3. Then call MCP tools (delete_room_06, visualise_layout, etc.) with that schema
+
+When calling MCP tools that require layout_json or layout_schema:
+- These arguments are ALWAYS injected automatically from the current layout
+- Do NOT ask the user for layout data - simply call the tool
+
 The MCP tools listed below are a toolbox: you may call them when they help achieve the user's goal. Choose tools and arguments only based on the user's request, the tool descriptions, and each tool's inputSchema. Do not assume any particular tool is required for a given instruction.
 
 Always ground your reasoning in the current layout JSON shown in the user message. That payload is loaded from the repository's layout_input/layout_schema.json and defines the structure, attribute names, ids, and nested objects you should use for context (for example which keys exist, how entities reference each other, and what values are valid to mention or pass through).
