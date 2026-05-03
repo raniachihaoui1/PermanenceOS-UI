@@ -113,7 +113,24 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_
 # ---------------------------------------------------------------------------
 
 def handle_select_layout(layout_input_dir: Path, state: dict) -> str:
-    """List JSON files, prompt the user, load the chosen one, update state."""
+    """List JSON files, prompt the user, load the chosen one, update state.
+
+    Safety net: if a layout is already loaded in state, return it immediately
+    instead of re-prompting. This protects against small models (Llama-3.1-8B)
+    that re-call select_layout in a loop ignoring the system prompt rule.
+    """
+    existing = state.get("layout_json_string")
+    if existing:
+        try:
+            layout_data = json.loads(existing)
+            return json.dumps({
+                "loaded": "(already loaded)",
+                "note": "A layout is already loaded. Use it for the user's request; do NOT call select_layout again.",
+                "layout": layout_data,
+            })
+        except json.JSONDecodeError:
+            pass
+
     if not layout_input_dir.exists():
         return json.dumps({"error": f"Layout directory not found: {layout_input_dir}"})
 

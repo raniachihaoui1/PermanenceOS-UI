@@ -67,31 +67,21 @@ def build_graph(ctx: Any) -> Any:
 
 
 def run_agent(prompt: str, ctx: Any) -> str:
-    app = build_graph(ctx)
-
-    initial_state = _build_initial_state(prompt, ctx)
-
     # Pre-empt: if the user's prompt clearly involves a layout but none is
     # loaded yet, run the select_layout pseudo-tool ourselves before the LLM
-    # reasons. This bypasses small models that ignore the "call select_layout
-    # first" rule and hallucinate results from layout-dependent tools.
+    # reasons. We mutate ctx.layout_data so _build_initial_state below uses
+    # the "layout already loaded" branch — this keeps the initial user
+    # message consistent (no stale "no layout loaded" text). The 8B Llama
+    # otherwise re-calls select_layout in a loop because it sees the stub.
     if not ctx.layout_data and _prompt_needs_layout(prompt):
         print("\n[graph] Prompt mentions layout - running select_layout before LLM reasoning.")
-        tool_output = handle_select_layout(ctx.layout_input_dir, initial_state)
-        initial_state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "select_layout", "arguments": {}}],
-            }),
-        })
-        initial_state["messages"].append({
-            "role": "user",
-            "content": f"Tool result: {tool_output}",
-        })
-        initial_state["iteration"] += 1
+        scratch: dict[str, Any] = {"layout_json_string": ""}
+        handle_select_layout(ctx.layout_input_dir, scratch)
+        if scratch.get("layout_json_string"):
+            ctx.layout_data = json.loads(scratch["layout_json_string"])
 
+    app = build_graph(ctx)
+    initial_state = _build_initial_state(prompt, ctx)
     final_state = app.invoke(initial_state)
 
     print("\nWorkflow graph:")
