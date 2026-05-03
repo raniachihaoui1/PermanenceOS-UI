@@ -23,24 +23,16 @@ def get_local_tools() -> list[dict[str, Any]]:
     return [
         {
             "name": "layout_filter",
-            "description": "Search and filter layouts by ID, apartment area, or description",
+            "description": "Search and filter layouts by ID",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "layout_id": {
                         "type": "string",
                         "description": "Search by layoutId (exact match)"
-                    },
-                    "apartment_area": {
-                        "type": "number",
-                        "description": "Search by apartment area (approximate match within 0.5)"
-                    },
-                    "description_search": {
-                        "type": "string",
-                        "description": "Search by description substring (case-insensitive)"
                     }
                 },
-                "required": []
+                "required": ["layout_id"]
             }
         },
         {
@@ -93,9 +85,7 @@ def build_local_tool_node():
             if tool_name == "layout_filter":
                 tool_output = select_layout(
                     all_layouts=state["all_layouts"],
-                    layout_id=tool_args.get("layout_id"),
-                    apartment_area=tool_args.get("apartment_area"),
-                    description_search=tool_args.get("description_search")
+                    layout_id=tool_args.get("layout_id")
                 )
             elif tool_name == "layout_matcher":
                 tool_output = match_layouts(

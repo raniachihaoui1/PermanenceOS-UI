@@ -1,5 +1,6 @@
 [
-    {
+    {   
+        "layoutId": "layout-1",
         "name": "root",
         "area": 32.470877319406036,
         "angle": 0,
@@ -139,6 +140,7 @@
         }
     },
     {
+        "layoutId": "layout-2",
         "name": "root",
         "area": 22.47866421236037,
         "angle": 0,
@@ -318,6 +320,7 @@
         }
     },
     {
+        "layoutId": "layout-3",
         "name": "root",
         "area": 28.332482607834503,
         "angle": 0,
@@ -537,6 +540,7 @@
         }
     },
     {
+        "layoutId": "layout-4",
         "name": "root",
         "area": 35.18530351103228,
         "angle": 0,
@@ -876,6 +880,7 @@
         }
     },
     {
+        "layoutId": "layout-5",
         "name": "root",
         "area": 36.829565327976354,
         "angle": 0,
@@ -1135,6 +1140,7 @@
         }
     },
     {
+        "layoutId": "layout-6",
         "name": "root",
         "area": 18.117393446496152,
         "angle": 0,

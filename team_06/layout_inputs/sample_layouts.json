@@ -272,7 +272,7 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "1 bath, 1 bed, 1 kitchen, 1 living"
+    "rooms_summary": "1 bath, 1 bed, 1 kitchen, 1 living"
   },
   {
     "layoutId": "layout-2",
@@ -609,7 +609,7 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "1 bath, 1 extra, 1 foyer, 1 kitchen, 1 living"
+    "rooms_summary": "1 bath, 1 extra, 1 foyer, 1 kitchen, 1 living"
   },
   {
     "layoutId": "layout-3",
@@ -976,7 +976,7 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "1 bath, 1 bed, 1 extra, 1 foyer, 1 kitchen, 1 living"
+    "rooms_summary": "1 bath, 1 bed, 1 extra, 1 foyer, 1 kitchen, 1 living"
   },
   {
     "layoutId": "layout-4",
@@ -1493,7 +1493,7 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "2 bath, 2 bed, 2 extra, 1 foyer, 1 kitchen, 1 living"
+    "rooms_summary": "2 bath, 2 bed, 2 extra, 1 foyer, 1 kitchen, 1 living"
   },
   {
     "layoutId": "layout-5",
@@ -1936,7 +1936,7 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "1 bath, 1 bed, 3 foyer, 1 kitchen, 1 living"
+    "rooms_summary": "1 bath, 1 bed, 3 foyer, 1 kitchen, 1 living"
   },
   {
     "layoutId": "layout-6",
@@ -2207,6 +2207,6 @@
     "furniture": [],
     "mep": [],
     "structure": [],
-    "description": "1 bath, 1 extra, 1 kitchen, 1 living"
+    "rooms_summary": "1 bath, 1 extra, 1 kitchen, 1 living"
   }
 ]
