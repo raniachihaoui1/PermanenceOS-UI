@@ -140,9 +140,9 @@ def _route_construct_model(state) -> str:
 
 
 def _route_cost_calculation(state) -> str:
-    if state.get("is_baseline_cost", True):
-        return "generate_heatmap"
-    return "calculate_delta"
+    if state.get("is_baseline_cost") is False:
+        return "calculate_delta"
+    return "generate_heatmap"
 
 
 def _route_generate_heatmap(state) -> str:

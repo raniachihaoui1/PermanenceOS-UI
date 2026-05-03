@@ -263,8 +263,14 @@ def call_llm(
        print(f"[llm] Last response object: {getattr(e, 'completion', None)}")
        raise
     content = result.content
+    if isinstance(content, list):
+        # ChatAnthropic returns a list of content blocks; extract text parts
+        content = " ".join(
+            block["text"] for block in content
+            if isinstance(block, dict) and block.get("type") == "text" and block.get("text")
+        )
     if not isinstance(content, str):
-        raise RuntimeError("LLM response content must be a string")
+        raise RuntimeError(f"LLM response content must be a string, got: {type(content)}")
 
     try:
         return _normalize_llm_decision(_parse_llm_json(content))
