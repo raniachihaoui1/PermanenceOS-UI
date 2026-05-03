@@ -1,7 +1,7 @@
 [
     {
         "layoutId": "layout-1",
-        "description": "1-bedroom 32 sqm apartment, day area with living and kitchen, night area with double bedroom and big bathroom accessible from bedroom. Ideal for young couples or single professionals.",
+        "description": "1-bedroom 32 sqm apartment, day area with living and kitchen, night area with bedroom and big bathroom accessible from bedroom. Ideal for young couples or single professionals.",
         "area": 32.47,
         "roomTypes": [
             "bed",
@@ -24,7 +24,7 @@
     },
     {
         "layoutId": "layout-3",
-        "description": "1-bedroom 28 sqm apartment, day area with big kitchen and living, night area with double bedroom, bathroom and storage, all accessible from foyer. Ideal for young couples or single professionals.",
+        "description": "1-bedroom 28 sqm apartment, day area with big kitchen and living, night area with bedroom, bathroom and storage, all accessible from foyer. Ideal for young couples or single professionals.",
         "area": 28.33,
         "roomTypes": [
             "bed",
@@ -37,7 +37,7 @@
     },
     {
         "layoutId": "layout-4",
-        "description": "35 sqm shared-flat configuration with central day area with living and kitchen, 2 bedrooms and 2 bathrooms, one bathroom accessible from the bedroom, the other from day area. Ideal for students",
+        "description": "2-bedroom 35 sqm apartment with central day area with living and kitchen, 2 lateral bedrooms with private bathrooms. Ideal for students, shared-flat configuration",
         "area": 35.19,
         "roomTypes": [
             "kitchen",
@@ -52,7 +52,7 @@
     },
     {
         "layoutId": "layout-5",
-        "description": "L-shaped 37 sqm 1-bedroom apartment with foyer, living, kitchen, double bedroom and big bathroom accessible from living area. Ideal for couples or young professionals. Ideal for couples",
+        "description": "Cozy L-shaped 37 sqm 1-bedroom apartment with foyer, living, kitchen, bedroom and big bathroom accessible from living area. Ideal for couples or young professionals.",
         "area": 36.83,
         "roomTypes": [
             "kitchen",
