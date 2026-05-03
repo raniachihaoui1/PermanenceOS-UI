@@ -52,7 +52,7 @@ def build_graph(ctx: Any) -> Any:
     tool = build_tool_node(
         ctx.mcp_client,
         ctx.tools,
-        ctx.edited_layout_path,
+        ctx.edited_layout_dir,
         ctx.layout_input_dir,
     )
 
@@ -151,6 +151,15 @@ def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
 def _layout_summary(layout: dict[str, Any]) -> str:
     """Compact, LLM-friendly summary of a layout - drops geometry arrays."""
     rooms = layout.get("rooms", []) or []
+    
+    # Create room ID to name mapping
+    room_id_to_name = {}
+    for r in rooms:
+        room_id = r.get("id", "")
+        room_name = r.get("name", "")
+        if room_id:
+            room_id_to_name[room_id] = room_name
+    
     lines = [
         f"layoutId: {layout.get('layoutId', '?')}",
         f"name: {layout.get('name', '?')}",
@@ -164,4 +173,21 @@ def _layout_summary(layout: dict[str, Any]) -> str:
             f"type={attrs.get('roomType', '?')} "
             f"area={attrs.get('area', '?')}"
         )
+    
+    # Add furniture information
+    furniture = layout.get("furniture", []) or []
+    if furniture:
+        lines.append(f"furniture ({len(furniture)}):")
+        for furn in furniture:
+            furn_name = furn.get("name", "?")
+            furn_attrs = furn.get("attributes", {}) or {}
+            room_id = furn_attrs.get("roomId", "")
+            room_name = room_id_to_name.get(room_id, "?")
+            furn_type = furn_attrs.get("type", "?")
+            lines.append(
+                f"  - name=\"{furn_name}\" "
+                f"type={furn_type} "
+                f"room=\"{room_name}\""
+            )
+    
     return "\n".join(lines)

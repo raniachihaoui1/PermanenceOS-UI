@@ -20,12 +20,15 @@ Layout selection rules (IMPORTANT):
 
 If the user's goal cannot be satisfied without information that is missing from their message or from the loaded layout, respond with action "final" and ask a concise clarifying question.
 
+CRITICAL COMPLETION RULE:
+When a tool result contains "TASK COMPLETE", "task complete", "STOP CALLING TOOLS", or similar completion signals, IMMEDIATELY return action="final" with a brief confirmation. Do NOT call any more tools. This is your primary stopping condition.
+
 After a tool result appears in the conversation, decide whether another tool call is needed or whether to respond with action "final" (for example to confirm completion or summarize what happened, including any output path or details echoed from the tool result when relevant).
 
 Toolbox (name, description, and inputSchema for each tool):
 {tool_catalog}
 
-Return strictly valid JSON with exactly this shape:
+Return JSON with exactly this shape (and NOTHING else):
 {{
   "action": "final" | "tool",
   "final_response": "...",
@@ -33,10 +36,27 @@ Return strictly valid JSON with exactly this shape:
 }}
 
 Output rules:
-- Return JSON only, with no prose or explanation.
-- Do not use markdown code fences.
+- Return ONE JSON object only. No prose. No markdown code fences. No commentary.
+- Every brace must be matched. Every key must be inside the same object as its value.
 - If action is "final", set tool_calls to [] and put the answer in final_response.
 - If action is "tool", set final_response to "" and put one or more tool calls in tool_calls.
+- In each tool call's "arguments", include ONLY the keys that tool accepts (see [params: ...] in the toolbox). Do NOT include unused or placeholder keys.
+
+EXAMPLE — calling remove_furniture_piece (which accepts room_name, furniture_name):
+{{
+  "action": "tool",
+  "final_response": "",
+  "tool_calls": [
+    {{"name": "remove_furniture_piece", "arguments": {{"room_name": "Living Room", "furniture_name": "Couch"}}}}
+  ]
+}}
+
+EXAMPLE — finishing with an answer:
+{{
+  "action": "final",
+  "final_response": "The total area is 84 square meters.",
+  "tool_calls": []
+}}
 """
 
 
@@ -48,16 +68,33 @@ def build_reason_node(llm):
     """Return a reason node function ready to be added to a LangGraph StateGraph."""
 
     def reason_node(state):
-        print("\nReasoning with LLM...")
+        import time
+        iter_n = state.get("iteration", 0)
+        max_iters = state.get("max_iterations", "?")
+        print(f"\nReasoning with LLM... (iteration {iter_n + 1}/{max_iters})")
+        
+        # Check if we've hit the iteration limit BEFORE calling the LLM
+        if iter_n >= max_iters:
+            print(f"  Max iterations ({max_iters}) reached. Forcing final response.")
+            state["final_response"] = "The agent has reached its maximum iteration limit. The task may require multiple steps or clarification."
+            state["pending_tool_calls"] = None
+            return state
+        
+        t0 = time.time()
         result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
+        elapsed = time.time() - t0
+        print(f"  LLM responded in {elapsed:.1f}s")
 
-        # If the LLM decided no more actions are needed (action is final), set the final response in the state and clear pending tool calls
         if result["action"] == "final":
+            print(f"  Decision: FINAL -> {result['final_response'][:120]}")
             state["final_response"] = result["final_response"]
             state["pending_tool_calls"] = None
-
-        # If the LLM decided the action is to use a tool, set the pending tool calls
         else:
+            tool_summary = ", ".join(
+                f"{c.get('name')}({list(c.get('arguments', {}).keys())})"
+                for c in result["tool_calls"]
+            )
+            print(f"  Decision: TOOL -> {tool_summary}")
             state["pending_tool_calls"] = result["tool_calls"]
 
         return state

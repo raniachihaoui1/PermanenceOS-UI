@@ -43,8 +43,22 @@ def build_reason_node(llm):
     """Return a reason node function ready to be added to a LangGraph StateGraph."""
 
     def reason_node(state):
-        print("\nReasoning with LLM...")
+        import time
+        iter_n = state.get("iteration", 0)
+        max_iters = state.get("max_iterations", "?")
+        print(f"\nReasoning with LLM... (iteration {iter_n + 1}/{max_iters})")
+        
+        # Check if we've hit the iteration limit BEFORE calling the LLM
+        if iter_n >= max_iters:
+            print(f"  Max iterations ({max_iters}) reached. Forcing final response.")
+            state["final_response"] = "The agent has reached its maximum iteration limit. The task may require multiple steps or clarification."
+            state["pending_tool_calls"] = None
+            return state
+        
+        t0 = time.time()
         result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
+        elapsed = time.time() - t0
+        print(f"  LLM responded in {elapsed:.1f}s")
 
         # If the LLM decided no more actions are needed (action is final), set the final response in the state and clear pending tool calls
         if result["action"] == "final":

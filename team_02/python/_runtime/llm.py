@@ -23,42 +23,30 @@ def create_chat_llm(
         model=llm_model,
         timeout=timeout_seconds,
         temperature=0,
+        # Bound the response so an unconstrained model can't run forever.
+        # Our JSON decisions are short - 512 tokens is plenty for the
+        # action/final_response/tool_calls envelope plus a handful of args.
+        max_tokens=512,
         model_kwargs=model_kwargs or {},
     )
 
 
 # ---------------------------------------------------------------------------
-# Structured-output schema builders
-#
-# get_llm_response_format() generates a provider-compatible JSON schema that
-# constrains the LLM's output to a predictable shape for tool decisions.
-# You should not need to modify these directly.
+# Response format selection
 # ---------------------------------------------------------------------------
 
 LLM_DECISION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "action": {
-            "type": "string",
-            "enum": ["final", "tool"],
-        },
-        "final_response": {
-            "type": "string",
-            "description": "Use a non-empty string only when action is 'final'. Use an empty string when action is 'tool'.",
-        },
+        "action": {"type": "string", "enum": ["final", "tool"]},
+        "final_response": {"type": "string"},
         "tool_calls": {
             "type": "array",
-            "description": "Use one or more tool calls only when action is 'tool'. Use an empty array when action is 'final'.",
             "items": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "arguments": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                        "additionalProperties": False,
-                    },
+                    "arguments": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
                 },
                 "required": ["name", "arguments"],
                 "additionalProperties": False,
@@ -89,7 +77,6 @@ def _build_arguments_schema(tools: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(property_type, str):
                 nullable_schema["type"] = [property_type, "null"]
             merged_properties[property_name] = nullable_schema
-
     return {
         "type": "object",
         "properties": merged_properties,
@@ -99,21 +86,19 @@ def _build_arguments_schema(tools: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def get_llm_response_format(tools: list[dict[str, Any]]) -> dict[str, Any]:
-    schema = deepcopy(LLM_DECISION_SCHEMA)
-    tool_names = [str(tool.get("name")) for tool in tools if tool.get("name")]
-    tool_call_schema = schema["properties"]["tool_calls"]["items"]
-    tool_call_schema["properties"]["name"]["enum"] = tool_names
-    tool_call_schema["properties"]["arguments"] = _build_arguments_schema(tools)
-
+    # NOTE: LMStudio's OpenAI-compatible server only accepts
+    # response_format types 'json_schema' or 'text'. Real OpenAI also
+    # supports 'json_object', but LMStudio rejects it with HTTP 400.
+    #
+    # We use 'text' (no format constraint) here:
+    #   - 'json_schema' with strict=true causes constrained-generation
+    #     hangs on Llama-3.1-8B against our merged schema.
+    #   - 'text' lets the model generate freely; the system prompt in
+    #     nodes/reason.py shows the exact JSON shape to emit, and the
+    #     parser below tolerates small structural variations.
+    _ = tools
     return {
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "agent_decision",
-                "strict": True,
-                "schema": schema,
-            },
-        }
+        "response_format": {"type": "text"},
     }
 
 
@@ -133,39 +118,78 @@ def _strip_markdown_code_fence(content: str) -> str:
     return "\n".join(lines[1:-1]).strip()
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Find the first balanced top-level JSON object in arbitrary text."""
+    in_string = False
+    escape = False
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start != -1:
+                return text[start:i + 1]
+    return None
+
+
 def _parse_llm_json(content: str) -> dict[str, Any]:
     content = _strip_markdown_code_fence(content)
+
+    # First try: parse the whole string.
     try:
         parsed = json.loads(content)
-        if not isinstance(parsed, dict):
-            raise RuntimeError("LLM JSON response must be an object")
-        return parsed
-    except json.JSONDecodeError as exc:
-        if "Extra data" not in str(exc):
-            raise
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
 
+    # Second try: extract first balanced { ... } from prose.
+    candidate = _extract_json_object(content)
+    if candidate is not None:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Third try: NDJSON with 'tool_call' per line.
     lines = [line.strip() for line in content.splitlines() if line.strip()]
-    if not lines:
-        raise RuntimeError("LLM response was empty")
+    if lines:
+        try:
+            tool_calls: list[dict[str, Any]] = []
+            for line in lines:
+                parsed_line = json.loads(line)
+                if isinstance(parsed_line, dict) and isinstance(parsed_line.get("tool_call"), dict):
+                    tool_calls.append(parsed_line["tool_call"])
+            if tool_calls:
+                return {"tool_calls": tool_calls}
+        except json.JSONDecodeError:
+            pass
 
-    tool_calls: list[dict[str, Any]] = []
-    for line in lines:
-        parsed_line = json.loads(line)
-        if not isinstance(parsed_line, dict):
-            raise RuntimeError("Each JSON line must be an object")
-        tool_call = parsed_line.get("tool_call")
-        if not isinstance(tool_call, dict):
-            raise RuntimeError("Each JSON line must contain 'tool_call'")
-        tool_calls.append(tool_call)
-
-    return {"tool_calls": tool_calls}
+    raise RuntimeError(f"Could not parse JSON from LLM response: {content[:500]}")
 
 
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     action = parsed.get("action")
 
     if action == "final":
-        return {"action": "final", "final_response": parsed["final_response"]}
+        return {"action": "final", "final_response": parsed.get("final_response", "")}
 
     if action == "tool":
         tool_calls = parsed.get("tool_calls")
@@ -173,7 +197,7 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError("LLM tool decision must include a non-empty 'tool_calls' array")
         return {
             "action": "tool",
-            "tool_calls": [{"name": t["name"], "arguments": t["arguments"]} for t in tool_calls],
+            "tool_calls": [{"name": t["name"], "arguments": t.get("arguments", {})} for t in tool_calls],
         }
 
     if "final_response" in parsed:
@@ -183,35 +207,24 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     if isinstance(tool_call, dict):
         return {
             "action": "tool",
-            "tool_calls": [{"name": tool_call["name"], "arguments": tool_call["arguments"]}],
+            "tool_calls": [{"name": tool_call["name"], "arguments": tool_call.get("arguments", {})}],
         }
 
     tool_calls = parsed.get("tool_calls")
     if isinstance(tool_calls, list) and tool_calls:
         return {
             "action": "tool",
-            "tool_calls": [{"name": t["name"], "arguments": t["arguments"]} for t in tool_calls],
+            "tool_calls": [{"name": t["name"], "arguments": t.get("arguments", {})} for t in tool_calls],
         }
 
     raise RuntimeError("LLM response must include either 'final_response' or 'tool_call'")
 
 
 # ---------------------------------------------------------------------------
-# Public convenience function used by reason nodes
+# Public entry used by reason nodes
 # ---------------------------------------------------------------------------
 
-def call_llm(
-    llm: Any,
-    system_prompt: str,
-    messages: list[dict[str, str]],
-    tool_catalog: str,
-) -> dict[str, Any]:
-    """Invoke the LLM and return a parsed decision dict.
-
-    Returns one of:
-      {"action": "final", "final_response": "<text>"}
-      {"action": "tool",  "tool_calls": [{"name": "<tool>", "arguments": {...}}]}
-    """
+def call_llm(llm: Any, system_prompt: str, messages: list[dict[str, str]], tool_catalog: str) -> dict[str, Any]:
     formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
     llm_messages = [{"role": "system", "content": formatted_prompt}] + messages
 

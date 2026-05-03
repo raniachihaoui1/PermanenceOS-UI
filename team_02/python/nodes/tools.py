@@ -10,7 +10,7 @@ from _runtime.llm import write_tool_result
 # pseudo-tool) requested by the reason node.
 # ---------------------------------------------------------------------------
 
-def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_dir):
+def build_tool_node(mcp_client, allowed_tools, edited_layout_dir, layout_input_dir):
     """Return a tool node function ready to be added to a LangGraph StateGraph."""
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
@@ -27,9 +27,9 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_
     # Per-tool property allow-list. The structured-output schema in llm.py
     # merges every tool's properties into one shared object and marks them all
     # required, so the LLM sends placeholder values like room_name='' or
-    # width=0 for fields that don't apply to the tool being called. Those
-    # leak into MCP and cause silent failures. Filter each call down to the
-    # properties this specific tool's inputSchema declares.
+    # width=0 for fields that don't apply to the tool being called. Filter
+    # each call down to the properties this specific tool's inputSchema
+    # actually declares.
     tool_property_names: dict[str, set[str]] = {
         t["name"]: set((t.get("inputSchema", {}).get("properties") or {}).keys())
         for t in allowed_tools
@@ -40,18 +40,27 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_
 
         for call in state["pending_tool_calls"]:
 
+            # Check if we're about to exceed max iterations BEFORE incrementing
+            if state["iteration"] >= state["max_iterations"]:
+                print(f"Max iterations ({state['max_iterations']}) reached in tool node. Skipping remaining tool calls.")
+                break
+            
             state["iteration"] += 1
             if state["iteration"] > state["max_iterations"]:
-                raise RuntimeError("Max iterations exceeded")
+                print(f"Max iterations exceeded after tool execution (iteration {state['iteration']} > {state['max_iterations']})")
+                # Set a final response to gracefully exit instead of raising
+                state["final_response"] = "The agent reached its maximum number of iterations. Unable to complete the full task."
+                state["pending_tool_calls"] = None
+                return state
 
             tool_name = call["name"]
             if tool_name not in allowed_names:
                 raise RuntimeError(f"Tool '{tool_name}' is not in the allowed tools list")
 
-            # 1) Strip nulls the LLM may have included as placeholders.
-            # 2) Filter to only the properties this specific tool's inputSchema
-            #    declares - drops cross-tool leakage from the merged schema
-            #    (e.g. room_name='' on compute_total_area).
+            # Track the old layout before tool execution (to detect changes)
+            old_layout_string = state.get("layout_json_string", "")
+
+            # 1) Strip nulls. 2) Filter to this tool's declared properties.
             allowed_props = tool_property_names.get(tool_name, set())
             tool_args = {
                 k: v
@@ -64,6 +73,20 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_
                 tool_output = handle_select_layout(layout_input_dir, state)
                 printable_args: dict[str, Any] = {}
                 print(f"select_layout -> {tool_output[:200]}")
+                
+                # Generate a summary message for select_layout
+                summary_msg = _generate_tool_result_summary(
+                    tool_name, 
+                    tool_args, 
+                    tool_output, 
+                    old_layout_string,
+                    state.get("layout_json_string", "")
+                )
+                
+                # For select_layout, include a compact result
+                _append_tool_messages(state, tool_name, printable_args, summary_msg)
+                print(f"Tool result: {summary_msg}")
+                continue
 
             # ---------------- Regular MCP tool ------------------------------
             else:
@@ -87,20 +110,36 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path, layout_input_
                 print(f"Calling tool: {tool_name} with arguments: {printable_args}")
                 tool_output = mcp_client.call_tool(tool_name, tool_args)
 
-                write_tool_result(tool_output, edited_layout_path)
-
-                # Refresh state['layout_json_string'] only when the result
-                # looks like an updated layout (has a 'rooms' key). Don't let
-                # scalar results like {"area": 40} clobber the layout.
+                # Only persist when the result is actually a layout (has a
+                # 'rooms' key). Refresh state so subsequent calls see the
+                # updated version, AND save it to <edited_layout_dir>/
+                # <layoutId>_modified.json. We DO NOT write scalar results
+                # like {"area": 40} - that would clobber the saved layout.
                 try:
                     updated = json.loads(tool_output.strip())
                     if isinstance(updated, dict) and "rooms" in updated:
                         state["layout_json_string"] = json.dumps(updated)
+
+                        layout_id = updated.get("layoutId") or "edited"
+                        output_path = edited_layout_dir / f"{layout_id}_modified.json"
+                        write_tool_result(tool_output, output_path)
+                        print(f"  Saved updated layout: {output_path}")
                 except (json.JSONDecodeError, AttributeError):
                     pass
 
-            _append_tool_messages(state, tool_name, printable_args, tool_output)
-            print(f"Tool result: {tool_output[:300]}{'...' if len(tool_output) > 300 else ''}")
+            # Generate a summary message to help the LLM understand what happened
+            summary_msg = _generate_tool_result_summary(
+                tool_name, 
+                tool_args, 
+                tool_output, 
+                old_layout_string,
+                state.get("layout_json_string", "")
+            )
+            
+            # Only include the summary - don't add the full result which can confuse the LLM
+            # If the task is complete, the LLM needs to see a clear completion message
+            _append_tool_messages(state, tool_name, printable_args, summary_msg)
+            print(f"Tool result: {summary_msg}")
 
         state["pending_tool_calls"] = None
         return state
@@ -116,7 +155,7 @@ def handle_select_layout(layout_input_dir: Path, state: dict) -> str:
     """List JSON files, prompt the user, load the chosen one, update state.
 
     Safety net: if a layout is already loaded in state, return it immediately
-    instead of re-prompting. This protects against small models (Llama-3.1-8B)
+    instead of re-prompting. Protects against small models (Llama-3.1-8B)
     that re-call select_layout in a loop ignoring the system prompt rule.
     """
     existing = state.get("layout_json_string")
@@ -173,6 +212,98 @@ def handle_select_layout(layout_input_dir: Path, state: dict) -> str:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _generate_tool_result_summary(
+    tool_name: str,
+    tool_args: dict,
+    tool_output: str,
+    old_layout_string: str,
+    new_layout_string: str
+) -> str:
+    """Generate a human-readable summary of what the tool did.
+    
+    Helps the LLM understand whether the task is complete by comparing
+    before/after states and providing clear feedback.
+    """
+    try:
+        result = json.loads(tool_output.strip())
+    except (json.JSONDecodeError, ValueError):
+        return f"Tool '{tool_name}' executed with arguments {tool_args}."
+    
+    # For layout-modifying tools, detect if anything changed
+    if tool_name in ("remove_furniture_piece", "add_furniture", "edit_room"):
+        try:
+            old_layout = json.loads(old_layout_string) if old_layout_string else {}
+            new_layout = json.loads(new_layout_string) if new_layout_string else {}
+            
+            # Detect changes in furniture
+            old_furniture = _extract_all_furniture(old_layout)
+            new_furniture = _extract_all_furniture(new_layout)
+            
+            if old_furniture != new_furniture:
+                removed = old_furniture - new_furniture
+                added = new_furniture - old_furniture
+                
+                changes = []
+                if removed:
+                    changes.append(f"Removed: {', '.join(sorted(removed))}")
+                if added:
+                    changes.append(f"Added: {', '.join(sorted(added))}")
+                
+                if changes:
+                    return (
+                        f"✓ SUCCESS: Layout successfully modified. {' '.join(changes)}. "
+                        f"TASK COMPLETE - RETURN action='final' NOW."
+                    )
+            else:
+                # Nothing changed - be VERY explicit this is complete
+                room_name = tool_args.get("room_name", "the room")
+                furniture_name = tool_args.get("furniture_name", "the requested item")
+                if tool_name == "remove_furniture_piece":
+                    # Make it absolutely clear: task is done, stop calling tools
+                    return (
+                        f"✓ TASK COMPLETE: '{furniture_name}' not found in {room_name}. "
+                        f"This furniture either doesn't exist or was already removed. "
+                        f"STOP CALLING TOOLS. Return action='final' immediately with your response."
+                    )
+        except (json.JSONDecodeError, KeyError, AttributeError):
+            pass
+    
+    # For query tools (compute_*, list_*, etc.), just confirm execution
+    if tool_name.startswith("compute_") or tool_name.startswith("list_"):
+        if isinstance(result, dict) and "error" not in result:
+            return f"✓ {tool_name} executed successfully."
+    
+    return f"Tool '{tool_name}' executed with arguments {tool_args}."
+
+
+def _extract_all_furniture(layout: dict) -> set[str]:
+    """Extract all furniture items from a layout as a set of 'room:furniture' pairs.
+    
+    Furniture is stored at the top level with roomId references.
+    """
+    furniture = set()
+    try:
+        # Get mapping of room IDs to room names
+        room_id_to_name = {}
+        for room in layout.get("rooms", []):
+            room_id = room.get("id", "")
+            room_name = room.get("name", "")
+            if room_id and room_name:
+                room_id_to_name[room_id] = room_name
+        
+        # Extract furniture with room references
+        for item in layout.get("furniture", []):
+            item_name = item.get("name", "")
+            room_id = item.get("attributes", {}).get("roomId", "")
+            room_name = room_id_to_name.get(room_id, "")
+            
+            if room_name and item_name:
+                furniture.add(f"{room_name}:{item_name}")
+    except (KeyError, TypeError, AttributeError):
+        pass
+    return furniture
+
 
 def _append_tool_messages(state: dict, tool_name: str, arguments: dict, tool_output: str) -> None:
     state["messages"].append({
