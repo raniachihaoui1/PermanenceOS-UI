@@ -142,6 +142,7 @@ team_04/
 - Routes conditionally: tool calls → `tool`; unvalidated geometry → `auto_evaluate`; done → `END`
 - `auto_evaluate` calls all 3 evaluators (spatial, performance, integrity) then clears `final_response` so the LLM synthesises a qualified response
 - `_build_tracked_tool_node` wraps the inner tool node to extract `geometry_id` from `parametric_shape_generator_04` responses automatically
+- `print_ascii()` call in `run_agent` is wrapped in `try/except ImportError` — prints graph structure only when `grandalf` is installed; silently skipped otherwise
 
 **Key functions:**
 - `build_graph(ctx)` — assembles the 3-node workflow and compiles it
@@ -194,22 +195,32 @@ team_04/
 ---
 
 #### `llm.py`
-**Purpose:** LLM interface and structured output management
+**Purpose:** LLM interface and response parsing
 
 **What it does:**
 - Creates LangChain `ChatOpenAI` instances (works with OpenAI-compatible APIs)
-- Defines a strict JSON schema that constrains the LLM's responses
-- Builds tool-specific argument schemas from MCP tool definitions
+- Defines a reference JSON schema (`LLM_DECISION_SCHEMA`) for documentation purposes
 - Parses LLM responses (handles markdown fences, multi-line JSON)
 - Normalizes LLM decisions into a consistent format
 - Persists tool results to disk (saves edited layouts as JSON)
 
+**Design decision — no `response_format` schema in requests:**  
+Earlier versions passed the full `json_schema` / `json_object` `response_format` flag to every API call. This was removed because:
+1. Cloudflare Workers AI enforces a 2 000-token output cap when `json_schema` is used, causing `LengthFinishReasonError` on the first reasoning step.
+2. The merged argument schema (all 21 tool properties combined) added ~1 000+ tokens to every request, causing HTTP 408 inference timeouts on the 30B model.
+3. The system prompt already instructs the model to emit strict JSON, and `_parse_llm_json` / `_normalize_llm_decision` handle any format variance robustly.
+
+As a result, `get_llm_response_format()` now returns `{}` — no API-level schema enforcement.
+
+**`max_tokens=8192` added to `create_chat_llm()`:**  
+Cloudflare defaults the output cap to 2 000 tokens. Setting `max_tokens=8192` lifts the limit so the model can emit a complete JSON response for complex prompts.
+
 **Key constants:**
-- `LLM_DECISION_SCHEMA` — the JSON schema for agent decisions
+- `LLM_DECISION_SCHEMA` — reference JSON schema; used for documentation, not sent to API
 
 **Key functions:**
-- `create_chat_llm()` — factory function for LLM instances
-- `get_llm_response_format()` — builds structured output schema
+- `create_chat_llm()` — factory function; includes `max_tokens=8192`, `temperature=0`
+- `get_llm_response_format()` — returns `{}` (no response_format overhead)
 - `call_llm()` — invokes the LLM and parses the response
 - `write_tool_result()` — saves tool output to file
 
@@ -340,7 +351,7 @@ Tools exposed by the Grasshopper MCP server. Examples might include:
 - `validate_layout` — check if the layout is valid
 
 ### Structured Output
-The LLM is constrained to return JSON in this exact format:
+The LLM is instructed via the system prompt to return JSON in this exact format:
 ```json
 {
   "action": "final" | "tool",
@@ -354,7 +365,19 @@ The LLM is constrained to return JSON in this exact format:
 }
 ```
 
-This ensures reliable parsing and prevents hallucination of tool names or arguments.
+No `response_format` flag is passed to the API (see `llm.py` notes above). Parsing is handled by `_parse_llm_json` and `_normalize_llm_decision` in `_runtime/llm.py`.
+
+### LLM Provider — Cloudflare Workers AI
+
+The active provider is Cloudflare Workers AI via an OpenAI-compatible endpoint:
+- **Model:** `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (fast FP8-quantised Llama 3.3 70B)
+- **Base URL:** `https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1`
+- **Credentials:** `CF_ACCOUNT_ID`, `CF_API_TOKEN`, `CF_MODEL` in `.env` at repo root
+- **Timeout:** `timeout_seconds=300` for multi-turn agent runs (history grows with each tool call)
+- **Max iterations:** `max_iterations=20` — full TerraPilot workflow requires ~10–15 tool calls
+
+**Why `llama-3.3-70b-instruct-fp8-fast` over `qwen3-30b-a3b-fp8`:**  
+The Qwen 30B model consistently timed out (HTTP 408) when processing multi-turn conversations with the large TerraPilot system prompt. The Llama 3.3 70B FP8-fast variant handles the same load reliably.
 
 ---
 
@@ -392,10 +415,26 @@ The MCP server endpoint is loaded from `mcp.json` in the repository root.
 
 ## Safety & Limits
 
-- **Max iterations:** Prevents infinite loops (configurable via `MAX_ITERATIONS`)
-- **Structured output:** LLM can only call known tools with valid arguments
+- **Max iterations:** Prevents infinite loops (configurable via `MAX_ITERATIONS`; recommended ≥ 20 for full TerraPilot workflows)
+- **Output token cap:** `max_tokens=8192` lifts Cloudflare's default 2 000-token cap
 - **Tool validation:** Requested tools are checked against the allowed list
-- **Timeout protection:** All HTTP requests have timeouts
+- **Timeout protection:** All HTTP requests have configurable timeouts (recommended 300 s for multi-turn runs)
+- **Module cache:** Cell 19 in the notebook calls `importlib.reload()` on `_runtime.llm` and `graph` before each run to pick up any on-disk edits without restarting the kernel
+
+---
+
+## Environment Setup
+
+Create a `.env` file at `AIA26_Studio/.env` (repo root):
+
+```dotenv
+# Cloudflare Workers AI
+CF_ACCOUNT_ID = "<your-account-id>"
+CF_API_TOKEN  = "<your-api-token>"
+CF_MODEL      = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+```
+
+The notebook loads this file via `load_dotenv(..., override=True)` at cell run time.
 
 ---
 

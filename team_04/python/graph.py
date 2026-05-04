@@ -166,9 +166,12 @@ def run_agent(prompt: str, ctx: Any) -> str:
     initial_state = _build_initial_state(prompt, ctx)
     final_state = app.invoke(initial_state)
 
-    # Uncomment these two lines to see the graph structure in the terminal
-    print("\nWorkflow graph:")
-    app.get_graph().print_ascii()
+    # Print graph structure if grandalf is available
+    try:
+        print("\nWorkflow graph:")
+        app.get_graph().print_ascii()
+    except ImportError:
+        pass
 
     final_response = final_state.get("final_response")
     if not isinstance(final_response, str):
