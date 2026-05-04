@@ -570,36 +570,6 @@
   ],
   "furniture": [
     {
-      "id": "furn-1",
-      "name": "Master Bed",
-      "geometry": [
-        [
-          1.0,
-          1.0
-        ],
-        [
-          4.5,
-          1.0
-        ],
-        [
-          4.5,
-          3.0
-        ],
-        [
-          1.0,
-          3.0
-        ],
-        [
-          1.0,
-          1.0
-        ]
-      ],
-      "attributes": {
-        "roomId": "room-5",
-        "type": "bed"
-      }
-    },
-    {
       "id": "furn-2",
       "name": "Sitting Area Sofa",
       "geometry": [

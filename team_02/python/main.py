@@ -10,7 +10,10 @@ def main():
     parser.add_argument("prompt", help="Your instruction for the agent (e.g. 'delete the kitchen')")
     args = parser.parse_args()
 
-    # Initialize and run the agent
+    # No layout is pre-selected. The agent will call the `select_layout`
+    # pseudo-tool (handled in nodes/tools.py) when the user's request
+    # actually needs a layout — at which point the user is prompted in
+    # the terminal to choose a JSON file from layout_input/.
     ctx = bootstrap()
     response = run_agent(args.prompt, ctx)
 
