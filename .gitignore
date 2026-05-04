@@ -2,3 +2,9 @@
 *.pyc
 mcp.json
 **/__pycache__/
+
+#Ignore virtual environment
+.venv/
+
+#Ignore vscode settings
+.vscode/
