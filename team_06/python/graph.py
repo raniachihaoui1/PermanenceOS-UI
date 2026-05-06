@@ -29,9 +29,11 @@ class AgentState():
     iteration: int                       # current tool-call count
     max_iterations: int                  # safety cap to stop the process (set from .env)
     tool_catalog: str                    # formatted list of available MCP tools
-    layout_json_string: str              # current layout as a JSON string, injected into tool calls
-    layout_id: str | None                # current selected layout ID
-    layout_schema: dict[str, Any] | None # current selected layout schema dict
+    input_layout_json_string: str        # initial layout as JSON string (immutable)
+    current_layout_json_string: str | None  # layout being evaluated (mutable, from filter or MCP tools)
+    output_layout_json_string: str | None   # final result layout at end of workflow
+    candidate_ids_json_string: str | None   # JSON array: [{"layoutId": "L1", "score": 0.95}, ...]
+    current_candidate_index: int            # pointer to current candidate being evaluated (0, 1, 2...)
 
 # ---------------------------------------------------------------------------
 # Routing — decides which node runs next after "reason".
@@ -104,7 +106,7 @@ def run_agent(prompt: str, ctx: Any) -> str:
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
     # Convert the layout data to a JSON string
-    layout_text = json.dumps(ctx.layout_data, indent=2)
+    input_layout_text = json.dumps(ctx.layout_data, indent=2)
     
     # Get local tools
     local_tools = get_local_tools()
@@ -118,7 +120,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "Context: the current layout is JSON below. "
         "Valid room names are rooms[].name.\n\n"
         f"User request:\n{prompt}\n\n"
-        f"Current layout JSON:\n{layout_text}"
+        f"Current layout JSON:\n{input_layout_text}"
     )
 
     return {
@@ -128,9 +130,11 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "iteration": 0,
         "max_iterations": ctx.max_iterations,
         "tool_catalog": tool_catalog,
-        "layout_json_string": layout_text,
-        "layout_id": None,
-        "layout_schema": None,
+        "input_layout_json_string": input_layout_text,
+        "current_layout_json_string": None,
+        "output_layout_json_string": None,
+        "candidate_ids_json_string": None,
+        "current_candidate_index": 0,
     }
 
 # Helper funtion to prepare the tool catalog for the LLM
