@@ -35,16 +35,13 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
-            # Inject layout_json if the tool expects it
-            if "layout_json" in tool_args:
-                tool_args["layout_json"] = state["layout_json_string"]
+            # Inject input_layout if the tool expects it
+            if "input_layout" in tool_args:
+                tool_args["input_layout"] = state["input_layout_json_string"]
             
-            # For visualise_layout, inject layout_schema (filtered layout if available, otherwise full layout)
-            if tool_name == "visualise_layout" and "layout_schema" in tool_args:
-                if state.get("layout_schema"):
-                    tool_args["layout_schema"] = json.dumps(state["layout_schema"])
-                else:
-                    tool_args["layout_schema"] = state["layout_json_string"]
+            # Inject current_layout if the tool expects it
+            if "current_layout" in tool_args:
+                tool_args["current_layout"] = state["current_layout_json_string"]
 
             # Call the tool
             tool_output = mcp_client.call_tool(tool_name, tool_args)
@@ -57,7 +54,7 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             try:
                 updated = json.loads(tool_output.strip())
                 if isinstance(updated, dict):
-                    state["layout_json_string"] = json.dumps(updated)
+                    state["current_layout_json_string"] = json.dumps(updated)
             except (json.JSONDecodeError, AttributeError):
                 pass
 
