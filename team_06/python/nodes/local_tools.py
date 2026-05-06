@@ -22,7 +22,7 @@ from tools.layout_filter import select_layout
 @lru_cache(maxsize=1)
 def _load_all_layouts() -> list[dict[str, Any]]:
     """Load all layouts from sample_layouts.json."""
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     layouts_path = repo_root / "layout_inputs" / "sample_layouts.json"
     return json.loads(layouts_path.read_text(encoding="utf-8"))
 
@@ -30,7 +30,7 @@ def _load_all_layouts() -> list[dict[str, Any]]:
 @lru_cache(maxsize=1)
 def _load_all_descriptions() -> list[dict[str, Any]]:
     """Load layout descriptions from sample_descriptions.json."""
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     descriptions_path = repo_root / "layout_inputs" / "sample_descriptions.json"
     return json.loads(descriptions_path.read_text(encoding="utf-8"))
 
@@ -130,16 +130,20 @@ def build_local_tool_node():
 
             # Store results in state for downstream tool calls
             if tool_name == "layout_matcher" and isinstance(tool_output, dict):
-                # Extract the best matching layout ID
+                # Extract all matching layout IDs with scores, store as JSON string
                 matches = tool_output.get("matches", [])
                 if matches:
-                    best_match = matches[0]
-                    state["layout_id"] = best_match.get("layoutId")
+                    # Convert to format: [{"layoutId": "L1", "score": 0.95}, ...]
+                    candidate_list = [
+                        {"layoutId": m.get("layoutId"), "score": m.get("score")}
+                        for m in matches
+                    ]
+                    state["candidate_ids_json_string"] = json.dumps(candidate_list)
+                    state["current_candidate_index"] = 0
             
             elif tool_name == "layout_filter" and isinstance(tool_output, dict):
-                # Store the full layout schema
-                state["layout_schema"] = tool_output
-                state["layout_id"] = tool_output.get("layoutId")
+                # Store the full layout schema as JSON string
+                state["current_layout_json_string"] = json.dumps(tool_output, indent=2)
 
             # Append the tool call and its result to the conversation history
             state["messages"].append({
