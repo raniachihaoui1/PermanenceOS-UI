@@ -149,7 +149,7 @@ def _build_initial_state(prompt: str, ctx: Any, session_state: dict[str, Any] | 
         "Context: the current layout is JSON below. "
         "Valid room names are rooms[].name.\n\n"
         f"User request:\n{prompt}\n\n"
-        f"Current layout JSON:\n{layout_text}"
+        f"Current layout JSON:\n{input_layout_text}"
     )
 
     return {

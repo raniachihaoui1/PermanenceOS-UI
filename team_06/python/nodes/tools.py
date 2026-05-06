@@ -50,7 +50,7 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             try:
                 updated = json.loads(tool_output.strip())
                 if isinstance(updated, dict):
-                    state["layout_json_string"] = json.dumps(updated)
+                    state["current_layout_json_string"] = json.dumps(updated)
             except (json.JSONDecodeError, AttributeError):
                 pass
 

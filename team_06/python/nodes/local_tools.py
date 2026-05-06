@@ -23,6 +23,7 @@ from tools.layout_filter import select_layout
 def _load_all_layouts() -> list[dict[str, Any]]:
     """Load all layouts from sample_layouts.json."""
     repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     layouts_path = repo_root / "layout_inputs" / "sample_layouts.json"
     return json.loads(layouts_path.read_text(encoding="utf-8"))
 
@@ -30,6 +31,7 @@ def _load_all_layouts() -> list[dict[str, Any]]:
 @lru_cache(maxsize=1)
 def _load_all_descriptions() -> list[dict[str, Any]]:
     """Load layout descriptions from sample_descriptions.json."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
     repo_root = Path(__file__).resolve().parent.parent.parent
     descriptions_path = repo_root / "layout_inputs" / "sample_descriptions.json"
     return json.loads(descriptions_path.read_text(encoding="utf-8"))
