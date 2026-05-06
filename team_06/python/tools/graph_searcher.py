@@ -1,82 +1,82 @@
 """Graph-based layout search using NetworkX.
 
-Simple topology search: graph similarity and room program matching.
+Unified topology search: build pattern graphs and match via graph similarity.
 """
 
 import json
 from pathlib import Path
 import networkx as nx
 
-# Import graph builder
+# Import graph builders
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.schema_to_graph import create_graph_from_layout
+from utils.schema_to_graph import create_graph_from_layout, build_topology_graph
 
-
+# ============================================================================
+# GraphSearcher class: loads layout graphs and provides search methods.
+# ============================================================================
 class GraphSearcher:
-    """Search layouts using graph topology comparison."""
-    
-    def __init__(self, layouts_path: str):
-        """
-        Initialize with layouts data.
-        
-        Args:
-            layouts_path: Path to sample_layouts.json
-        """
-        self.layouts_path = layouts_path
-        self.layouts = self._load_layouts()
-        self.layout_graphs = {}
-        self._build_networkx_graphs()
-    
-    def _load_layouts(self) -> list:
-        """Load all layouts from JSON."""
-        with open(self.layouts_path, 'r') as f:
-            return json.load(f)
-    
-    def _build_networkx_graphs(self) -> None:
-        """Build NetworkX graphs from layout schemas."""
-        for layout_idx, layout_data in enumerate(self.layouts, 1):
-            layout_id = f"layout-{layout_idx}"
-            # Build graph from schema
-            G = create_graph_from_layout(layout_data)
-            
-            self.layout_graphs[layout_id] = {
-                'graph': G,
-                'data': layout_data
-            }
+    # --------- Loading and initialization
+    def __init__(self, graphs_path: str):
 
+        self.graphs_path = graphs_path
+        self.layout_graphs = self._load_graphs()
     
+    # --------- Private methods
+    def _load_graphs(self) -> dict:
+
+        with open(self.graphs_path, 'r') as f:
+            graphs_data = json.load(f)
+        
+        # Convert node-link format back to NetworkX graphs
+        layout_graphs = {}
+        for layout_id, node_link_data in graphs_data.items():
+            layout_graphs[layout_id] = nx.node_link_graph(node_link_data)
+        
+        return layout_graphs
+
     def search_by_graph_similarity(self, pattern_graph: nx.Graph, method: str = "jaccard") -> list:
-        """
-        Search for layouts similar to a given pattern graph.
-        
-        Args:
-            pattern_graph: Reference NetworkX graph
-            method: Similarity metric ('jaccard' or 'overlap')
-        
-        Returns:
-            List of (layout_id, similarity_score) tuples
-        """
         results = []
         
-        # Convert pattern graph to edge set
+        # Extract pattern structure: required program counts and edges
+        pattern_programs = {}
+        for node in pattern_graph.nodes():
+            program = pattern_graph.nodes[node].get('program', '')
+            pattern_programs[program] = pattern_programs.get(program, 0) + 1
+        
         pattern_edges = set()
         for u, v in pattern_graph.edges():
-            edge = tuple(sorted([u, v]))
+            # Get programs for each node in pattern
+            prog_u = pattern_graph.nodes[u].get('program', '')
+            prog_v = pattern_graph.nodes[v].get('program', '')
+            edge = tuple(sorted([prog_u, prog_v]))
             pattern_edges.add(edge)
         
-        for layout_id, layout_info in self.layout_graphs.items():
-            G = layout_info['graph']
+        for layout_id, G in self.layout_graphs.items():
+            # Get available programs in layout
+            available_programs = {}
+            for node in G.nodes():
+                program = G.nodes[node].get('program', '')
+                available_programs[program] = available_programs.get(program, 0) + 1
             
-            # Convert to edge set
+            # Check if layout has required program counts
+            if not all(available_programs.get(prog, 0) >= count 
+                      for prog, count in pattern_programs.items()):
+                continue
+            
+            # Get layout edges between required programs
             layout_edges = set()
             for u, v in G.edges():
-                edge = tuple(sorted([u, v]))
-                layout_edges.add(edge)
+                prog_u = G.nodes[u].get('program', '')
+                prog_v = G.nodes[v].get('program', '')
+                # Only count edges between programs we care about
+                if prog_u in pattern_programs and prog_v in pattern_programs:
+                    edge = tuple(sorted([prog_u, prog_v]))
+                    layout_edges.add(edge)
             
-            # Calculate similarity
+            # Calculate primary similarity based on pattern edges
             if method == "jaccard":
-                # Jaccard similarity: intersection / union
+                # Jaccard: intersection / union
                 union_size = len(pattern_edges | layout_edges)
                 if union_size > 0:
                     similarity = len(pattern_edges & layout_edges) / union_size
@@ -84,68 +84,58 @@ class GraphSearcher:
                     similarity = 0.0
             
             elif method == "overlap":
-                # Overlap coefficient: intersection / min size
+                # Overlap: intersection / min
                 min_size = min(len(pattern_edges), len(layout_edges)) or 1
                 similarity = len(pattern_edges & layout_edges) / min_size
             
             else:
                 similarity = 0.0
             
-            results.append((layout_id, similarity))
-        
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results
-    
-    def search_by_room_program(self, required_programs: list, min_match: int = None) -> list:
-        """
-        Search for layouts with specific room types.
-        
-        Args:
-            required_programs: List of room programs needed
-                              e.g., ['bed', 'kitchen', 'living']
-            min_match: Minimum number to match (default: all)
-        
-        Returns:
-            List of (layout_id, num_matched) tuples
-        """
-        if min_match is None:
-            min_match = len(required_programs)
-        
-        results = []
-        
-        for layout_id, layout_info in self.layout_graphs.items():
-            rooms = layout_info['data']['rooms']
-            available_programs = {room['program'] for room in rooms}
+            # Tiebreaker: connectivity quality (higher = more interconnected subgraph)
+            # Count how many pattern program types have edges within pattern set
+            required_prog_nodes = [node for node in G.nodes() 
+                                  if G.nodes[node].get('program', '') in pattern_programs]
+            if len(required_prog_nodes) > 1:
+                subgraph = G.subgraph(required_prog_nodes)
+                # Density of the required rooms subgraph (0-1, higher = more connected)
+                tiebreaker = nx.density(subgraph)
+            else:
+                tiebreaker = 0.0
             
-            # Count matches
-            matches = sum(1 for prog in required_programs if prog in available_programs)
-            
-            if matches >= min_match:
-                results.append((layout_id, matches))
+            results.append((layout_id, similarity, tiebreaker))
         
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results
+        # Sort by similarity first, then by connectivity tiebreaker
+        results.sort(key=lambda x: (x[1], x[2]), reverse=True)
+        
+        # Return as (layout_id, similarity) pairs for compatibility
+        return [(layout_id, similarity) for layout_id, similarity, _ in results]
     
-    def get_layout_info(self, layout_id: str) -> dict:
-        """Get layout schema data for a specific layout ID."""
-        if layout_id in self.layout_graphs:
-            return self.layout_graphs[layout_id]['data']
-        return None
+    # --------- Utility methods
+    # Get layout info for a specific layout ID
+    def get_layout_info(self, layout_id: str) -> nx.Graph:
+        
+        return self.layout_graphs.get(layout_id)
     
+    # --------- Statistics
+    # Get network statistics for a layout
     def get_graph_stats(self, layout_id: str) -> dict:
-        """Get network statistics for a layout."""
-        if layout_id not in self.layout_graphs:
+        G = self.layout_graphs.get(layout_id)
+        if G is None:
             return None
         
-        G = self.layout_graphs[layout_id]['graph']
+        # Count rooms by program
+        program_counts = {}
+        for node in G.nodes():
+            program = G.nodes[node].get('program', '')
+            program_counts[program] = program_counts.get(program, 0) + 1
         
         return {
             "layout_id": layout_id,
             "num_rooms": G.number_of_nodes(),
-            "num_doors": G.number_of_edges(),
+            "num_connections": G.number_of_edges(),
+            "room_programs": program_counts,
             "is_connected": nx.is_connected(G),
             "density": nx.density(G),
             "clustering_coefficient": sum(nx.clustering(G).values()) / G.number_of_nodes() if G.number_of_nodes() > 0 else 0,
             "degree_sequence": {G.nodes[node].get('name', node): G.degree(node) for node in G.nodes()}
         }
-
