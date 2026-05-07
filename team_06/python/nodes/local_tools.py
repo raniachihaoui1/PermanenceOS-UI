@@ -13,8 +13,7 @@ from functools import lru_cache
 
 from tools.embedding_matcher import match_layouts
 from tools.layout_filter import select_layout
-from tools.graph_searcher import GraphSearcher
-from utils.schema_to_graph import build_topology_graph
+from tools.graph_searcher import GraphSearcher, build_topology_graph
 
 
 # ---------------------------------------------------------------------------

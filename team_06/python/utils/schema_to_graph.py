@@ -34,53 +34,7 @@ def create_graph_from_layout(layout: dict) -> nx.Graph:
     return graph
 
 
-def build_topology_graph(programs: list, connection_type: str = "any") -> nx.Graph:
-    """
-    Build a topology pattern graph from room programs for search queries.
-    Preserves count by creating unique node IDs for each program instance.
-    
-    ABSTRACTION: This converts user intent ("find bed, kitchen, living connected")
-    into a PROGRAM-LEVEL graph (not room-level). This abstraction allows matching
-    ANY bed room to ANY kitchen room, regardless of their actual room IDs.
-    
-    Args:
-        programs: List of room programs/types (e.g., ['bed', 'kitchen', 'living', 'bed'])
-                 Count matters - ['bed', 'bed'] is different from ['bed']
-        connection_type: 'any' = rooms exist (any edges), 
-                        'connected' = rooms must all be interconnected
-    
-    Returns:
-        NetworkX graph representing the topology pattern to search for
-        - Nodes have 'program' attribute (e.g., 'bed', 'kitchen')
-        - Edges represent required connections between program types
-    """
-    G = nx.Graph()
-    
-    # Create unique node IDs for each program instance (preserves count)
-    # This ensures ['bed', 'bed'] creates 2 nodes, not 1
-    # e.g., ['bed', 'bed', 'kitchen'] → nodes: bed_1, bed_2, kitchen_1
-    program_count = {}
-    node_ids = {}
-    for idx, program in enumerate(programs):
-        count = program_count.get(program, 0) + 1
-        program_count[program] = count
-        node_id = f"{program}_{count}"
-        node_ids[idx] = (node_id, program)
-        G.add_node(node_id, program=program)
-    
-    # Add edges based on connection type
-    if connection_type == "connected" and len(node_ids) > 1:
-        # CONNECTED mode: create a fully connected graph (complete subgraph)
-        # This means all programs must be interconnected via doors
-        # E.g., "bed connected to kitchen connected to living"
-        node_list = [node_id for node_id, _ in node_ids.values()]
-        for i in range(len(node_list)):
-            for j in range(i + 1, len(node_list)):
-                G.add_edge(node_list[i], node_list[j])
-    # else: connection_type == "any" → just nodes, no edges
-    #       This means rooms can exist anywhere (no connectivity requirement)
-    
-    return G
+
 
 
 def generate_and_save_graphs(layouts_path: str, output_path: str = None) -> None:

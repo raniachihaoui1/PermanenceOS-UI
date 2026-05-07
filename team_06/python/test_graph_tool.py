@@ -5,8 +5,7 @@ import sys
 from pathlib import Path
 
 print("✓ Testing unified GraphSearcher...\n")
-from tools.graph_searcher import GraphSearcher
-from utils.schema_to_graph import build_topology_graph
+from tools.graph_searcher import GraphSearcher, build_topology_graph
 
 repo_root = Path(__file__).resolve().parent.parent
 graphs_path = repo_root / "layout_inputs" / "sample_graphs.json"
