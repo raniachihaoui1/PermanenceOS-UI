@@ -35,36 +35,66 @@ class GraphSearcher:
         
         return layout_graphs
 
-    def search_by_graph_similarity(self, pattern_graph: nx.Graph, method: str = "jaccard") -> list:
+    def search_by_graph_similarity(self, topology_graph: nx.Graph, method: str = "jaccard") -> list:
+        """Search all layouts for matches against a topology pattern.
+        
+        ALGORITHM:
+        1. Extract what user is looking for (program counts + required edges)
+        2. For each layout, check if it HAS those programs
+        3. Extract program-level edges from the layout
+        4. Compare user edges vs layout edges using similarity metric
+        5. Rank by similarity + tiebreaker (connectivity)
+        
+        KEY INSIGHT: We work at PROGRAM LEVEL (bed, kitchen, living),
+        not ROOM LEVEL (room-1, room-2). This allows matching ANY bed
+        to ANY kitchen, regardless of their physical room IDs.
+        
+        Args:
+            topology_graph: User's search pattern (from build_topology_graph)
+            method: 'jaccard' (strict) or 'overlap' (lenient)
+                - jaccard: intersection / union (stricter)
+                - overlap: intersection / min (more forgiving)
+        
+        Returns:
+            List of (layout_id, similarity_score) sorted by score (best first)
+        """
         results = []
         
-        # Extract pattern structure: required program counts and edges
+        # STEP 1: Extract what user is looking for from topology pattern
+        # Count each program type: {'bed': 1, 'kitchen': 1, 'living': 1}
         pattern_programs = {}
-        for node in pattern_graph.nodes():
-            program = pattern_graph.nodes[node].get('program', '')
+        for node in topology_graph.nodes():
+            program = topology_graph.nodes[node].get('program', '')
             pattern_programs[program] = pattern_programs.get(program, 0) + 1
         
+        # Extract required PROGRAM-LEVEL edges (not room IDs)
+        # E.g., {('bed', 'kitchen'), ('kitchen', 'living')}
+        # This is the CONNECTIVITY PATTERN the user wants
         pattern_edges = set()
-        for u, v in pattern_graph.edges():
-            # Get programs for each node in pattern
-            prog_u = pattern_graph.nodes[u].get('program', '')
-            prog_v = pattern_graph.nodes[v].get('program', '')
+        for u, v in topology_graph.edges():
+            prog_u = topology_graph.nodes[u].get('program', '')
+            prog_v = topology_graph.nodes[v].get('program', '')
             edge = tuple(sorted([prog_u, prog_v]))
             pattern_edges.add(edge)
         
+        # STEP 2-4: Check each layout
         for layout_id, G in self.layout_graphs.items():
-            # Get available programs in layout
+            # Get available programs in this layout
+            # Count actual rooms by program type: {'bed': 1, 'kitchen': 1, 'living': 2, ...}
             available_programs = {}
             for node in G.nodes():
                 program = G.nodes[node].get('program', '')
                 available_programs[program] = available_programs.get(program, 0) + 1
             
-            # Check if layout has required program counts
+            # FILTER: Does layout have enough of each program type?
+            # E.g., if user wants 2 beds, layout must have at least 2 beds
             if not all(available_programs.get(prog, 0) >= count 
                       for prog, count in pattern_programs.items()):
-                continue
+                continue  # Skip this layout, doesn't match
             
-            # Get layout edges between required programs
+            # EXTRACT: Get program-level edges from the layout
+            # Only count edges between programs user cares about
+            # E.g., if user wants bed+kitchen, ignore bathroom edges
             layout_edges = set()
             for u, v in G.edges():
                 prog_u = G.nodes[u].get('program', '')
@@ -74,9 +104,11 @@ class GraphSearcher:
                     edge = tuple(sorted([prog_u, prog_v]))
                     layout_edges.add(edge)
             
-            # Calculate primary similarity based on pattern edges
+            # STEP 5a: Calculate similarity (how well does layout match user's edge pattern?)
             if method == "jaccard":
                 # Jaccard: intersection / union
+                # How many edges match? divided by total edges needed
+                # 2 matching edges out of 3 required = 2/3 = 0.67
                 union_size = len(pattern_edges | layout_edges)
                 if union_size > 0:
                     similarity = len(pattern_edges & layout_edges) / union_size
@@ -85,29 +117,34 @@ class GraphSearcher:
             
             elif method == "overlap":
                 # Overlap: intersection / min
+                # More forgiving than Jaccard
+                # 2 matching edges vs min(2 required, 4 in layout) = 2/2 = 1.0
                 min_size = min(len(pattern_edges), len(layout_edges)) or 1
                 similarity = len(pattern_edges & layout_edges) / min_size
             
             else:
                 similarity = 0.0
             
-            # Tiebreaker: connectivity quality (higher = more interconnected subgraph)
-            # Count how many pattern program types have edges within pattern set
+            # STEP 5b: Tiebreaker (if two layouts have same similarity score)
+            # Which layout's required rooms are MORE interconnected?
+            # E.g., all 3 rooms connected via doors = high density
+            #      3 rooms with only 1 door = low density
             required_prog_nodes = [node for node in G.nodes() 
                                   if G.nodes[node].get('program', '') in pattern_programs]
             if len(required_prog_nodes) > 1:
                 subgraph = G.subgraph(required_prog_nodes)
-                # Density of the required rooms subgraph (0-1, higher = more connected)
+                # Density: 0.0 (isolated) to 1.0 (fully connected)
                 tiebreaker = nx.density(subgraph)
             else:
                 tiebreaker = 0.0
             
             results.append((layout_id, similarity, tiebreaker))
         
-        # Sort by similarity first, then by connectivity tiebreaker
+        # STEP 6: Sort by similarity first, then by tiebreaker (connectivity)
         results.sort(key=lambda x: (x[1], x[2]), reverse=True)
         
         # Return as (layout_id, similarity) pairs for compatibility
+        return [(layout_id, similarity) for layout_id, similarity, _ in results]
         return [(layout_id, similarity) for layout_id, similarity, _ in results]
     
     # --------- Utility methods

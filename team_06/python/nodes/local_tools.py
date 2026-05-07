@@ -138,11 +138,11 @@ def build_local_tool_node():
                 programs = tool_args.get("programs", [])
                 connection_type = tool_args.get("connection_type", "any")
                 
-                # Build pattern graph from user intent
-                pattern_graph = build_topology_graph(programs, connection_type)
+                # Build topology graph from user intent
+                topology_graph = build_topology_graph(programs, connection_type)
                 
                 # Search using graph similarity
-                results = graph_searcher.search_by_graph_similarity(pattern_graph, method="jaccard")
+                results = graph_searcher.search_by_graph_similarity(topology_graph, method="jaccard")
                 
                 # Format results
                 candidates = [
