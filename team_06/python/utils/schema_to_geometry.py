@@ -32,7 +32,7 @@ def schema_to_rhino_geometry(schema: Dict[str, Any]) -> Dict[str, Any]:
     # Rooms
     for room in schema.get("rooms", []):
         result["rooms"].append(_coords_to_geometry(room.get("geometry", [])))
-        result["programs"].append(room.get("program", "unknown"))
+        result["programs"].append(room.get("attributes", {}).get("program", "unknown"))
     
     # Doors (points only)
     for door in schema.get("doors", []):
