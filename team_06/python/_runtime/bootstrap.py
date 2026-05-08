@@ -17,7 +17,7 @@ class Context:
     layout_data: dict[str, Any]
     max_iterations: int
     edited_layout_path: Path
-
+    reference_layout_path: Path
 
 def bootstrap() -> Context:
     """Load settings, connect to the MCP server, discover tools, and build the LLM.
@@ -26,10 +26,25 @@ def bootstrap() -> Context:
     """
     settings = load_settings()
 
-    # Read the layout schema that will be given to the agent as context (shared at repo root)
+    # Get paths
     repo_root = Path(__file__).resolve().parents[3]
-    layout_path = repo_root / "layout_input" / "layout_schema.json"
-    layout_data: dict[str, Any] = json.loads(layout_path.read_text(encoding="utf-8"))
+    team_dir = Path(__file__).resolve().parents[2]
+    team_name = team_dir.name
+    
+    edited_layout_path = team_dir / f"{team_name}_edited_layout.json"
+    reference_layout_path = team_dir / f"{team_name}_reference_layout.json"
+    input_layout_path = repo_root / "layout_input" / "layout_schema.json"
+    
+    # Load layout with priority: edited → reference → input
+    if edited_layout_path.exists():
+        layout_data = json.loads(edited_layout_path.read_text(encoding="utf-8"))
+        print(f"[bootstrap] Loaded layout: edited_layout ({team_name}_edited_layout.json)")
+    elif reference_layout_path.exists():
+        layout_data = json.loads(reference_layout_path.read_text(encoding="utf-8"))
+        print(f"[bootstrap] Loaded layout: reference_layout ({team_name}_reference_layout.json)")
+    else:
+        layout_data = json.loads(input_layout_path.read_text(encoding="utf-8"))
+        print(f"[bootstrap] Loaded layout: input_layout (layout_schema.json)")
 
     # Connect to the Grasshopper MCP server and list available tools
     mcp_client = McpClient(settings.mcp_endpoint, settings.request_timeout_seconds)
@@ -52,9 +67,7 @@ def bootstrap() -> Context:
         model_kwargs=get_llm_response_format(tools),
     )
 
-    team_dir = Path(__file__).resolve().parents[2]
-    team_name = team_dir.name
-    edited_layout_path = team_dir / f"{team_name}_edited_layout.json"
+   
 
     return Context(
         llm=llm,
@@ -63,4 +76,5 @@ def bootstrap() -> Context:
         layout_data=layout_data,
         max_iterations=settings.max_iterations,
         edited_layout_path=edited_layout_path,
+        reference_layout_path=reference_layout_path,
     )

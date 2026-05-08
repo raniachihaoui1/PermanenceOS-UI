@@ -57,7 +57,7 @@ def build_graph(ctx: Any) -> Any:
     # Use the reason and tool nodes
     reason = build_reason_node(ctx.llm)
     tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
-    local_tool = build_local_tool_node()
+    local_tool = build_local_tool_node(ctx.reference_layout_path)
 
     # Initialize the graph
     graph = StateGraph(AgentState)
@@ -101,7 +101,9 @@ def run_agent(prompt: str, ctx: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
-
+    # Start with fresh messages for each run (no persistence)
+    messages = []
+        
     # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
     
