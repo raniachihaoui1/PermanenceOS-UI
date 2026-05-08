@@ -66,9 +66,9 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             
             state["messages"].append({
                 "role": "user",
-                "content": f"Tool result: {tool_output}",
+                "content": f"Tool result: {tool_name}",
             })
-            print(f"Tool result: {tool_output}")
+            print(f"Used tool: {tool_name}")
 
         state["pending_tool_calls"] = None
         return state
