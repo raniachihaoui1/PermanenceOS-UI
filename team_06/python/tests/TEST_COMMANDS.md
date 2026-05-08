@@ -44,7 +44,7 @@ python test_workflow.py --test all
 - Filter layout: `"filter layout-2"`
 - Chained commands: `"filter layout-3 and delete kitchen"`
 - Delete room: `"delete kitchen"`
-- Add window: `"add window 1.5m in living room"`
+- Add window: `"add window 1.0 m width to the living"`
 - Graph search: `"find layout with bedroom and kitchen connected"`
 
 **Output:**
