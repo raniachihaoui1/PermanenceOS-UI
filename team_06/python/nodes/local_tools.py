@@ -24,7 +24,6 @@ from tools.graph_searcher import GraphSearcher, build_topology_graph
 def _load_all_layouts() -> list[dict[str, Any]]:
     """Load all layouts from sample_layouts.json."""
     repo_root = Path(__file__).resolve().parent.parent.parent
-    repo_root = Path(__file__).resolve().parent.parent.parent
     layouts_path = repo_root / "layout_inputs" / "sample_layouts.json"
     return json.loads(layouts_path.read_text(encoding="utf-8"))
 
@@ -32,7 +31,6 @@ def _load_all_layouts() -> list[dict[str, Any]]:
 @lru_cache(maxsize=1)
 def _load_all_descriptions() -> list[dict[str, Any]]:
     """Load layout descriptions from sample_descriptions.json."""
-    repo_root = Path(__file__).resolve().parent.parent.parent
     repo_root = Path(__file__).resolve().parent.parent.parent
     descriptions_path = repo_root / "layout_inputs" / "sample_descriptions.json"
     return json.loads(descriptions_path.read_text(encoding="utf-8"))
@@ -46,6 +44,34 @@ def _get_graph_searcher() -> GraphSearcher:
     return GraphSearcher(str(graphs_path))
 
 
+# ---------------------------------------------------------------------------
+# Common layout loading helper
+# ---------------------------------------------------------------------------
+
+def _load_layout_to_state(state: dict, reference_layout_path: Path, layout_id: str) -> dict[str, Any]:
+    """Load a layout by ID, update state, save to file.
+    
+    Returns: layout_output dict with status info.
+    """
+    all_layouts = _load_all_layouts()
+    layout = select_layout(all_layouts, layout_id)
+    
+    # Update state
+    state["layout_json_string"] = json.dumps(layout)
+    
+    # Write to file
+    reference_layout_path.parent.mkdir(parents=True, exist_ok=True)
+    reference_layout_path.write_text(
+        json.dumps(layout, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+    
+    return {
+        "layout_id": layout_id,
+        "status": "loaded",
+        "saved_to": str(reference_layout_path)
+    }
+
 
 # ---------------------------------------------------------------------------
 # Local tools catalog — tools available directly (not via MCP).
@@ -56,7 +82,7 @@ def get_local_tools() -> list[dict[str, Any]]:
     return [
         {
             "name": "layout_filter",
-            "description": "This tool selects a layout based on its layoutId. Use this after layout_graph_search to get the full layout JSON for a selected match.",
+            "description": "This tool filters a specific layout by ID.Auto-loads the found layout into state",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -70,7 +96,7 @@ def get_local_tools() -> list[dict[str, Any]]:
         },
         {
             "name": "layout_graph_search",
-            "description": "Search layouts by topology using a pattern graph. Specify room types and whether they must be connected.",
+            "description": "This tool searches layouts by topology. Auto-loads the best match into state and returns all candidates so you can select a different one if needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -95,11 +121,11 @@ def get_local_tools() -> list[dict[str, Any]]:
 # Local tool node — executes local Python tools.
 # ---------------------------------------------------------------------------
 
-def build_local_tool_node():
+def build_local_tool_node(reference_layout_path):
     """Return a local tool node function ready to be added to a LangGraph StateGraph."""
 
     def local_tool_node(state):
-        """Execute pending local tool calls and append results to conversation history."""
+        """Execute pending local tool calls."""
 
         remaining_calls = []  # Tools that aren't local (to pass to run_tool)
         
@@ -117,20 +143,15 @@ def build_local_tool_node():
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
-            # Execute the appropriate local tool
+            # Execute layout_filter or layout_graph_search
             if tool_name == "layout_filter":
-                all_layouts = _load_all_layouts()
-                tool_output = select_layout(
-                    all_layouts=all_layouts,
-                    layout_id=tool_args.get("layoutId")
-                )
-                state["layout_json_string"] = json.dumps(tool_output, indent=2)
-                
-                # Update session state with selected layout ID
-                selected_id = tool_args.get("layoutId")
-                state["layout_id"] = selected_id
-                state["last_action"] = f"Selected layout {selected_id}"
-                print(f"[local_tool] Updated state: layout_id={selected_id}")
+                layout_id = tool_args.get("layoutId")
+                load_result = _load_layout_to_state(state, reference_layout_path, layout_id)
+                tool_output = {
+                    **load_result,
+                    "message": f"Loaded layout {layout_id}."
+                }
+                print(f"[local_tool] {tool_output['message']}")
                 
             elif tool_name == "layout_graph_search":
                 graph_searcher = _get_graph_searcher()
@@ -143,20 +164,33 @@ def build_local_tool_node():
                 # Search using graph similarity
                 results = graph_searcher.search_by_graph_similarity(topology_graph, method="jaccard")
                 
-                # Format results
+                # Format all candidates
                 candidates = [
                     {"layoutId": layout_id, "score": similarity}
                     for layout_id, similarity in results
                 ]
                 
-                tool_output = {
-                    "pattern": f"Rooms: {', '.join(programs)}, connection: {connection_type}",
-                    "matches": candidates,
-                    "total": len(candidates)
-                }
-                state["last_action"] = f"Searched for rooms {connection_type}: {', '.join(programs)}"
-                state["candidate_layouts"] = candidates
-                print(f"[local_tool] Graph search: {len(candidates)} layouts found")
+                # Load best match into state (if found)
+                if results:
+                    best_layout_id, best_similarity = results[0]
+                    load_result = _load_layout_to_state(state, reference_layout_path, best_layout_id)
+                    tool_output = {
+                        "pattern": f"Rooms: {', '.join(programs)}, connection: {connection_type}",
+                        "best_match": best_layout_id,
+                        "best_score": round(best_similarity, 2),
+                        "all_candidates": candidates,
+                        "total": len(candidates),
+                        "message": f"Found {len(candidates)} matches. Auto-loaded best: {best_layout_id} (score: {round(best_similarity, 2)}). Ask me to switch to a different one if preferred."
+                    }
+                    print(f"[local_tool] Found {len(candidates)} matches, auto-loaded {best_layout_id}")
+                else:
+                    tool_output = {
+                        "pattern": f"Rooms: {', '.join(programs)}, connection: {connection_type}",
+                        "all_candidates": [],
+                        "total": 0,
+                        "message": "No layouts found matching this pattern."
+                    }
+                    print(f"[local_tool] No matches found for {programs}")
             else:
                 tool_output = {"error": f"Unknown tool: {tool_name}"}
 
@@ -172,7 +206,7 @@ def build_local_tool_node():
             
             state["messages"].append({
                 "role": "user",
-                "content": f"Tool result: {json.dumps(tool_output)}",
+                "content": f"Tool result: {json.dumps(tool_output)}"
             })
             
             print(f"[local_tool] Result: {tool_output}")
