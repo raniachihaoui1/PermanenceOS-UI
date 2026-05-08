@@ -8,7 +8,6 @@ from _runtime.mcp_client import McpClient
 from _runtime.llm import create_chat_llm, get_llm_response_format
 from nodes.local_tools import get_local_tools
 
-
 @dataclass
 class Context:
     """Everything the agent graph needs to run — passed from main.py into graph.py."""
@@ -50,7 +49,6 @@ def bootstrap() -> Context:
         base_url=settings.base_url,
         llm_model=settings.llm_model,
         timeout_seconds=settings.request_timeout_seconds,
-        max_tokens=8000,  # Structured JSON responses need space to format properly
         model_kwargs=get_llm_response_format(tools),
     )
 

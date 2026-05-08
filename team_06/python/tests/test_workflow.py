@@ -41,7 +41,7 @@ import signal
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _runtime.bootstrap import bootstrap
-from graph import run_agent
+from team_06.python.graph import run_agent
 from nodes.local_tools import _load_all_layouts, _get_graph_searcher
 from tools.layout_filter import select_layout
 from tools.graph_searcher import build_topology_graph

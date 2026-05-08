@@ -1,6 +1,5 @@
 from __future__ import annotations
 import json
-from pathlib import Path
 from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from nodes.reason import build_reason_node
@@ -30,9 +29,7 @@ class AgentState():
     max_iterations: int                  # safety cap to stop the process (set from .env)
     tool_catalog: str                    # formatted list of available MCP tools
     layout_json_string: str              # current layout as a JSON string, injected into tool calls
-    candidate_layouts: list[dict[str, Any]] | None  # search results with layoutId and score
-    layout_id: str | None                # which layout is selected (persisted to session)
-    last_action: str | None              # brief summary of last action (persisted to session)
+
 
 # ---------------------------------------------------------------------------
 # Routing — decides which node runs next after "reason".
@@ -60,7 +57,6 @@ def build_graph(ctx: Any) -> Any:
     # Use the reason and tool nodes
     reason = build_reason_node(ctx.llm)
     tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
-    local_tool = build_local_tool_node()
 
     # Initialize the graph
     graph = StateGraph(AgentState)
@@ -68,13 +64,11 @@ def build_graph(ctx: Any) -> Any:
     # Add the nodes
     graph.add_node("reason", reason)
     graph.add_node("tool", tool)
-    graph.add_node("local_tool", local_tool)
 
     # Add the edges
     graph.add_edge(START, "reason")
-    graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "local_tool": "local_tool", "finish": END})
+    graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "finish": END})
     graph.add_edge("tool", "reason")
-    graph.add_edge("local_tool", "reason")
 
     return graph.compile()
 
@@ -83,10 +77,10 @@ def build_graph(ctx: Any) -> Any:
 # Entry point — called from main.py.
 # ---------------------------------------------------------------------------
 
-def run_agent(prompt: str, ctx: Any, session_state: dict[str, Any] | None = None) -> tuple[str, dict[str, Any]]:
+def run_agent(prompt: str, ctx: Any) -> str:
     app = build_graph(ctx)
 
-    initial_state = _build_initial_state(prompt, ctx, session_state)
+    initial_state = _build_initial_state(prompt, ctx)
     final_state = app.invoke(initial_state)
 
     # Uncomment these two lines to see the graph structure in the terminal
@@ -96,53 +90,17 @@ def run_agent(prompt: str, ctx: Any, session_state: dict[str, Any] | None = None
     final_response = final_state.get("final_response")
     if not isinstance(final_response, str):
         raise RuntimeError("Agent finished without a final response")
-    
-    # Return both the response and the full state (for session persistence)
-    return final_response, final_state
+    return final_response
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _build_initial_state(prompt: str, ctx: Any, session_state: dict[str, Any] | None = None) -> AgentState:
-    # Restore persistent state from session if available
-    layout_id = None
-    candidate_layouts = None
-    last_action = None
-    layout_text = json.dumps(ctx.layout_data, indent=2)  # default layout
-    
-    if session_state:
-        layout_id = session_state.get("layout_id")
-        candidate_layouts = session_state.get("candidate_layouts")
-        last_action = session_state.get("last_action")
-        
-        # If we have a layout ID, load that specific layout instead of default
-        if layout_id:
-            try:
-                team_dir = Path(__file__).resolve().parent.parent
-                layouts_path = team_dir / "layout_inputs" / "sample_layouts.json"
-                all_layouts = json.loads(layouts_path.read_text(encoding="utf-8"))
-                
-                # Find the layout by ID
-                for layout in all_layouts:
-                    if layout.get("layoutId") == layout_id:
-                        layout_text = json.dumps(layout, indent=2)
-                        print(f"[graph] Loaded selected layout: {layout_id}")
-                        break
-            except Exception as e:
-                print(f"[graph] Warning: Could not load layout {layout_id}: {e}")
-                layout_text = json.dumps(ctx.layout_data, indent=2)
-        
-        if layout_id or candidate_layouts or last_action:
-            print(f"[graph] Restored session: candidates={len(candidate_layouts or [])}, layout={layout_id}, last_action={last_action}")
-    
-    # Get local tools
-    local_tools = get_local_tools()
-    
-    # Combine local tools with MCP tools for the tool catalog
-    combined_tools = local_tools + ctx.tools
-    tool_catalog = _format_tool_catalog(combined_tools)
+def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
+
+    # Convert the layout data to a JSON string
+    layout_text = json.dumps(ctx.layout_data, indent=2)
 
     # Engineer the user message
     user_message = (
@@ -158,31 +116,16 @@ def _build_initial_state(prompt: str, ctx: Any, session_state: dict[str, Any] | 
         "final_response": None,
         "iteration": 0,
         "max_iterations": ctx.max_iterations,
-        "tool_catalog": tool_catalog,
-        "layout_json_string": layout_text,
-        "candidate_layouts": candidate_layouts,
-        "layout_id": layout_id,
-        "last_action": last_action,
+        "tool_catalog": _format_tool_catalog(ctx.tools),
+        "layout_json_string": json.dumps(ctx.layout_data),
     }
 
-# Helper function to prepare the tool catalog for the LLM (compact format)
+# Helper funtion to prepare the tool catalog for the LLM
 def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
     lines = []
     for tool in tools:
         name = tool.get("name", "<unknown>")
         description = tool.get("description", "")
-        schema = tool.get("inputSchema", {})
-        properties = schema.get("properties", {})
-        required = schema.get("required", [])
-        
-        # Build param list: show parameter names and whether required
-        params = []
-        for prop_name in properties.keys():
-            marker = "*" if prop_name in required else ""
-            params.append(f"{prop_name}{marker}")
-        
-        param_str = f"({', '.join(params)})" if params else ""
-        lines.append(f"- {name}{param_str}: {description}")
-    
+        schema = json.dumps(tool.get("inputSchema", {}))
+        lines.append(f"- {name}: {description} | inputSchema={schema}")
     return "\n".join(lines)
-

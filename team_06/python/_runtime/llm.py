@@ -15,20 +15,16 @@ def create_chat_llm(
     base_url: str,
     llm_model: str,
     timeout_seconds: float,
-    max_tokens: int | None = None,
     model_kwargs: dict[str, Any] | None = None,
 ) -> ChatOpenAI:
-    kwargs = {
-        "api_key": api_key,
-        "base_url": base_url,
-        "model": llm_model,
-        "timeout": timeout_seconds,
-        "temperature": 0,
-        "model_kwargs": model_kwargs or {},
-    }
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
-    return ChatOpenAI(**kwargs)
+    return ChatOpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        model=llm_model,
+        timeout=timeout_seconds,
+        temperature=0,
+        model_kwargs=model_kwargs or {},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -166,14 +162,7 @@ def _parse_llm_json(content: str) -> dict[str, Any]:
 
 
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
-    print(f"[llm] _normalize_llm_decision input type: {type(parsed)}")
-    print(f"[llm] _normalize_llm_decision input: {parsed}")
-    
-    if not isinstance(parsed, dict):
-        raise RuntimeError(f"_normalize_llm_decision expects dict, got {type(parsed)}: {parsed}")
-    
     action = parsed.get("action")
-    print(f"[llm] Action: {action}")
 
     if action == "final":
         return {"action": "final", "final_response": parsed["final_response"]}
@@ -211,30 +200,6 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
 # Public convenience function used by reason nodes
 # ---------------------------------------------------------------------------
 
-def _keep_recent_messages(messages: list[dict[str, str]], max_chars: int = 50000) -> list[dict[str, str]]:
-    """If messages exceed max_chars, keep first message (layout context) + last recent messages."""
-    total = sum(len(msg.get("content", "")) for msg in messages)
-    if total <= max_chars:
-        return messages
-    
-    print(f"[llm] Messages too large ({total:,} > {max_chars:,}). Trimming old context...")
-    if len(messages) <= 1:
-        return messages
-    
-    # Always keep first message (has layout context)
-    # Then keep as many recent messages as fit in budget
-    kept = [messages[0]]
-    remaining_budget = max_chars - len(messages[0].get("content", ""))
-    
-    for msg in reversed(messages[1:]):
-        msg_size = len(msg.get("content", ""))
-        if msg_size <= remaining_budget:
-            kept.insert(1, msg)
-            remaining_budget -= msg_size
-    
-    return kept
-
-
 def call_llm(
     llm: Any,
     system_prompt: str,
@@ -247,9 +212,6 @@ def call_llm(
       {"action": "final", "final_response": "<text>"}
       {"action": "tool",  "tool_calls": [{"name": "<tool>", "arguments": {...}}]}
     """
-    # Trim messages aggressively to stay under token limit
-    messages = _keep_recent_messages(messages, max_chars=30000)
-    
     formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
     llm_messages = [{"role": "system", "content": formatted_prompt}] + messages
 
@@ -259,15 +221,10 @@ def call_llm(
         raise RuntimeError("LLM response content must be a string")
 
     try:
-        parsed = _parse_llm_json(content)
-        print(f"[llm] Parsed JSON: {parsed}")
-        result = _normalize_llm_decision(parsed)
-        print(f"[llm] Normalized decision: {result}")
-        return result
-    except Exception as e:
+        return _normalize_llm_decision(_parse_llm_json(content))
+    except Exception:
         print("\n[llm] Raw LLM response before crash:")
         print(content)
-        print(f"\n[llm] Error: {type(e).__name__}: {e}")
         raise
 
 
