@@ -86,6 +86,56 @@ def run_agent(prompt: str, ctx: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Profile constraints — physical requirements per user profile.
+# Used to enrich the LLM prompt with profile-specific context. (Hani)
+# ---------------------------------------------------------------------------
+
+PROFILE_CONSTRAINTS = {
+    "wheelchair": {
+        "min_door_width_m": 0.85,
+        "min_corridor_width_m": 0.90,
+        "cannot_use_stairs": True,
+        "needs_turning_radius_m": 1.50,
+        "notes": "Requires wide doors, clear turning space, and unobstructed paths."
+    },
+    "elderly": {
+        "min_door_width_m": 0.80,
+        "min_corridor_width_m": 0.85,
+        "cannot_use_stairs": False,
+        "needs_handrail": True,
+        "notes": "Sensitive to long distances, steps, and poor lighting."
+    },
+    "stroller": {
+        "min_door_width_m": 0.80,
+        "min_corridor_width_m": 0.90,
+        "cannot_use_stairs": True,
+        "notes": "Needs wide doors and straight circulation paths."
+    },
+    "autistic": {
+        "min_door_width_m": 0.75,
+        "min_corridor_width_m": 0.80,
+        "cannot_use_stairs": False,
+        "notes": "Sensitive to spatial complexity, dead ends, and low visibility between rooms."
+    },
+    "visually_impaired": {
+        "min_door_width_m": 0.80,
+        "min_corridor_width_m": 0.90,
+        "cannot_use_stairs": False,
+        "notes": "Depends on clear sightlines, consistent layout logic, and landmark rooms."
+    },
+}
+
+
+def _extract_profile(prompt: str) -> str:
+    """Extract user profile from prompt, default to wheelchair."""
+    prompt_lower = prompt.lower()
+    for profile in PROFILE_CONSTRAINTS:
+        if profile in prompt_lower:
+            return profile
+    return "wheelchair"
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -94,8 +144,14 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
     # Convert the layout data to a JSON string
     layout_text = json.dumps(ctx.layout_data, indent=2)
 
+    # Extract profile from prompt and get its constraints
+    profile = _extract_profile(prompt)
+    constraints = PROFILE_CONSTRAINTS[profile]
+
     # Engineer the user message
     user_message = (
+        f"Active user profile: {profile}\n"
+        f"Profile constraints: {json.dumps(constraints, indent=2)}\n\n"
         "Context: the current layout is JSON below. "
         "Valid room names are rooms[].name.\n\n"
         f"User request:\n{prompt}\n\n"
@@ -112,7 +168,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "layout_json_string": json.dumps(ctx.layout_data),
     }
 
-# Helper funtion to prepare the tool catalog for the LLM
+# Helper function to prepare the tool catalog for the LLM
 def _format_tool_catalog(tools: list[dict[str, Any]]) -> str:
     lines = []
     for tool in tools:

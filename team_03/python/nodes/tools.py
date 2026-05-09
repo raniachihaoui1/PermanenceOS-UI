@@ -9,7 +9,7 @@ from _runtime.llm import write_tool_result
 # Tool node — executes MCP tool calls requested by the reason node.
 # ---------------------------------------------------------------------------
 
-def build_tool_node(mcp_client, allowed_tools, edited_layout_path = "E:\IAAC Local GIT Repositories\AIA26_Studio\team_03\python\layout.json"):
+def build_tool_node(mcp_client, allowed_tools, edited_layout_path = r"D:\05- IAAC\03- Third Semester\05- AIA Studio\AIA-Studio_HaniKarime\AIA26_Studio\team_03\edited_layout.json"):
     """Return a tool node function ready to be added to a LangGraph StateGraph."""
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
@@ -35,9 +35,8 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path = "E:\IAAC Loc
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
-            # Inject layout_json
-            if "layout_json" in tool_args:
-                tool_args["layout_json"] = state["layout_json_string"]
+            # Always inject layout_json into every tool call
+            tool_args["layout_json"] = state["layout_json_string"]
 
             # Call the tool
             tool_output = mcp_client.call_tool(tool_name, tool_args)
