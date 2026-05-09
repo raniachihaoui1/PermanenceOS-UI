@@ -1,29 +1,10 @@
 from __future__ import annotations
 import json
-from typing import Any, TypedDict
+from typing import Any
 from langgraph.graph import END, START, StateGraph
 from nodes.reason import build_reason_node
 from nodes.tools import build_tool_node, handle_select_layout
-
-
-# Keywords that suggest the user's request needs a layout. Used as a
-# deterministic pre-empt because small models (e.g. Llama-3.1-8B) do not
-# reliably follow the "call select_layout first" instruction in the system
-# prompt and will skip to a layout-dependent tool, hallucinating results.
-LAYOUT_INTENT_KEYWORDS: tuple[str, ...] = (
-    "layout", "json", "file", "choose", "pick", "select", "load", "open",
-    "work on", "work with", "use",
-    "room", "kitchen", "bedroom", "bathroom", "living", "guest", "master",
-    "wall", "door", "window", "outline", "geometry",
-    "area", "size", "measure", "dimension",
-    "compute", "calculate", "delete", "remove", "edit", "modify",
-    "rename", "change", "update", "move", "resize", "split", "merge",
-)
-
-
-def _prompt_needs_layout(prompt: str) -> bool:
-    lower = prompt.lower()
-    return any(kw in lower for kw in LAYOUT_INTENT_KEYWORDS)
+from nodes.preprocess import build_preprocess_node, needs_layout, detect_intent
 
 
 # =============================================================================
@@ -39,6 +20,9 @@ class AgentState():
     max_iterations: int
     tool_catalog: str
     layout_json_string: str
+    intent: str
+    persona_detected: str | None
+    needs_persona_ask: bool
 
 
 def _route(state: AgentState) -> str:
@@ -48,6 +32,7 @@ def _route(state: AgentState) -> str:
 
 
 def build_graph(ctx: Any) -> Any:
+    preprocess = build_preprocess_node()
     reason = build_reason_node(ctx.llm)
     tool = build_tool_node(
         ctx.mcp_client,
@@ -57,9 +42,11 @@ def build_graph(ctx: Any) -> Any:
     )
 
     graph = StateGraph(AgentState)
+    graph.add_node("preprocess", preprocess)
     graph.add_node("reason", reason)
     graph.add_node("tool", tool)
-    graph.add_edge(START, "reason")
+    graph.add_edge(START, "preprocess")
+    graph.add_edge("preprocess", "reason")
     graph.add_conditional_edges("reason", _route, {"run_tool": "tool", "finish": END})
     graph.add_edge("tool", "reason")
 
@@ -72,7 +59,7 @@ def run_agent(prompt: str, ctx: Any) -> str:
     # reasons. We mutate ctx.layout_data so _build_initial_state below uses
     # the "layout already loaded" branch - keeps the initial user message
     # consistent (no stale "no layout loaded" text).
-    if not ctx.layout_data and _prompt_needs_layout(prompt):
+    if not ctx.layout_data and needs_layout(prompt, detect_intent(prompt)):
         print("\n[graph] Prompt mentions layout - running select_layout before LLM reasoning.")
         scratch: dict[str, Any] = {"layout_json_string": ""}
         handle_select_layout(ctx.layout_input_dir, scratch)
@@ -130,6 +117,9 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "max_iterations": ctx.max_iterations,
         "tool_catalog": _format_tool_catalog(ctx.tools),
         "layout_json_string": layout_json_string,
+        "intent": "",
+        "persona_detected": None,
+        "needs_persona_ask": False,
     }
 
 

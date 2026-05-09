@@ -1,8 +1,7 @@
 {
   "id": "room_001",
   "name": "Master Bedroom",
-  "geometry": { ...
-  },
+  "geometry": {},
   "attributes": {
     "area": 48.0,
     "height": 2.8,

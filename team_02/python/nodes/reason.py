@@ -1,49 +1,205 @@
 from __future__ import annotations
 from typing import Any
 from _runtime.llm import call_llm
+from personas import format_for_prompt
+
+
+# =============================================================================
+# reason.py — LLM decision node for the Comfort Copilot state graph.
+#
+# The system prompt is built DYNAMICALLY each time the reason node runs,
+# using the intent and persona already detected by the preprocess node.
+# This ensures the LLM only calls the tools needed for the current intent.
+#
+# Intent → tool sequence mapping:
+#   chitchat        → no tools, answer directly
+#   comfort_analyze → compute_comfort_scores only
+#   comfort_detect  → compute_comfort_scores → detect_sensorial_conflicts
+#   comfort_full    → compute_comfort_scores → detect_sensorial_conflicts → generate_suggestions
+#   inspire         → (Phase 3, not yet implemented)
+# =============================================================================
 
 
 # ---------------------------------------------------------------------------
-# System prompt — edit this to change how the agent thinks and behaves.
+# Static sections shared across all system prompts
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are an assistant that helps users work with a building layout.
+_BASE = """You are Comfort Copilot, an AI agent that analyzes architectural room layouts for multi-sensory comfort. You evaluate six comfort dimensions — thermal, visual, acoustic, spatial, olfactory, and tactile — detect conflicts, and generate improvement recommendations tailored to a specific user persona.
 
-The tools listed below are a toolbox: you may call them when they help achieve the user's goal. Choose tools and arguments only based on the user's request, the tool descriptions, and each tool's inputSchema. Do not assume any particular tool is required for a given instruction.
+## Available personas
+{personas}
 
-Layout selection rules (IMPORTANT):
-- A layout may or may not already be loaded. If the user message contains a "Current layout JSON" section, a layout is loaded — use it to ground your reasoning in real room names, ids, and attributes from that payload.
-- If no layout is loaded and the user's request requires one (computing geometry, editing rooms, querying the structure, etc.), your FIRST tool call must be `select_layout` (no arguments). It prompts the user in the terminal to pick a JSON file from layout_input/. The tool result will contain the loaded layout — use it to ground subsequent reasoning.
-- If the user's request does NOT require a layout (e.g. casual questions, asking what you can do), do NOT call `select_layout`. Respond with action "final".
-- Never call `select_layout` more than once in a session unless the user explicitly asks to switch layouts.
-- For any layout-dependent MCP tool, do not include `layout_json` in your arguments — it is injected automatically from the loaded layout.
+## Layout rules
+- If no layout is loaded and the request requires one, your FIRST tool call must be `select_layout` (no arguments).
+- Never call `select_layout` more than once per session.
+- Do not include `layout_json` in your tool arguments — it is injected automatically from the loaded layout.
 
-**CRITICAL: Tool Failure Detection Rule**
-- If a tool result contains "_no_change_warning", it means the tool call had NO EFFECT (the layout did not change).
-- This indicates the requested item (furniture, room, etc.) does NOT EXIST or is NOT EDITABLE.
-- When you see "_no_change_warning", IMMEDIATELY respond with action "final" and tell the user the item cannot be found or modified.
-- DO NOT call the same tool again with the same arguments—it will fail again.
+## Supporting tools
+Use these when the user asks specific questions outside of comfort analysis:
+- `compute_room_area` — when the user asks about the size of a specific room
+- `compute_total_area` — when the user asks about total floor area
+- `remove_furniture_piece` — when implementing a suggestion that involves removing furniture
 
-If the user's goal cannot be satisfied without information that is missing from their message or from the loaded layout, respond with action "final" and ask a concise clarifying question.
-
-After a tool result appears in the conversation, decide whether another tool call is needed or whether to respond with action "final" (for example to confirm completion or summarize what happened, including any output path or details echoed from the tool result when relevant).
+## Tool failure rule
+If a tool result contains "_no_change_warning", respond immediately with action "final" reporting the failure. Do not retry the same tool.
 
 Toolbox (name, description, and inputSchema for each tool):
-{tool_catalog}
+{{tool_catalog}}
 
 Return strictly valid JSON with exactly this shape:
-{{
+{{{{
   "action": "final" | "tool",
   "final_response": "...",
-  "tool_calls": [{{"name": "<tool-name>", "arguments": {{...}}}}, ...]
-}}
+  "tool_calls": [{{{{"name": "<tool-name>", "arguments": {{{{...}}}}}}}}]
+}}}}
 
 Output rules:
-- Return JSON only, with no prose or explanation.
+- Return JSON only, with no prose or explanation outside final_response.
 - Do not use markdown code fences.
 - If action is "final", set tool_calls to [] and put the answer in final_response.
-- If action is "tool", set final_response to "" and put one or more tool calls in tool_calls.
+- If action is "tool", set final_response to "" and list tool calls in tool_calls.
 """
+
+_PERSONA_ASK = """
+## Action required — persona missing
+The user wants a comfort analysis but did NOT mention a persona.
+Respond immediately with action "final", asking the user which persona to use.
+Do NOT call any tools until a persona is established.
+"""
+
+_CHITCHAT = """
+## Intent: chitchat
+The user is asking a casual question unrelated to comfort analysis.
+Respond with action "final" directly — no tools needed.
+"""
+
+_ANALYZE = """
+## Intent: comfort_analyze — compute scores only
+The user wants to see comfort scores. Run ONLY this step:
+1. Call `compute_comfort_scores` — args: persona="{persona}", room_ids="all"
+2. Respond with action "final" using the scores schema below.
+
+## Output schema for comfort_analyze
+{{{{
+  "layoutId": "<from layout>",
+  "persona": "<persona used>",
+  "rooms": [
+    {{{{
+      "roomId": "<id>",
+      "roomName": "<name>",
+      "persona": "<persona>",
+      "comfortScores": {{{{
+        "thermal": 0.0, "visual": 0.0, "acoustic": 0.0,
+        "spatial": 0.0, "olfactory": 0.0, "tactile": 0.0
+      }}}},
+      "overallScore": 0.0,
+      "conflicts": [],
+      "suggestions": [],
+      "narrative": "<plain language summary of scores only>"
+    }}}}
+  ]
+}}}}
+"""
+
+_DETECT = """
+## Intent: comfort_detect — scores + conflict detection
+The user wants to know what is wrong. Run ONLY these two steps:
+1. Call `compute_comfort_scores` — args: persona="{persona}", room_ids="all"
+2. Call `detect_sensorial_conflicts` — args: persona="{persona}"
+3. Respond with action "final" using the schema below.
+
+## Output schema for comfort_detect
+{{{{
+  "layoutId": "<from layout>",
+  "persona": "<persona used>",
+  "rooms": [
+    {{{{
+      "roomId": "<id>",
+      "roomName": "<name>",
+      "persona": "<persona>",
+      "comfortScores": {{{{
+        "thermal": 0.0, "visual": 0.0, "acoustic": 0.0,
+        "spatial": 0.0, "olfactory": 0.0, "tactile": 0.0
+      }}}},
+      "overallScore": 0.0,
+      "conflicts": ["<conflict description>"],
+      "suggestions": [],
+      "narrative": "<plain language summary of scores and conflicts>"
+    }}}}
+  ]
+}}}}
+"""
+
+_FULL = """
+## Intent: comfort_full — scores + conflicts + suggestions
+The user wants the full analysis with improvement recommendations. Follow all three steps:
+1. Call `compute_comfort_scores` — args: persona="{persona}", room_ids="all"
+2. Call `detect_sensorial_conflicts` — args: persona="{persona}"
+3. Call `generate_suggestions` — args: persona="{persona}", conflicts=<full JSON string from step 2>
+4. Respond with action "final" using the schema below.
+
+## Output schema for comfort_full
+{{{{
+  "layoutId": "<from layout>",
+  "persona": "<persona used>",
+  "rooms": [
+    {{{{
+      "roomId": "<id>",
+      "roomName": "<name>",
+      "persona": "<persona>",
+      "comfortScores": {{{{
+        "thermal": 0.0, "visual": 0.0, "acoustic": 0.0,
+        "spatial": 0.0, "olfactory": 0.0, "tactile": 0.0
+      }}}},
+      "overallScore": 0.0,
+      "conflicts": ["<conflict description>"],
+      "suggestions": ["<suggestion text>"],
+      "narrative": "<plain language summary>"
+    }}}}
+  ]
+}}}}
+
+Assemble by combining the three tool results: scores from compute_comfort_scores,
+conflicts from detect_sensorial_conflicts, suggestions from generate_suggestions.
+Match rooms by roomId. For rooms with no conflicts, set conflicts to [] and suggestions to [].
+"""
+
+_INSPIRE = """
+## Intent: inspire
+The user wants atmospheric / mood inspiration. This feature is not yet implemented.
+Respond with action "final" letting the user know image generation is coming in a future phase.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Dynamic system prompt builder
+# ---------------------------------------------------------------------------
+
+def _build_system_prompt(intent: str, persona: str | None, needs_persona_ask: bool) -> str:
+    """
+    Assemble a system prompt tailored to the current intent and persona.
+    The base section is always included; the intent section is appended.
+    """
+    base = _BASE.format(personas=format_for_prompt())
+
+    if needs_persona_ask:
+        return base + _PERSONA_ASK
+
+    p = persona or "Neutral"
+
+    if intent == "chitchat" or intent == "":
+        return base + _CHITCHAT
+    elif intent == "comfort_analyze":
+        return base + _ANALYZE.format(persona=p)
+    elif intent == "comfort_detect":
+        return base + _DETECT.format(persona=p)
+    elif intent == "comfort_full":
+        return base + _FULL.format(persona=p)
+    elif intent == "inspire":
+        return base + _INSPIRE
+    else:
+        # Fallback — treat unknown intent as chitchat
+        return base + _CHITCHAT
 
 
 # ---------------------------------------------------------------------------
@@ -54,15 +210,22 @@ def build_reason_node(llm):
     """Return a reason node function ready to be added to a LangGraph StateGraph."""
 
     def reason_node(state):
-        print("\nReasoning with LLM...")
-        result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
+        intent = state.get("intent", "")
+        persona = state.get("persona_detected")
+        needs_persona_ask = state.get("needs_persona_ask", False)
 
-        # If the LLM decided no more actions are needed (action is final), set the final response in the state and clear pending tool calls
+        print(f"\n[reason] Intent={intent!r}  Persona={persona!r}  NeedsAsk={needs_persona_ask}")
+
+        system_prompt = _build_system_prompt(intent, persona, needs_persona_ask)
+        print("\nReasoning with LLM...")
+        result = call_llm(llm, system_prompt, state["messages"], state["tool_catalog"])
+
+        # If the LLM decided no more actions are needed, store final response
         if result["action"] == "final":
             state["final_response"] = result["final_response"]
             state["pending_tool_calls"] = None
 
-        # If the LLM decided the action is to use a tool, set the pending tool calls
+        # If the LLM decided to call a tool, store the pending calls
         else:
             state["pending_tool_calls"] = result["tool_calls"]
 
