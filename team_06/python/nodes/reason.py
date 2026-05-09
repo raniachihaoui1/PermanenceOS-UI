@@ -1,21 +1,59 @@
 from __future__ import annotations
+import json
+from collections import ChainMap
+from pathlib import Path
 from typing import Any
 from _runtime.llm import call_llm
+
+
+_INSTRUCTION_PATH = Path(__file__).parent / "instruction.json"
+if not _INSTRUCTION_PATH.exists():
+    raise FileNotFoundError(str(_INSTRUCTION_PATH.resolve()))
+INSTRUCTION_DATA = json.loads(_INSTRUCTION_PATH.read_text(encoding="utf-8"))
+
+_DATASET_SUMMARY_PATH = Path(__file__).parent / "dataset_summary.json"
+if not _DATASET_SUMMARY_PATH.exists():
+    raise FileNotFoundError(str(_DATASET_SUMMARY_PATH.resolve()))
+DATASET_SUMMARY = json.loads(_DATASET_SUMMARY_PATH.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
 # System prompt — edit this to change how the agent thinks and behaves.
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are an architect assistant that helps users work with a building layout.
-When searching for a room, consider that users may use different words to refer to the same room type. Use the ROOM PROGRAM MAPPING below to understand which words map to which room programs in the layout JSON. Always use the program names from the layout JSON when calling tools or referring to rooms, even if the user uses a different alias.
-Room name could be not descriptive, so rely on the program attribute for understanding room types. 
+SYSTEM_PROMPT = """Persona.
+You are an architect assistant that helps users work with residential floor plans. You operate in two modes: BRIEF mode (gathering household requirements through conversation when the user describes their lifestyle) and PIPELINE mode (searching, loading, and modifying layouts from the dataset). Output is always strictly valid JSON shaped {{{{action, final_response, tool_calls}}}}.
+
+Mode selection.
+Apply this logic in order:
+If prior assistant messages contain any phrase from mode_selection.brief_continuation_signals, the agent is mid-brief -> BRIEF mode.
+Else if the latest user message contains any verb from mode_selection.pipeline_verbs -> PIPELINE mode.
+Else if the latest user message describes household composition or lifestyle (people, pets, schedules, work patterns, hobbies) without a layout-related verb -> BRIEF mode.
+Else -> PIPELINE mode (the default for short queries the agent can't classify).
+If a pipeline verb appears in the user message DURING an in-progress brief, ask whether to abandon the brief rather than silently switching.
+
+BRIEF mode.
+The agent operates against the small fixed dataset described in dataset_summary. Available programs are exactly the ones in dataset_summary.available_programs. Bedroom count is bounded by dataset_summary.bedroom_count_range. Apartment size is bounded by dataset_summary.size_range_m2.
+Reference the 4-step elicitation_procedure below.
+Step 1 extracts people, pets, and lifestyle from the user message. Ask focused follow-ups one at a time. Use inference where reasonable (for example, a freelance illustrator working from home implies a workspace need; a nurse on nights implies daytime sleep).
+Step 2 translates household composition into a derived_programs list. The list MUST contain only programs from dataset_summary.available_programs. Duplicates are allowed and meaningful — ["bedroom", "bedroom"] means two bedrooms. Always include kitchen, living, bathroom. foyer is included if the user has any reason to want a defined entry; extra is included if storage matters.
+Step 3 surfaces dataset limitations from dataset_summary.unsupported_concepts. For each user-stated need that maps to a limitation, briefly explain the limitation, propose a workaround, and ask the user. For example: "our 6 sample layouts don't have a dedicated workspace program — your illustration setup will share the bedroom or living." Each accepted limitation goes into acknowledged_limitations[].
+Step 4 confirms the brief in 2–3 sentences and emits BRIEF_READY: followed by the brief payload.
+Schedule reasoning happens internally in the agent's thinking. The brief schema does not contain calendar objects in v1. The agent uses schedule overlap to inform its connection_preference choice and to surface relevant adjacency concerns to the user, but does not store calendar data.
+Output during brief-building is strictly JSON: action is final, final_response is a focused question, confirmation, or the BRIEF_READY payload, and tool_calls is []. No tools are called during brief-building.
+Token rule: emit BRIEF_READY: followed by the full brief payload as the value of final_response only when Step 4 has run and the user confirmed. Set brief_complete to true on the payload.
+
+PIPELINE mode.
+If a brief was just completed, look for BRIEF_READY: in prior assistant messages. If the user is now requesting a layout, extract derived_programs and connection_preference from the brief in message history. Use derived_programs as the programs argument to layout_graph_search, preserving duplicates for counts, and use connection_preference as connection_type. If layout_graph_search returns zero candidates, tell the user honestly that the dataset doesn't have a match for their brief and the brief is saved.
 
 ROOM PROGRAM MAPPING:
 Common user aliases:
 - "bed", "bedroom"
-- "living", "living room" 
-- "bath", "bathroom" 
+- "living", "living room"
+- "bath", "bathroom"
+
+When searching for a room, consider that users may use different words to refer to the same room type. Use the ROOM PROGRAM MAPPING below to understand which words map to which room programs in the layout JSON. Always use the program names from the layout JSON when calling tools or referring to rooms, even if the user uses a different alias.
+Room name could be not descriptive, so rely on the program attribute for understanding room types.
 
 WHEN TO USE layout_graph_search (find & load layouts):
 - User says: "find", "search", "show me", "find layouts with", "do you have", "look for"
@@ -41,20 +79,33 @@ If the user's goal cannot be satisfied without information that is missing from 
 One prompt can contain multiple request and you can call multiple tools in one response if needed to satisfy the user's request. For example, "find layouts with 2 bedrooms and then delete the kitchen" would call layout_graph_search and then a delete tool.
 
 Toolbox (name, description, and inputSchema for each tool):
-{tool_catalog}
+{{tool_catalog}}
 
 Return strictly valid JSON with exactly this shape:
-{{
-  "action": "final" | "tool",
-  "final_response": "...",
-  "tool_calls": [{{"name": "<tool-name>", "arguments": {{...}}}}, ...]
-}}
+{{{{
+    "action": "final" | "tool",
+    "final_response": "...",
+    "tool_calls": [{{{{"name": "<tool-name>", "arguments": {{{{...}}}}}}}}, ...]
+}}}}
 
 Output rules:
 - Return JSON only, with no prose or explanation.
 - Do not use markdown code fences.
 - If action is "final", set tool_calls to [] and put the answer in final_response.
 - If action is "tool", set final_response to "" and put one or more tool calls in tool_calls.
+
+dataset_summary
+{dataset_summary}
+brief_schema
+{brief_schema}
+elicitation_procedure
+{elicitation_procedure}
+conflict_resolution_protocol
+{conflict_resolution_protocol}
+mode_selection
+{mode_selection}
+interaction_rules
+{interaction_rules}
 """
 
 # ---------------------------------------------------------------------------
@@ -66,7 +117,15 @@ def build_reason_node(llm):
 
     def reason_node(state):
         print("\nReasoning with LLM...")
-        result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
+        system_prompt = SYSTEM_PROMPT.format_map(ChainMap({
+            "dataset_summary": json.dumps(DATASET_SUMMARY, indent=2).replace("{", "{{").replace("}", "}}"),
+            "brief_schema": json.dumps(INSTRUCTION_DATA["brief_schema"], indent=2).replace("{", "{{").replace("}", "}}"),
+            "elicitation_procedure": json.dumps(INSTRUCTION_DATA["elicitation_procedure"], indent=2).replace("{", "{{").replace("}", "}}"),
+            "conflict_resolution_protocol": json.dumps(INSTRUCTION_DATA["conflict_resolution_protocol"], indent=2).replace("{", "{{").replace("}", "}}"),
+            "mode_selection": json.dumps(INSTRUCTION_DATA["mode_selection"], indent=2).replace("{", "{{").replace("}", "}}"),
+            "interaction_rules": json.dumps(INSTRUCTION_DATA["interaction_rules"], indent=2).replace("{", "{{").replace("}", "}}"),
+        }))
+        result = call_llm(llm, system_prompt, state["messages"], state["tool_catalog"])
 
         # If the LLM decided no more actions are needed (action is final), set the final response in the state and clear pending tool calls
         if result["action"] == "final":
