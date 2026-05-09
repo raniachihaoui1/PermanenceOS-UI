@@ -41,13 +41,14 @@ Format per room (one room = one short block):
 
 Rules:
 - Scores range from 0.0 (very poor) to 1.0 (excellent).
-- Address the persona by its EXACT category name at the start (e.g. "For a
-  Child under 12..." or "For an Elderly 65+ user..."). Never invent a personal
-  name like "Sarah" or "John".
-- If conflict data is provided, add a short "Conflicts" section listing each
-  flagged room and sense in one line each.
-- If suggestion data is provided, add a short "Suggestions" section with one
-  action per line, grouped by room.
+- Address the persona by its EXACT category name ONCE at the top. Never invent
+  a personal name like "Sarah" or "John".
+- CRITICAL: Only include a "Conflicts" section if the message contains a
+  "--- CONFLICTS (tool output) ---" block. If that block says "not run", you
+  MUST NOT write any conflicts — do not infer them from scores.
+- CRITICAL: Only include a "Suggestions" section if the message contains a
+  "--- SUGGESTIONS (tool output) ---" block. If that block says "not run", you
+  MUST NOT write any suggestions — do not infer them from scores.
 - End with one sentence overall summary.
 - No markdown tables. No JSON. No internal tool names. Keep it short.
 - Use only plain ASCII characters. Use a hyphen (-) not an em dash.
@@ -73,15 +74,15 @@ def build_respond_node(llm):
             f"Layout ID: {layout_id}",
             f"Analysis depth: {depth}",
             "",
-            "--- COMFORT SCORES ---",
+            "--- COMFORT SCORES (tool output) ---",
             scores or "(not computed)",
+            "",
+            "--- CONFLICTS (tool output) ---",
+            conflicts if conflicts else "not run — do NOT invent or infer conflicts",
+            "",
+            "--- SUGGESTIONS (tool output) ---",
+            suggestions if suggestions else "not run — do NOT invent or infer suggestions",
         ]
-
-        if conflicts:
-            sections += ["", "--- CONFLICTS ---", conflicts]
-
-        if suggestions:
-            sections += ["", "--- SUGGESTIONS ---", suggestions]
 
         user_message = "\n".join(sections)
 
