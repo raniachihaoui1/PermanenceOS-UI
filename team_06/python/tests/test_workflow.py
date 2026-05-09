@@ -1,30 +1,29 @@
 #!/usr/bin/env python
 """
-Test the complete workflow without real LLM by simulating LLM behavior.
+Simplified workflow test with file-based state persistence and REAL tool execution.
 
-This script tests the agent workflow using the REAL graph execution:
-1. Mock LLM parses natural language prompts into tool calls
-2. Real graph.run_agent() executes the workflow with actual tools
-3. State persists across tests to match real behavior
+Features:
+- File-based state persistence (test_results/test_reference_layout.json, etc.)
+- Same file structure as production code (team_06_reference_layout.json, etc.)
+- Mock LLM that parses natural language into tool calls
+- Executes local tools: layout_filter, layout_graph_search (real)
+- Executes MCP tools: delete_room_06, add_window_06, adapt_layout_06 (real, 15s timeout)
+- Auto-loading search results into state
+- File-based state persistence across tests
 
 Usage:
-    # Run with custom prompt
-    python test_workflow.py "your natural language prompt here"
+    python test_workflow.py "your prompt here"
+    python test_workflow.py --show-state
+    python test_workflow.py --clear
     
-    # Run all predefined tests (4 test cases with persistent state)
-    python test_workflow.py --test all
+Example prompts:
+    python test_workflow.py "select layout-1 and adapt to input layout"
+    python test_workflow.py "search layout with 2 bedrooms and bathroom"
+    python test_workflow.py "delete kitchen"
 
-Test Cases (--test all):
-    1. Filter layout-1 (load specific layout)
-    2. Search layouts with bathroom accessible from bedroom
-    3. Search layout with 2 bedroom and 2 bathrooms and delete kitchen
-    4. Add window 1m to the living room
-    
-Notes:
-    • Uses REAL graph execution with ACTUAL tools (no tool duplication)
-    • State persists across all tests when using --test all
-    • Only the LLM reasoning is mocked with pattern matching
-    • Output files saved to test_results/ directory
+Requirements:
+    - MCP server must be running (set endpoint in mcp.json)
+    - All tools execute for real and save results to state files
 """
 
 import sys
@@ -32,138 +31,206 @@ import json
 import argparse
 import re
 from pathlib import Path
-from typing import Any, Optional
-from threading import Thread
-import signal
+from typing import Any
+import threading
 
-# Add parent directory (/python/) to path for imports
-# This script is at /tests/test_workflow.py, so parent is /python/
+# Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _runtime.bootstrap import bootstrap
-from python.graph import run_agent
 from nodes.local_tools import _load_all_layouts, _get_graph_searcher
 from tools.layout_filter import select_layout
 from tools.graph_searcher import build_topology_graph
 
 
-
 # ============================================================================
-# Timeout helper for MCP calls
+# State Management — File-based persistence (same structure as production)
 # ============================================================================
 
-def call_tool_with_timeout(mcp_client, tool_name, arguments, timeout_seconds=5):
-    """Call MCP tool with timeout to prevent hanging."""
-    result = [None]
-    error = [None]
+# Test file paths (mirrors team_06 structure)
+TEST_RESULTS_DIR = Path(__file__).parent / "test_results"
+TEST_REFERENCE_LAYOUT = TEST_RESULTS_DIR / "test_reference_layout.json"
+TEST_EDITED_LAYOUT = TEST_RESULTS_DIR / "test_edited_layout.json"
+TEST_INPUT_LAYOUT = TEST_RESULTS_DIR / "test_input_layout.json"
+TEST_HISTORY = TEST_RESULTS_DIR / "test_history.json"
+
+
+def init_test_dirs():
+    """Create test results directory."""
+    TEST_RESULTS_DIR.mkdir(exist_ok=True)
+
+
+def load_current_layout() -> dict:
+    """Load current layout with priority: edited > reference > None."""
+    if TEST_EDITED_LAYOUT.exists():
+        return json.loads(TEST_EDITED_LAYOUT.read_text(encoding="utf-8"))
+    elif TEST_REFERENCE_LAYOUT.exists():
+        return json.loads(TEST_REFERENCE_LAYOUT.read_text(encoding="utf-8"))
+    else:
+        return None
+
+
+def load_input_layout() -> dict:
+    """Load input layout if exists."""
+    if TEST_INPUT_LAYOUT.exists():
+        return json.loads(TEST_INPUT_LAYOUT.read_text(encoding="utf-8"))
+    else:
+        return None
+
+
+def save_reference_layout(layout: dict):
+    """Save layout to reference file."""
+    TEST_REFERENCE_LAYOUT.write_text(json.dumps(layout, indent=2), encoding="utf-8")
+
+
+def save_edited_layout(layout: dict):
+    """Save layout to edited file."""
+    TEST_EDITED_LAYOUT.write_text(json.dumps(layout, indent=2), encoding="utf-8")
+
+
+def save_input_layout(layout: dict):
+    """Save input layout."""
+    TEST_INPUT_LAYOUT.write_text(json.dumps(layout, indent=2), encoding="utf-8")
+
+
+def add_history(event: str, tool: str = None, result: Any = None):
+    """Add event to history file."""
+    history = []
+    if TEST_HISTORY.exists():
+        history = json.loads(TEST_HISTORY.read_text(encoding="utf-8"))
     
-    def call_tool():
+    history.append({
+        "event": event,
+        "tool": tool,
+        "result": result
+    })
+    TEST_HISTORY.write_text(json.dumps(history, indent=2), encoding="utf-8")
+
+
+def clear_test_state():
+    """Delete all test state files."""
+    for path in [TEST_REFERENCE_LAYOUT, TEST_EDITED_LAYOUT, TEST_INPUT_LAYOUT, TEST_HISTORY]:
+        if path.exists():
+            path.unlink()
+
+
+def call_mcp_tool_safe(ctx: Any, tool_name: str, args: dict, timeout_sec: float = 15.0) -> tuple[bool, str]:
+    """
+    Safely call an MCP tool with timeout.
+    Returns (success: bool, result_or_error: str)
+    """
+    result = {"success": False, "output": None, "error": None}
+    
+    def _call():
         try:
-            result[0] = mcp_client.call_tool(tool_name, arguments)
+            result["output"] = ctx.mcp_client.call_tool(tool_name, args)
+            result["success"] = True
         except Exception as e:
-            error[0] = e
+            result["error"] = str(e)
     
-    thread = Thread(target=call_tool, daemon=True)
+    thread = threading.Thread(target=_call, daemon=True)
     thread.start()
-    thread.join(timeout=timeout_seconds)
+    thread.join(timeout=timeout_sec)
     
-    if error[0]:
-        raise error[0]
-    if result[0] is None:
-        raise TimeoutError(f"MCP tool '{tool_name}' timed out after {timeout_seconds}s")
+    if thread.is_alive():
+        return (False, f"MCP timeout after {timeout_sec}s (server not responding?)")
     
-    return result[0]
-
+    if result["success"]:
+        return (True, result["output"])
+    else:
+        return (False, result["error"] or "Unknown error")
 
 
 # ============================================================================
-# Mock LLM — Simulates LLM decision-making by parsing natural language
+# Mock LLM — Parse natural language to tool calls
 # ============================================================================
 
-class MockLLMDecisionMaker:
-    """Mock LLM that simulates agent reasoning via pattern matching."""
+class MockLLM:
+    """Simple mock LLM using pattern matching."""
     
-    def invoke(self, messages):
-        """Simulate LLM.invoke() - called from call_llm() in nodes/reason.py"""
-        # Extract user prompt from messages (last user message)
-        user_prompt = ""
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                user_prompt = msg.get("content", "")
-                break
+    def parse(self, prompt: str) -> dict[str, Any]:
+        """Parse prompt into tool calls. Supports chained commands."""
+        text = prompt.lower()
+        tool_calls = []
         
-        print(f"[MockLLM] Parsing prompt: {user_prompt[:100]}...")
+        # Check for layout selection (do first)
+        layout_match = re.search(r'layout-(\d+)', text)
+        if layout_match:
+            layout_result = self._parse_layout_command(text, layout_match.group(1))
+            tool_calls.extend(layout_result["tool_calls"])
         
-        decision = self._parse_prompt(user_prompt)
-        print(f"[MockLLM] Decision: action={decision['action']}, tools={[t['name'] for t in decision.get('tool_calls', [])]}")
+        # Check for search (independent)
+        if any(w in text for w in ["search", "find", "show", "get", "any layouts"]):
+            search_result = self._parse_search(text)
+            tool_calls.extend(search_result["tool_calls"])
         
-        # Return as ChatOpenAI response object
-        class MockResponse:
-            def __init__(self, content):
-                self.content = json.dumps(content)
+        # Check for delete (chained after layout/search)
+        if "delete" in text:
+            delete_result = self._parse_delete(text)
+            tool_calls.extend(delete_result["tool_calls"])
         
-        return MockResponse(decision)
-    
-    def _parse_prompt(self, text: str) -> dict[str, Any]:
-        """Parse natural language into tool calls."""
-        text_lower = text.lower()
+        # Check for adapt/adjust (chained)
+        if any(w in text for w in ["adapt", "adjust", "match", "align"]):
+            adapt_result = self._parse_adapt(text)
+            tool_calls.extend(adapt_result["tool_calls"])
         
-        # Check for search/filter operations
-        if any(word in text_lower for word in ["find", "search", "show", "select layout", "get", "what layouts", "any layouts"]):
-            return self._parse_search(text_lower)
+        # Check for add window (chained)
+        if "add window" in text or "add a window" in text:
+            window_result = self._parse_add_window(text)
+            tool_calls.extend(window_result["tool_calls"])
         
-        # Check for delete operations
-        if "delete" in text_lower:
-            return self._parse_delete(text_lower)
+        # If we have tool calls, return them
+        if tool_calls:
+            return {
+                "action": "tool",
+                "final_response": "",
+                "tool_calls": tool_calls
+            }
         
-        # Check for add window operations
-        if "add window" in text_lower or "add a window" in text_lower:
-            return self._parse_add_window(text_lower)
-        
-        # Check for layout selection
-        if any(f"layout-{i}" in text_lower for i in range(1, 100)):
-            return self._parse_filter_layout(text_lower)
-        
-        # Default: return as final response
+        # Default: final response
         return {
             "action": "final",
-            "final_response": f"I'm not sure what to do with: '{text}'",
+            "final_response": f"I don't understand: '{prompt}'",
             "tool_calls": []
         }
     
+    def _parse_layout_command(self, text: str, layout_num: str) -> dict[str, Any]:
+        """Handle 'layout-X' commands - returns just the filter."""
+        layout_id = f"layout-{layout_num}"
+        tool_calls = [
+            {"name": "layout_filter", "arguments": {"layoutId": layout_id}}
+        ]
+        
+        return {
+            "action": "tool",
+            "final_response": "",
+            "tool_calls": tool_calls
+        }
+    
     def _parse_search(self, text: str) -> dict[str, Any]:
-        """Parse search queries into layout_graph_search calls."""
+        """Parse search/find commands."""
         programs = []
         
-        # Extract bedroom count
+        # Count bedrooms
         bed_match = re.search(r'(\d+)\s*[-\s]?bedroom', text)
         if bed_match:
-            count = int(bed_match.group(1))
-            programs.extend(['bedroom'] * count)
+            programs.extend(['bedroom'] * int(bed_match.group(1)))
         
-        # Extract bathroom count
+        # Count bathrooms
         bath_match = re.search(r'(\d+)\s*[-\s]?bathroom?', text)
         if bath_match:
-            count = int(bath_match.group(1))
-            programs.extend(['bathroom'] * count)
+            programs.extend(['bathroom'] * int(bath_match.group(1)))
         
-        # Extract keywords
+        # Keywords
         if 'kitchen' in text:
             programs.append('kitchen')
         if 'living' in text:
             programs.append('living')
-        if 'dining' in text:
-            programs.append('dining')
-        for room in ['foyer', 'entry', 'entrance']:
-            if room in text:
-                programs.append(room)
         
-        # Determine connection type
-        connection_type = "connected" if "accessible from" in text or "connected" in text else "any"
-        
-        # If no programs extracted, default
         if not programs:
-            programs = ['bed', 'kitchen']
+            programs = ['bedroom', 'kitchen']
+        
+        connection = "connected" if "accessible" in text or "connected" in text else "any"
         
         return {
             "action": "tool",
@@ -172,367 +239,354 @@ class MockLLMDecisionMaker:
                 "name": "layout_graph_search",
                 "arguments": {
                     "programs": programs,
-                    "connection_type": connection_type
+                    "connection_type": connection
                 }
             }]
         }
     
     def _parse_delete(self, text: str) -> dict[str, Any]:
-        """Parse delete operations."""
-        # Extract room to delete (after "delete" keyword)
-        delete_idx = text.find('delete')
-        delete_part = text[delete_idx:] if delete_idx >= 0 else text
-        
-        room_to_delete = None
-        for room in ['kitchen', 'bedroom', 'bathroom', 'living', 'dining', 'foyer', 'entry']:
-            if room in delete_part:
-                room_to_delete = room.capitalize() if room != 'bedroom' else 'Bedroom'
+        """Parse delete commands."""
+        room = None
+        for r in ['kitchen', 'living', 'bedroom', 'bathroom', 'foyer']:
+            if r in text:
+                room = r.capitalize()
                 break
         
-        if not room_to_delete:
-            return {
-                "action": "final",
-                "final_response": "I couldn't identify which room to delete.",
-                "tool_calls": []
-            }
-        
-        tool_calls = []
-        
-        # Check if a specific layout is mentioned in the full text
-        layout_match = re.search(r'layout-(\d+)', text)
-        if layout_match:
-            # Load that specific layout first
-            layout_id = f"layout-{layout_match.group(1)}"
-            tool_calls.append({
-                "name": "layout_filter",
-                "arguments": {"layoutId": layout_id}
-            })
-        
-        # Delete the room - state will provide layout_id if not already set
-        tool_calls.append({
-            "name": "delete_room_06",
-            "arguments": {"room_name": room_to_delete}
-        })
+        if not room:
+            room = "Kitchen"
         
         return {
             "action": "tool",
             "final_response": "",
-            "tool_calls": tool_calls
+            "tool_calls": [{
+                "name": "delete_room_06",
+                "arguments": {"room_name": room}
+            }]
+        }
+    
+    def _parse_adapt(self, text: str) -> dict[str, Any]:
+        """Parse adapt/adjust commands."""
+        return {
+            "action": "tool",
+            "final_response": "",
+            "tool_calls": [{
+                "name": "adapt_layout_06",
+                "arguments": {"input_layout": "placeholder"}  # Will be injected
+            }]
         }
     
     def _parse_add_window(self, text: str) -> dict[str, Any]:
-        """Parse add window operations."""
-        # Extract width (look for numbers before 'm')
-        width_match = re.search(r'(\d+(?:\.\d+)?)\s*m(?:eter)?s?', text)
+        """Parse add window commands."""
+        width_match = re.search(r'(\d+(?:\.\d+)?)\s*m', text)
         width = float(width_match.group(1)) if width_match else 1.0
         
-        # Extract room name
-        room_name = None
-        for room in ['living', 'bedroom', 'kitchen', 'bathroom', 'dining', 'foyer']:
-            if room in text:
-                room_name = room.capitalize() if room != 'bedroom' else 'Bedroom'
+        room = "Living"
+        for r in ['kitchen', 'living', 'bedroom', 'bathroom']:
+            if r in text:
+                room = r.capitalize()
                 break
-        
-        if not room_name:
-            room_name = 'Living'  # Default
         
         return {
             "action": "tool",
             "final_response": "",
             "tool_calls": [{
                 "name": "add_window_06",
-                "arguments": {
-                    "room_name": room_name,
-                    "width": width
-                }
+                "arguments": {"room_name": room, "width": width}
             }]
         }
-    
-    def _parse_filter_layout(self, text: str) -> dict[str, Any]:
-        """Parse layout selection."""
-        layout_match = re.search(r'layout-(\d+)', text)
-        if layout_match:
-            layout_id = f"layout-{layout_match.group(1)}"
-            return {
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{
-                    "name": "layout_filter",
-                    "arguments": {"layoutId": layout_id}
-                }]
-            }
-        
-        return {
-            "action": "final",
-            "final_response": "I couldn't identify which layout to select.",
-            "tool_calls": []
-        }
-
 
 # ============================================================================
-# Test Execution — Simplified mock LLM with real tool execution
+# Tool Execution
 # ============================================================================
 
-def execute_tool(tool_name: str, arguments: dict[str, Any], ctx: Any, state: dict[str, Any]) -> dict[str, Any]:
-    """Execute a single tool and return its result. Updates state as needed."""
-    print(f"\n  Executing: {tool_name}")
+def execute_tool(tool_name: str, args: dict, ctx: Any) -> Any:
+    """Execute a tool and update state."""
+    print(f"  → Executing: {tool_name}")
     
     try:
         if tool_name == "layout_filter":
-            # Call real layout filter tool
+            # Load layout by ID
+            layout_id = args.get("layoutId")
             all_layouts = _load_all_layouts()
-            layout_id = arguments.get("layoutId")
-            result = select_layout(all_layouts, layout_id)
-            print(f"    [OK] Loaded layout {layout_id} with {len(result.get('rooms', []))} rooms")
+            layout = select_layout(all_layouts, layout_id)
             
-            # Store in state for subsequent operations - match real code structure
-            state["selected_layout_id"] = layout_id
-            state["layout"] = result
-            state["layout_json_string"] = json.dumps(result)
-            
-            return result
-            
+            # Save to reference layout (mirrors local_tools.py behavior)
+            save_reference_layout(layout)
+            add_history(f"Loaded {layout_id}", tool_name, {"layoutId": layout_id})
+            print(f"    ✓ Loaded {layout_id}")
+            return layout
+        
         elif tool_name == "layout_graph_search":
-            # Call real graph search tool
-            programs = arguments.get("programs", [])
-            connection_type = arguments.get("connection_type", "any")
+            # Search layouts
+            programs = args.get("programs", [])
+            connection = args.get("connection_type", "any")
+            
             graph_searcher = _get_graph_searcher()
-            topology_graph = build_topology_graph(programs, connection_type)
+            topology_graph = build_topology_graph(programs, connection)
             results = graph_searcher.search_by_graph_similarity(topology_graph, method="jaccard")
             
-            candidates = [
-                {"layoutId": layout_id, "score": similarity}
-                for layout_id, similarity in results
-            ]
-            print(f"    [OK] Found {len(candidates)} layouts matching {programs}")
-            return {"candidates": candidates}
-            
+            # Auto-load best match (mirrors local_tools.py behavior)
+            if results:
+                best_id, score = results[0]
+                all_layouts = _load_all_layouts()
+                best_layout = select_layout(all_layouts, best_id)
+                
+                # Save to reference layout
+                save_reference_layout(best_layout)
+                add_history(f"Searched {programs}, found {len(results)}", tool_name, 
+                           {"programs": programs, "best": best_id, "score": score})
+                print(f"    ✓ Found {len(results)} layouts, auto-loaded {best_id}")
+                return {"best": best_id, "candidates": len(results)}
+            else:
+                add_history(f"Searched {programs}, no results", tool_name)
+                print(f"    ✓ No layouts found")
+                return {"candidates": 0}
+        
         elif tool_name == "delete_room_06":
-            # MCP tool - try to execute via server
-            room_name = arguments.get("room_name", "?")
+            # Delete room (MCP tool)
+            room = args.get("room_name", "?")
+            current_layout = load_current_layout()
+            layout_id = current_layout.get("layoutId", "?") if current_layout else "?"
             
-            # Get layout from state (real behavior: use state's layout if available)
-            layout_json_string = state.get("layout_json_string")
-            layout_id = state.get("selected_layout_id")
-            if not layout_json_string:
-                # If no layout in state, get default from context
-                layout_data = ctx.layout_data
-                layout_id = layout_data.get("layout_id", "layout-1")
-                layout_json_string = json.dumps(layout_data)
-                state["selected_layout_id"] = layout_id
-                state["layout_json_string"] = layout_json_string
-                print(f"    ℹ No layout in state, using default: {layout_id}")
+            print(f"    → Calling MCP: delete_room_06 (timeout: 15s)")
             
-            # Add layout_json to arguments for MCP call (matching real code behavior)
-            full_arguments = {**arguments, "layout_json": layout_json_string}
-            print(f"    DEBUG: layout_json_string type={type(layout_json_string)}, length={len(layout_json_string) if layout_json_string else 0}")
-            print(f"    DEBUG: layout_json first 100 chars: {layout_json_string[:100] if layout_json_string else 'EMPTY'}")
-            print(f"    DEBUG: full_arguments keys: {list(full_arguments.keys())}")
+            # Inject layout_json (mirrors tools.py behavior)
+            args_to_send = args.copy()
+            if "layout_json" not in args_to_send and current_layout:
+                args_to_send["layout_json"] = current_layout
             
-            try:
-                # Attempt to call the MCP tool with timeout
-                result = call_tool_with_timeout(ctx.mcp_client, 'delete_room_06', full_arguments, timeout_seconds=5)
-                print(f"    [OK] MCP tool executed: deleted room '{room_name}' from {layout_id}")
-                return json.loads(result) if isinstance(result, str) else result
-            except TimeoutError as e:
-                print(f"    ⚠ MCP call timed out: {e}")
-                print(f"      Would delete room: {room_name} from {layout_id}")
-                return {"skipped": True, "reason": "MCP timeout", "tool_name": "delete_room_06", "room": room_name, "layout": layout_id}
-            except Exception as e:
-                print(f"    ⚠ MCP server error: {e}")
-                print(f"      Would delete room: {room_name} from {layout_id}")
-                return {"skipped": True, "reason": "MCP server unavailable", "tool_name": "delete_room_06", "room": room_name, "layout": layout_id}
+            success, output = call_mcp_tool_safe(ctx, tool_name, args_to_send, timeout_sec=15.0)
             
+            if success:
+                print(f"    ✓ MCP returned: {output[:80]}...")
+                try:
+                    result = json.loads(output) if output.startswith("{") else json.loads(output)
+                    # Save edited layout (mirrors tools.py behavior)
+                    if isinstance(result, dict):
+                        save_edited_layout(result)
+                        add_history(f"Deleted {room}", tool_name, {"room": room, "layout": layout_id})
+                    return result
+                except json.JSONDecodeError:
+                    add_history(f"Deleted {room} (non-JSON response)", tool_name, {"room": room})
+                    return {"status": "deleted", "room": room}
+            else:
+                print(f"    ⚠ MCP error: {output}")
+                add_history(f"MCP error: {output}", tool_name, {"error": output})
+                return {"error": output}
+        
         elif tool_name == "add_window_06":
-            # MCP tool - try to execute via server
-            room_name = arguments.get("room_name", "any room")
-            width = arguments.get("width", "?")
+            # Add window (MCP tool)
+            room = args.get("room_name", "?")
+            width = args.get("width", "?")
+            current_layout = load_current_layout()
+            layout_id = current_layout.get("layoutId", "?") if current_layout else "?"
             
-            # Get layout from state (real behavior: use state's layout if available)
-            layout_json_string = state.get("layout_json_string")
-            layout_id = state.get("selected_layout_id")
-            if not layout_json_string:
-                # If no layout in state, get default from context
-                layout_data = ctx.layout_data
-                layout_id = layout_data.get("layout_id", "layout-1")
-                layout_json_string = json.dumps(layout_data)
-                state["selected_layout_id"] = layout_id
-                state["layout_json_string"] = layout_json_string
-                print(f"    ℹ No layout in state, using default: {layout_id}")
+            print(f"    → Calling MCP: add_window_06 (timeout: 15s)")
             
-            # Add layout_json to arguments for MCP call (matching real code behavior)
-            full_arguments = {**arguments, "layout_json": layout_json_string}
-            print(f"    DEBUG: MCP arguments keys: {list(full_arguments.keys())}, room_name={room_name}, width={width}")
+            # Inject layout_json (mirrors tools.py behavior)
+            args_to_send = args.copy()
+            if "layout_json" not in args_to_send and current_layout:
+                args_to_send["layout_json"] = current_layout
             
-            try:
-                # Attempt to call the MCP tool with timeout
-                result = call_tool_with_timeout(ctx.mcp_client, 'add_window_06', full_arguments, timeout_seconds=5)
-                print(f"    [OK] MCP tool executed: added {width}m window to {room_name} in {layout_id}")
-                return json.loads(result) if isinstance(result, str) else result
-            except TimeoutError as e:
-                print(f"    ⚠ MCP call timed out: {e}")
-                print(f"      Would add {width}m window to {room_name} in {layout_id}")
-                return {"skipped": True, "reason": "MCP timeout", "tool_name": "add_window_06", "width": width, "room": room_name, "layout": layout_id}
-            except Exception as e:
-                print(f"    ⚠ MCP server error: {e}")
-                print(f"      Would add {width}m window to {room_name} in {layout_id}")
-                return {"skipped": True, "reason": "MCP server unavailable", "tool_name": "add_window_06", "width": width, "room": room_name, "layout": layout_id}
+            success, output = call_mcp_tool_safe(ctx, tool_name, args_to_send, timeout_sec=15.0)
+            
+            if success:
+                print(f"    ✓ MCP returned: {output[:80]}...")
+                try:
+                    result = json.loads(output) if output.startswith("{") else json.loads(output)
+                    # Save edited layout (mirrors tools.py behavior)
+                    if isinstance(result, dict):
+                        save_edited_layout(result)
+                        add_history(f"Added window", tool_name, {"width": width, "room": room})
+                    return result
+                except json.JSONDecodeError:
+                    add_history(f"Added window (non-JSON response)", tool_name, {"width": width, "room": room})
+                    return {"status": "added_window", "width": width, "room": room}
+            else:
+                print(f"    ⚠ MCP error: {output}")
+                add_history(f"MCP error: {output}", tool_name, {"error": output})
+                return {"error": output}
+            
+        elif tool_name == "adapt_layout_06":
+            # Adapt layout (MCP tool)
+            current_layout = load_current_layout()
+            layout_id = current_layout.get("layoutId", "?") if current_layout else "?"
+            
+            print(f"    → Calling MCP: adapt_layout_06 (timeout: 15s)")
+            
+            # Inject current layout_json if not already included
+            args_to_send = args.copy()
+            if "layout_json" not in args_to_send and current_layout:
+                args_to_send["layout_json"] = current_layout
+            
+            # Inject input_layout from file if exists, else use current layout as template
+            if "input_layout" in args_to_send:
+                input_layout = load_input_layout()
+                if input_layout:
+                    args_to_send["input_layout"] = input_layout
+                elif current_layout:
+                    # If no separate input_layout file, use current layout as the template
+                    args_to_send["input_layout"] = current_layout
+            
+            success, output = call_mcp_tool_safe(ctx, tool_name, args_to_send, timeout_sec=15.0)
+            
+            if success:
+                print(f"    ✓ MCP returned: {output[:80]}...")
+                try:
+                    result = json.loads(output) if output.startswith("{") else json.loads(output)
+                    # Save edited layout (mirrors tools.py behavior)
+                    if isinstance(result, dict):
+                        save_edited_layout(result)
+                        add_history(f"Adapted {layout_id}", tool_name, {"layout": layout_id})
+                    return result
+                except json.JSONDecodeError:
+                    add_history(f"Adapted {layout_id} (non-JSON response)", tool_name, {"layout": layout_id})
+                    return {"status": "adapted", "layout": layout_id}
+            else:
+                print(f"    ⚠ MCP error: {output}")
+                add_history(f"MCP error: {output}", tool_name, {"error": output})
+                return {"error": output}
+        
         else:
             return {"error": f"Unknown tool: {tool_name}"}
-            
+    
     except Exception as e:
-        print(f"    ERROR: {e}")
+        print(f"    ✗ Error: {e}")
+        add_history(f"Error in {tool_name}", tool_name, {"error": str(e)})
         return {"error": str(e)}
 
 
-def run_test(prompt: str, session_state: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Execute a single test with mock LLM parsing and real tool execution.
-    
-    State persists across tool calls within a single test:
-    - If layout_filter is called, it stores selected_layout_id in state
-    - If delete/add_window are called without a layout, they use state's layout_id
-    - If no layout in state, they use the default from context
-    """
+# ============================================================================
+# Main Test
+# ============================================================================
+
+def run_test(prompt: str, reset: bool = False):
+    """Execute a single test."""
     print(f"\n{'='*70}")
     print(f"Test: {prompt}")
     print(f"{'='*70}")
     
+    # Initialize
+    init_test_dirs()
+    if reset:
+        clear_test_state()
+    
+    current_layout = load_current_layout()
+    layout_id = current_layout.get("layoutId") if current_layout else None
+    history = json.loads(TEST_HISTORY.read_text()) if TEST_HISTORY.exists() else []
+    print(f"State: layout={layout_id}, history_events={len(history)}")
+    
+    # Bootstrap
     try:
-        # Initialize state - can come from previous runs (session persistence)
-        # Results go to tests/test_results/ directory
-        script_dir = Path(__file__).resolve().parent
-        results_dir = script_dir / "test_results"
-        results_dir.mkdir(exist_ok=True)
-        session_file = results_dir / "test_session_state.json"
-        
-        if session_state is None:
-            # Try to load from previous session (matches real code behavior)
-            if session_file.exists():
-                with open(session_file, 'r') as f:
-                    state = json.load(f)
-                    print(f"[OK] Loaded state from previous session: layout_id={state.get('selected_layout_id')}")
-            else:
-                # Fresh state
-                state = {
-                    "selected_layout_id": None,
-                    "layout": None,
-                    "layout_json_string": None
-                }
-        else:
-            state = session_state
-        
-        # Bootstrap context to get access to tools and settings
         ctx = bootstrap()
-        print(f"[OK] Bootstrapped context")
-        
-        # Parse prompt with mock LLM
-        mock_llm = MockLLMDecisionMaker()
-        decision = mock_llm._parse_prompt(prompt)
-        print(f"[OK] Mock LLM parsed prompt: action={decision['action']}")
-        
-        results = []
-        
-        # If it's a final response, just return it
-        if decision.get("action") == "final":
-            print(f"[OK] Final response: {decision.get('final_response', '')[:50]}...")
-            results.append({"type": "final", "content": decision.get("final_response")})
-        
-        # If it's tools, execute them
-        elif decision.get("action") == "tool":
-            tool_calls = decision.get("tool_calls", [])
-            print(f"[OK] Executing {len(tool_calls)} tool call(s)...")
-            
-            for call in tool_calls:
-                tool_name = call["name"]
-                args = call["arguments"]
-                # Pass state through and it gets updated by execute_tool
-                result = execute_tool(tool_name, args, ctx, state)
-                results.append({"tool": tool_name, "result": result})
-        
-        # Save results to tests/test_results/
-        script_dir = Path(__file__).resolve().parent
-        results_dir = script_dir / "test_results"
-        results_dir.mkdir(exist_ok=True)
-        
-        # Create a detailed log file
-        log_file = results_dir / "test_execution_log.jsonl"
-        with open(log_file, 'a') as f:
-            f.write(json.dumps({
-                "prompt": prompt,
-                "decision_action": decision.get("action"),
-                "tools_called": [c["name"] for c in decision.get("tool_calls", [])],
-                "final_state": {
-                    "selected_layout_id": state.get("selected_layout_id"),
-                },
-                "results": results
-            }) + "\n")
-        
-        # Save state to session file for next run (matches real code persistence)
-        with open(session_file, 'w') as f:
-            json.dump(state, f, indent=2)
-        
-        print(f"[OK] Test completed (state: layout_id={state.get('selected_layout_id')}, log: {log_file})")
-        ctx.mcp_client.close()
-        
-        return {"success": True, "decision": decision, "results": results, "state": state}
-        
+        print(f"✓ Bootstrapped context")
     except Exception as e:
-        print(f"ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
-
-
-def test_all():
-    """Run all predefined test cases."""
-    print("\n" + "#"*70)
-    print("TEST: All Predefined Test Cases")
-    print("#"*70)
+        print(f"✗ Bootstrap failed: {e}")
+        return
     
-    test_cases = [
-        "filter layout-1",
-        "search layouts with bathroom accessible from bedroom",
-        "search layout with 2 bedroom and 2 bathrooms and delete kitchen",
-        "add window 1m to the living"
-    ]
+    # Parse with mock LLM
+    mock_llm = MockLLM()
+    decision = mock_llm.parse(prompt)
     
-    for i, prompt in enumerate(test_cases, 1):
-        print(f"\n\nTest Case {i}/4")
-        run_test(prompt)
+    print(f"Parsed: action={decision['action']}, tools={len(decision.get('tool_calls', []))}")
+    
+    # Execute tools
+    if decision["action"] == "final":
+        print(f"Final response: {decision['final_response']}")
+        add_history("Final response", result=decision["final_response"])
+    
+    elif decision["action"] == "tool":
+        for call in decision["tool_calls"]:
+            tool_name = call["name"]
+            args = call["arguments"]
+            
+            # Inject current layout_json if needed (mirrors graph.py behavior)
+            if "layout_json" in args:
+                current_layout = load_current_layout()
+                if current_layout:
+                    args["layout_json"] = current_layout
+            
+            # Inject input_layout if needed
+            if "input_layout" in args:
+                input_layout = load_input_layout()
+                if input_layout:
+                    args["input_layout"] = input_layout
+            
+            result = execute_tool(tool_name, args, ctx)
+    
+    print(f"\n✓ Test complete\n")
 
-
-def test_custom_prompt(prompt: str):
-    """Run a custom prompt test."""
-    run_test(prompt)
-
-
-# ============================================================================
-# Main
-# ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Test the agent workflow with real graph + mock LLM"
-    )
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        help="Natural language prompt to test"
-    )
-    parser.add_argument(
-        "--test",
-        choices=["all"],
-        help="Run all predefined test cases"
-    )
+    parser = argparse.ArgumentParser(description="Test workflow with mock LLM")
+    parser.add_argument("prompt", nargs="?", help="Test prompt")
+    parser.add_argument("--reset", action="store_true", help="Reset state before test")
+    parser.add_argument("--show-state", action="store_true", help="Show current state files")
+    parser.add_argument("--clear", action="store_true", help="Clear state")
+    parser.add_argument("--test", choices=["all"], help="Run predefined test suite")
     
     args = parser.parse_args()
+    init_test_dirs()
+    
+    if args.clear:
+        clear_test_state()
+        print("✓ State cleared")
+        return
+    
+    if args.show_state:
+        print("\n" + "="*70)
+        print("Test State Files")
+        print("="*70)
+        
+        if TEST_REFERENCE_LAYOUT.exists():
+            print(f"\n📄 {TEST_REFERENCE_LAYOUT.name}:")
+            data = json.loads(TEST_REFERENCE_LAYOUT.read_text())
+            print(f"   layoutId: {data.get('layoutId')}")
+            print(f"   size: {len(json.dumps(data))} bytes")
+        
+        if TEST_EDITED_LAYOUT.exists():
+            print(f"\n📝 {TEST_EDITED_LAYOUT.name}:")
+            data = json.loads(TEST_EDITED_LAYOUT.read_text())
+            print(f"   layoutId: {data.get('layoutId')}")
+            print(f"   size: {len(json.dumps(data))} bytes")
+        
+        if TEST_INPUT_LAYOUT.exists():
+            print(f"\n📥 {TEST_INPUT_LAYOUT.name}:")
+            data = json.loads(TEST_INPUT_LAYOUT.read_text())
+            print(f"   layoutId: {data.get('layoutId')}")
+            print(f"   size: {len(json.dumps(data))} bytes")
+        
+        if TEST_HISTORY.exists():
+            history = json.loads(TEST_HISTORY.read_text())
+            print(f"\n📋 {TEST_HISTORY.name}: {len(history)} events")
+            for i, event in enumerate(history[-5:], start=max(1, len(history)-4)):
+                print(f"   {i}. {event.get('event')} [{event.get('tool', '-')}]")
+        
+        print("\n" + "="*70 + "\n")
+        return
     
     if args.test == "all":
-        test_all()
-    elif args.prompt:
-        test_custom_prompt(args.prompt)
+        # Run predefined test suite
+        print("Running predefined test suite (4 tests)...\n")
+        
+        clear_test_state()
+        run_test("select layout-1 and adapt to input layout", reset=True)
+        run_test("search layout with 2 bedrooms and bathroom")
+        run_test("adapt reference layout to input layout")
+        run_test("delete kitchen")
+        run_test("add window 1.0 m width to living room")
+        return
+    
+    if args.prompt:
+        run_test(args.prompt, reset=args.reset)
     else:
-        parser.print_help()
+        # Run default test cases (3 tests)
+        print("No prompt provided. Running example tests...\n")
+        
+        clear_test_state()
+        run_test("select layout-1 and adapt to input layout", reset=True)
+        run_test("search layout with 2 bedrooms and bathroom")
+        run_test("delete kitchen")
 
 
 if __name__ == "__main__":

@@ -6,10 +6,15 @@ from pathlib import Path
 def polyline_to_coords(polyline) -> List[Tuple[float, float]]:
     """Convert Rhino Polyline to list of [x, y] coordinates"""
     coords = []
-    for i in range(polyline.Count):
-        pt = polyline[i]
+    for i in range(polyline.PointCount):
+        pt = polyline.Point(i)
         coords.append([pt.X, pt.Y])
     return coords
+
+
+def point3d_to_coords(point) -> Tuple[float, float]:
+    """Convert Rhino Point3d to [x, y]"""
+    return [point.X, point.Y]
 
 
 def point3d_to_coords(point) -> Tuple[float, float]:

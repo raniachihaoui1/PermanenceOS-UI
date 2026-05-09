@@ -66,9 +66,9 @@ WHEN TO USE layout_filter (load a specific layout):
 - Only after search results if user asks to switch to a different layout from the candidates.
 
 WHEN TO USE MCP tools (modify current layout):
-- User says: "delete", "remove", "add", "create", "modify", "change", "edit"
-- Examples: "delete the kitchen", "add a window", "remove this room"
-→ Call the appropriate MCP tool to modify the current layout.
+- User says: "delete", "remove", "add", "create", "modify", "change", "edit", "adapt"
+- Examples: "delete the kitchen", "add a window", "adapt reference layout to input layout"
+→ Call the appropriate MCP tool to modify the current reference layout (layout_json_string in state).
 
 The MCP tools listed below are a toolbox: you may call them when they help achieve the user's goal. Choose tools and arguments only based on the user's request, the tool descriptions, and each tool's inputSchema. Do not assume any particular tool is required for a given instruction.
 

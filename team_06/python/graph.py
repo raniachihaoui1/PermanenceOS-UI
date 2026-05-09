@@ -56,7 +56,7 @@ def build_graph(ctx: Any) -> Any:
     # Create the state graph
     # Use the reason and tool nodes
     reason = build_reason_node(ctx.llm)
-    tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
+    tool = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path, ctx.input_layout_path)
     local_tool = build_local_tool_node(ctx.reference_layout_path)
 
     # Initialize the graph

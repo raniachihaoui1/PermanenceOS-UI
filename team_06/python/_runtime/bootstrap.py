@@ -18,6 +18,7 @@ class Context:
     max_iterations: int
     edited_layout_path: Path
     reference_layout_path: Path
+    input_layout_path: Path
 
 def bootstrap() -> Context:
     """Load settings, connect to the MCP server, discover tools, and build the LLM.
@@ -77,4 +78,5 @@ def bootstrap() -> Context:
         max_iterations=settings.max_iterations,
         edited_layout_path=edited_layout_path,
         reference_layout_path=reference_layout_path,
+        input_layout_path=input_layout_path,
     )

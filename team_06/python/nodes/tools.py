@@ -9,7 +9,7 @@ from _runtime.llm import write_tool_result
 # Tool node — executes MCP tool calls requested by the reason node.
 # ---------------------------------------------------------------------------
 
-def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
+def build_tool_node(mcp_client, allowed_tools, edited_layout_path, input_layout_path=None):
     """Return a tool node function ready to be added to a LangGraph StateGraph."""
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
@@ -39,6 +39,14 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             if "layout_json" in tool_args:
                 tool_args["layout_json"] = state["layout_json_string"]
 
+            # Inject input_layout from file
+            if "input_layout" in tool_args and input_layout_path and input_layout_path.exists():
+                try:
+                    input_layout = json.loads(input_layout_path.read_text(encoding="utf-8"))
+                    tool_args["input_layout"] = json.dumps(input_layout)
+                except (json.JSONDecodeError, IOError) as e:
+                    print(f"Warning: Could not load input_layout from {input_layout_path}: {e}")
+
             # Call the tool
             tool_output = mcp_client.call_tool(tool_name, tool_args)
 
@@ -66,7 +74,7 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             
             state["messages"].append({
                 "role": "user",
-                "content": f"Tool result: {tool_name}",
+                "content": f"Tool result: {tool_output}",
             })
             print(f"Used tool: {tool_name}")
 
