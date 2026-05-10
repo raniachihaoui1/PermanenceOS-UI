@@ -2,3 +2,5 @@
 *.pyc
 mcp.json
 **/__pycache__/
+.venv/
+team_06/output/

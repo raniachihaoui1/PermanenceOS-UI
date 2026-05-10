@@ -42,7 +42,7 @@ def _route(state: AgentState) -> str:
     # Check if any pending tool calls are local tools
     if state["pending_tool_calls"]:
         for call in state["pending_tool_calls"]:
-            if call["name"] in ["layout_filter", "layout_graph_search"]:
+            if call["name"] in ["layout_filter", "layout_graph_search", "boundary_analyzer"]:
                 return "local_tool"
     
     return "run_tool"

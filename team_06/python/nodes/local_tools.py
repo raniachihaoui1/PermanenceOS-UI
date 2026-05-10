@@ -14,6 +14,7 @@ from functools import lru_cache
 from tools.embedding_matcher import match_layouts
 from tools.layout_filter import select_layout
 from tools.graph_searcher import GraphSearcher, build_topology_graph
+from tools.boundary_analyzer import boundary_analyzer, get_boundary_analyzer_schema
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +81,7 @@ def _load_layout_to_state(state: dict, reference_layout_path: Path, layout_id: s
 def get_local_tools() -> list[dict[str, Any]]:
     """Return definitions of all local (non-MCP) tools."""
     return [
+        get_boundary_analyzer_schema(),
         {
             "name": "layout_filter",
             "description": "This tool filters a specific layout by ID.Auto-loads the found layout into state",
@@ -134,7 +136,7 @@ def build_local_tool_node(reference_layout_path):
             tool_name = call["name"]
             
             # Skip non-local tools
-            if tool_name not in ["layout_filter", "layout_graph_search"]:
+            if tool_name not in ["layout_filter", "layout_graph_search", "boundary_analyzer"]:
                 remaining_calls.append(call)
                 continue
             
@@ -143,8 +145,17 @@ def build_local_tool_node(reference_layout_path):
             # Cleanup any null values accidentally included by the LLM
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
 
-            # Execute layout_filter or layout_graph_search
-            if tool_name == "layout_filter":
+            # Execute layout_filter, layout_graph_search, or boundary_analyzer
+            if tool_name == "boundary_analyzer":
+                tool_output = boundary_analyzer(
+                    input_boundary=tool_args.get("input_boundary"),
+                    input_layout_path=tool_args.get("input_layout_path"),
+                    dataset_path=tool_args.get("dataset_path"),
+                    top_n_results=tool_args.get("top_n_results", 5)
+                )
+                print(f"[local_tool] Boundary analysis complete: {tool_output.get('status')}")
+                
+            elif tool_name == "layout_filter":
                 layout_id = tool_args.get("layoutId")
                 load_result = _load_layout_to_state(state, reference_layout_path, layout_id)
                 tool_output = {
