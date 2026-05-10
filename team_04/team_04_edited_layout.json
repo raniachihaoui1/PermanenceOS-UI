@@ -1,12 +1,22 @@
 {
   "success": true,
   "data": {
-    "gfa_compliant": true,
-    "gfa_surplus_deficit_sqm": 450,
-    "footprint_compliant": true
+    "geometry_id": "terrapilot_geom_6692c5d7",
+    "shape_type": "bar",
+    "footprint_area_sqm": 1050,
+    "gfa_sqm": 4200,
+    "total_height_m": 16,
+    "parameters": {
+      "shape_base": "bar",
+      "arm_length_m": 70,
+      "width_m": 15,
+      "floors": 4,
+      "floor_height_m": 4
+    },
+    "is_editable": true
   },
   "metadata": {
-    "tool_name": "area_requirement_checker_04",
+    "tool_name": "parametric_shape_generator_04",
     "placeholder": true
   }
 }

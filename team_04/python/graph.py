@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import json
 from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
@@ -13,14 +13,14 @@ from nodes.tools import build_tool_node
 
 
 # =============================================================================
-# graph.py — TerraPilot agent graph.
+# graph.py â€” TerraPilot agent graph.
 #
 # Architecture: 9-node category-based pipeline
 #
 # Each node has ONE named, unambiguous role.  Tool groups map 1-to-1 to nodes:
 #
 #   Node               Kind    Tool category           Tools
-#   ─────────────────────────────────────────────────────────────────────────
+#   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #   read_site          LLM     Site reading            site_boundary_reader_04
 #                                                      context_reader_04
 #                                                      legal_constraints_reader_04
@@ -42,38 +42,38 @@ from nodes.tools import build_tool_node
 #   evaluate           AUTO    Evaluation              spatial_intention_evaluator_04
 #                                                      performance_evaluator_04
 #                                                      shape_integrity_evaluator_04
-#   write_report       LLM     Report writing          (no tools — LLM only)
+#   write_report       LLM     Report writing          (no tools â€” LLM only)
 #   bake_output        AUTO    Output                  bake_geometry_id_04
 #   tool               SHARED  Tool executor           (all phases share this)
 #
 # Flow:
-#   START → read_site ──(tool loop)─► plan_form ──(tool loop)─► check_constraints
-#             check_constraints ──[access violation]──► fix_orientation ──(tool loop)─►┐
-#             check_constraints ──[form violation]────► fix_form ──(tool loop)──────────┤
-#             check_constraints ──[clean or ≤4 cycles]► evaluate → write_report → bake_output → END
-#                                                                         ▲
-#             fix_orientation ─(done)─► check_constraints ────────────────┤ (loop ≤ 4×)
-#             fix_form        ─(done)─► check_constraints ────────────────┘
+#   START â†’ read_site â”€â”€(tool loop)â”€â–º plan_form â”€â”€(tool loop)â”€â–º check_constraints
+#             check_constraints â”€â”€[access violation]â”€â”€â–º fix_orientation â”€â”€(tool loop)â”€â–ºâ”
+#             check_constraints â”€â”€[form violation]â”€â”€â”€â”€â–º fix_form â”€â”€(tool loop)â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+#             check_constraints â”€â”€[clean or â‰¤4 cycles]â–º evaluate â†’ write_report â†’ bake_output â†’ END
+#                                                                         â–²
+#             fix_orientation â”€(done)â”€â–º check_constraints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤ (loop â‰¤ 4Ã—)
+#             fix_form        â”€(done)â”€â–º check_constraints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 #
 # Key improvement over previous design
-# ──────────────────────────────────────
-# Previous:  LLM nodes were called repeatedly in the same phase — once to plan
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Previous:  LLM nodes were called repeatedly in the same phase â€” once to plan
 #            tool calls, again to process results, again to decide what to do
 #            next.  It was impossible to tell whether a node's output was
 #            planning the next step or summarising the last one.
 #
 # Now:       Each LLM node is called in exactly TWO modes, written into the prompt:
-#              MODE A (planning)  — no tool results yet → action="tool"
-#              MODE B (summary)   — results received → action="final" + phase summary
+#              MODE A (planning)  â€” no tool results yet â†’ action="tool"
+#              MODE B (summary)   â€” results received â†’ action="final" + phase summary
 #            The summary is appended to messages as an assistant message, making
 #            the conversation log a clear, structured timeline of what happened.
 #
 #            write_report does NOT call tools (baking is handled by bake_output AUTO).
-#            evaluate and check_constraints are fully AUTO — no LLM needed.
+#            evaluate and check_constraints are fully AUTO â€” no LLM needed.
 # =============================================================================
 
 
-# ── Tool name sets per category ───────────────────────────────────────────────
+# â”€â”€ Tool name sets per category â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _SITE_TOOL_NAMES   = {
     "site_boundary_reader_04",
     "context_reader_04",
@@ -126,7 +126,7 @@ class AgentState(TypedDict, total=False):
     tool_catalog:         str          # full catalog (kept for reference)
     layout_json_string:   str
 
-    # Phase tracking — one of: "site" | "form" | "fix_orient" | "fix_form" | "report"
+    # Phase tracking â€” one of: "site" | "form" | "fix_orient" | "fix_form" | "report"
     phase:                str
     geometry_id:          str | None
     evaluation_done:      bool
@@ -185,9 +185,9 @@ def _route_after_plan_form(state: AgentState) -> str:
 def _route_after_constraints(state: AgentState) -> str:
     """
     check_constraints: route based on violations found.
-    Priority: access/orientation → fix_orientation first (often cascades to fix others).
-    Form violations → fix_form.
-    Clean or max cycles → evaluate.
+    Priority: access/orientation â†’ fix_orientation first (often cascades to fix others).
+    Form violations â†’ fix_form.
+    Clean or max cycles â†’ evaluate.
     """
     violations = state.get("violations", [])
     mod_iters  = state.get("modification_iters", 0)
@@ -252,7 +252,7 @@ def _build_constraint_checker_node(mcp_client: Any) -> Any:
         viol_text   = (
             f"Violations detected: {violations}"
             if violations
-            else "✓ All 5 constraints satisfied — no violations."
+            else "âœ“ All 5 constraints satisfied â€” no violations."
         )
 
         messages = list(state.get("messages", []))
@@ -295,7 +295,7 @@ def _build_evaluate_node(mcp_client: Any) -> Any:
                 result = mcp_client.call_tool(tool_name, args)
                 eval_parts.append(f"[{tool_name}]:\n{result}")
             except Exception as exc:
-                eval_parts.append(f"[{tool_name}]: ERROR — {exc}")
+                eval_parts.append(f"[{tool_name}]: ERROR â€” {exc}")
 
         messages = list(state.get("messages", []))
         messages.append({
@@ -327,7 +327,7 @@ def _build_bake_node(mcp_client: Any) -> Any:
     def bake_output(state: AgentState) -> dict:
         geom_id = state.get("geometry_id")
         if not geom_id:
-            print("[bake_output] No geometry_id — skipping bake.")
+            print("[bake_output] No geometry_id â€” skipping bake.")
             return {}
         try:
             raw  = mcp_client.call_tool("bake_geometry_id_04", {
@@ -335,7 +335,7 @@ def _build_bake_node(mcp_client: Any) -> Any:
                 "layer_name":  "TerraPilot_Output",
             })
             data = json.loads(raw).get("data", {})
-            print(f"[bake_output] Baked → Rhino GUID: {data.get('rhino_guid', 'unknown')}")
+            print(f"[bake_output] Baked â†’ Rhino GUID: {data.get('rhino_guid', 'unknown')}")
         except Exception as exc:
             print(f"[bake_output] Bake failed: {exc}")
         return {}
@@ -397,19 +397,19 @@ def build_graph(ctx: Any) -> Any:
     orient_catalog = _fmt_phase_catalog(all_tools, _ORIENT_TOOL_NAMES)
     modify_catalog = _fmt_phase_catalog(all_tools, _MODIFY_TOOL_NAMES)
 
-    # ── LLM nodes (5) ────────────────────────────────────────────────────────
+    # â”€â”€ LLM nodes (5) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     read_site       = build_site_reader_node(ctx.llm, site_catalog)
     plan_form       = build_form_planner_node(ctx.llm, form_catalog)
     fix_orientation = build_orientation_fixer_node(ctx.llm, orient_catalog)
     fix_form        = build_form_modifier_node(ctx.llm, modify_catalog)
     write_report    = build_report_writer_node(ctx.llm)
 
-    # ── AUTO nodes (3) ───────────────────────────────────────────────────────
+    # â”€â”€ AUTO nodes (3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     check_constraints = _build_constraint_checker_node(ctx.mcp_client)
     evaluate          = _build_evaluate_node(ctx.mcp_client)
     bake_output       = _build_bake_node(ctx.mcp_client)
 
-    # ── Shared tool executor (1) ─────────────────────────────────────────────
+    # â”€â”€ Shared tool executor (1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     tool = _build_tracked_tool_node(ctx)
 
     graph = StateGraph(AgentState)
@@ -425,7 +425,7 @@ def build_graph(ctx: Any) -> Any:
     graph.add_node("bake_output",       bake_output)
     graph.add_node("tool",              tool)
 
-    # ── Pipeline wiring ───────────────────────────────────────────────────────
+    # â”€â”€ Pipeline wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     graph.add_edge(START, "read_site")
 
     graph.add_conditional_edges(
@@ -453,7 +453,7 @@ def build_graph(ctx: Any) -> Any:
         {"tool": "tool", "check_constraints": "check_constraints"},
     )
 
-    # After evaluate → write report → bake → done
+    # After evaluate â†’ write report â†’ bake â†’ done
     graph.add_edge("evaluate",     "write_report")
     graph.add_edge("write_report", "bake_output")
     graph.add_edge("bake_output",  END)
@@ -473,7 +473,7 @@ def build_graph(ctx: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Entry point — called from main.py and the notebook.
+# Entry point â€” called from main.py and the notebook.
 # ---------------------------------------------------------------------------
 
 def run_agent(prompt: str, ctx: Any) -> str:
@@ -522,303 +522,4 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
     }
 
 from nodes.tools import build_tool_node
-
-
-# =============================================================================
-# graph.py — TerraPilot agent graph.
-#
-# Architecture: 8-node phase-gated pipeline
-#
-#   START → site_reason ──(tools)──► tool ──► site_reason
-#                      └──(done)──► form_reason ──(tools)──► tool ──► form_reason
-#                                               └──(done)──► check_constraints
-#                                                            ├──(access)──► orient_reason ──(tools)──► tool ──► orient_reason
-#                                                            │                             └──(done)──► check_constraints (≤4 cycles)
-#                                                            ├──(form)────► modify_reason ──(tools)──► tool ──► modify_reason
-#                                                            │                             └──(done)──► check_constraints (≤4 cycles)
-#                                                            └──(clean)──► auto_evaluate ──► synthesise_reason ──► END
-#
-# Nodes:
-#   site_reason       LLM — reads site geometry, context, legal limits
-#   form_reason       LLM — selects typology, generates initial building form
-#   check_constraints AUTO — runs all 5 constraint checkers, categorises violations
-#   orient_reason     LLM — fixes orientation / access violations (rotate, offset)
-#   modify_reason     LLM — fixes form violations (scale, stretch, bend, terrace...)
-#   auto_evaluate     AUTO — runs 3 evaluators (spatial, performance, integrity)
-#   synthesise_reason LLM — bakes geometry, generates final architectural narrative
-#   tool              SHARED — executes MCP tool calls for all LLM phase nodes
-# =============================================================================
-
-
-# ── Tool name sets per phase ──────────────────────────────────────────────────
-_SITE_TOOL_NAMES   = {"site_boundary_reader_04", "context_reader_04", "legal_constraints_reader_04"}
-_FORM_TOOL_NAMES   = {"shape_library_loader_04", "parametric_shape_generator_04"}
-_ORIENT_TOOL_NAMES = {"rotate_mirror_tool_04", "scale_shape_tool_04"}
-_MODIFY_TOOL_NAMES = {
-    "scale_shape_tool_04", "stretch_arm_tool_04", "width_modifier_tool_04",
-    "courtyard_modifier_tool_04", "bend_angle_tool_04", "terrace_step_tool_04",
-}
-_CONSTRAINT_TOOL_NAMES = [
-    "site_fit_checker_04",
-    "setback_checker_04",
-    "area_requirement_checker_04",
-    "adjacency_access_checker_04",
-    "tree_constraint_checker_04",
-]
-_EVAL_TOOL_NAMES = [
-    "spatial_intention_evaluator_04",
-    "performance_evaluator_04",
-    "shape_integrity_evaluator_04",
-]
-_SHAPE_TOOL_NAMES = {"parametric_shape_generator_04", "shape_library_loader_04"}
-
-# Maximum orient/modify correction cycles before forcing evaluation
-_MAX_MOD_ITERS = 4
-
-
-# ---------------------------------------------------------------------------
-# State
-# ---------------------------------------------------------------------------
-
-class AgentState(TypedDict, total=False):
-    messages:             list[dict[str, Any]]
-    pending_tool_calls:   list[dict[str, Any]] | None
-    final_response:       str | None
-    iteration:            int
-    max_iterations:       int
-    tool_catalog:         str        # full catalog kept for reference / notebook use
-    layout_json_string:   str
-
-    # Phase tracking
-    phase:                str        # "site"|"form"|"orient"|"modify"|"synthesise"
-    geometry_id:          str | None
-    evaluation_done:      bool
-
-    # Constraint correction loop
-    constraint_results:   dict[str, Any] | None   # per-tool checker results
-    violations:           list[str]               # ["fit","setback","area","access","trees"]
-    modification_iters:   int                     # number of check_constraints runs so far
-
-
-# ---------------------------------------------------------------------------
-# Violation categorisation
-# ---------------------------------------------------------------------------
-
-def _categorize_violations(results: dict[str, Any]) -> list[str]:
-    """Parse checker results and return a list of violation category names."""
-    violations: list[str] = []
-
-    fit = results.get("site_fit_checker_04", {}).get("data", {})
-    if not fit.get("fits_within_site", True):
-        violations.append("fit")
-
-    setback = results.get("setback_checker_04", {}).get("data", {})
-    if not setback.get("compliant", True):
-        violations.append("setback")
-
-    area = results.get("area_requirement_checker_04", {}).get("data", {})
-    if not area.get("meets_requirement", True):
-        violations.append("area")
-
-    access = results.get("adjacency_access_checker_04", {}).get("data", {})
-    if not access.get("access_adequate", True):
-        violations.append("access")
-
-    trees = results.get("tree_constraint_checker_04", {}).get("data", {})
-    if not trees.get("no_conflicts", True):
-        violations.append("trees")
-
-    return violations
-
-
-# ---------------------------------------------------------------------------
-# Routing
-# ---------------------------------------------------------------------------
-
-def _route_after_site(state: AgentState) -> str:
-    """After site_reason: execute tools OR advance to form placement."""
-    if state.get("pending_tool_calls"):
-        return "tool"
-    return "form_reason"
-
-
-def _route_after_form(state: AgentState) -> str:
-    """After form_reason: execute tools OR advance to constraint checking."""
-    if state.get("pending_tool_calls"):
-        return "tool"
-    return "check_constraints"
-
-
-def _route_after_constraints(state: AgentState) -> str:
-    """Route to orientation fix, form fix, or evaluation based on violations."""
-    violations = state.get("violations", [])
-    mod_iters  = state.get("modification_iters", 0)
-
-    # Force evaluation after too many cycles or when all constraints pass
-    if not violations or mod_iters >= _MAX_MOD_ITERS:
-        return "evaluate"
-
-    # Fix orientation/access first — rotation often resolves other violations too
-    if "access" in violations:
-        return "orient"
-
-    # Fix form violations (fit, setback, area, trees)
-    if any(v in violations for v in ["fit", "setback", "area", "trees"]):
-        return "modify"
-
-    return "evaluate"
-
-
-def _route_after_orient(state: AgentState) -> str:
-    """After orient_reason: execute tools OR re-check constraints."""
-    if state.get("pending_tool_calls"):
-        return "tool"
-    return "check_constraints"
-
-
-def _route_after_modify(state: AgentState) -> str:
-    """After modify_reason: execute tools OR re-check constraints."""
-    if state.get("pending_tool_calls"):
-        return "tool"
-    return "check_constraints"
-
-
-def _route_after_tool(state: AgentState) -> str:
-    """After any tool execution: return to the reason node for the current phase."""
-    phase_map = {
-        "site":       "site_reason",
-        "form":       "form_reason",
-        "orient":     "orient_reason",
-        "modify":     "modify_reason",
-        "synthesise": "synthesise_reason",
-    }
-    return phase_map.get(state.get("phase", "site"), "synthesise_reason")
-
-
-def _route_after_synthesise(state: AgentState) -> str:
-    """After synthesise_reason: execute bake tool OR finish."""
-    if state.get("pending_tool_calls"):
-        return "tool"
-    return "finish"
-
-
-# ---------------------------------------------------------------------------
-# Automatic constraint-checking node
-# ---------------------------------------------------------------------------
-
-def _build_constraint_checker_node(mcp_client: Any) -> Any:
-    """Runs all 5 constraint tools automatically and categorises violations."""
-
-    def check_constraints(state: AgentState) -> dict:
-        geom_id     = state.get("geometry_id")
-        layout_json = state.get("layout_json_string", "{}")
-        results: dict[str, Any] = {}
-
-        for tool_name in _CONSTRAINT_TOOL_NAMES:
-            args: dict[str, Any] = {"layout_json": layout_json}
-            if geom_id:
-                args["geometry_id"] = geom_id
-            try:
-                raw = mcp_client.call_tool(tool_name, args)
-                results[tool_name] = json.loads(raw)
-            except Exception as exc:
-                results[tool_name] = {"success": False, "error": str(exc)}
-
-        violations  = _categorize_violations(results)
-        result_text = json.dumps(results, indent=2)
-        viol_text   = (
-            f"Violations detected: {violations}" if violations
-            else "No violations — all constraints satisfied."
-        )
-
-        messages = list(state.get("messages", []))
-        messages.append({
-            "role": "user",
-            "content": f"=== Constraint Check Results ===\n{result_text}\n\n{viol_text}",
-        })
-
-        print(f"[check_constraints] Violations: {violations}")
-
-        return {
-            "messages":           messages,
-            "constraint_results": results,
-            "violations":         violations,
-            "pending_tool_calls": None,
-            "modification_iters": state.get("modification_iters", 0) + 1,
-        }
-
-    return check_constraints
-
-
-# ---------------------------------------------------------------------------
-# Automatic evaluation node
-# ---------------------------------------------------------------------------
-
-def _build_auto_evaluate_node(mcp_client: Any) -> Any:
-    """Runs all 3 evaluators automatically, then advances phase to synthesise."""
-
-    def auto_evaluate(state: AgentState) -> dict:
-        geom_id    = state.get("geometry_id")
-        eval_parts: list[str] = []
-
-        for tool_name in _EVAL_TOOL_NAMES:
-            args = {"geometry_id": geom_id} if geom_id else {}
-            try:
-                result = mcp_client.call_tool(tool_name, args)
-                eval_parts.append(f"[{tool_name}]:\n{result}")
-            except Exception as exc:
-                eval_parts.append(f"[{tool_name}]: ERROR — {exc}")
-
-        messages = list(state.get("messages", []))
-        messages.append({
-            "role": "user",
-            "content": (
-                "=== Automatic Evaluation Complete ===\n\n"
-                + "\n\n".join(eval_parts)
-                + "\n\nAll evaluators done. Proceeding to final synthesis."
-            ),
-        })
-
-        print("[auto_evaluate] All 3 evaluators complete.")
-
-        return {
-            "messages":           messages,
-            "evaluation_done":    True,
-            "phase":              "synthesise",
-            "final_response":     None,
-            "pending_tool_calls": None,
-        }
-
-    return auto_evaluate
-
-
-# ---------------------------------------------------------------------------
-# Tracked tool node — shared executor with geometry_id extraction
-# ---------------------------------------------------------------------------
-
-def _build_tracked_tool_node(ctx: Any) -> Any:
-    inner = build_tool_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
-
-    def tracked_tool(state: AgentState) -> dict:
-        pending    = state.get("pending_tool_calls") or []
-        tool_names = [c.get("name", "") for c in pending]
-
-        result = inner(state)
-
-        # Auto-extract geometry_id when a shape tool is executed
-        if any(t in _SHAPE_TOOL_NAMES for t in tool_names):
-            for msg in reversed(result.get("messages", [])):
-                if msg.get("role") == "user" and msg.get("content", "").startswith("Tool result:"):
-                    try:
-                        payload = json.loads(msg["content"].removeprefix("Tool result:").strip())
-                        gid = payload.get("data", {}).get("geometry_id")
-                        if gid:
-                            result["geometry_id"] = gid
-                    except Exception:
-                        pass
-                    break
-
-        return result
-
-    return tracked_tool
 
