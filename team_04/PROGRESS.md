@@ -1,6 +1,6 @@
 # Team 04 — TerraPilot Implementation Progress
 
-_Last updated: 2026-05-09_
+_Last updated: 2026-05-11_
 
 ---
 
@@ -8,14 +8,14 @@ _Last updated: 2026-05-09_
 
 | Area | Status | Notes |
 |---|---|---|
-| LangGraph workflow | ✅ Done | Phase-aware 3-node graph with auto-evaluate gate |
-| System prompt | ✅ Done | Full TerraPilot philosophy + 23 tools in `reason.py` |
+| LangGraph workflow | ✅ Done | **9-node category-based pipeline** — each node has ONE unambiguous role; Two-Mode LLM pattern eliminates reasoning ambiguity |
+| System prompt | ✅ Done | **5 focused phase prompts** in `reason.py` — each LLM node calls tools (Mode A) then writes a structured summary (Mode B) |
 | Tool definitions | ✅ Done | 21 GH tools + 2 LLM-side tools documented |
 | Mock MCP client | ✅ Done | All 21 stubs returning realistic JSON |
 | Notebook explorer | ✅ Done | 19-cell notebook, all sections running |
 | LLM configuration | ✅ Done | Cloudflare Workers AI — `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 | Graph visualization | ✅ Done | LangGraph PNG + matplotlib workflow diagram |
-| End-to-end agent run | ✅ Done | Cell 19 runs successfully with mock stubs |
+| End-to-end agent run | ❌ Broken | Cell 19 fails — `.env` has invalid model `@cf/google/gemini-flash-1.5-8b`; fix: restore `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 | `.env` setup | ✅ Done | Credentials file created at repo root |
 | API schema fix | ✅ Done | Removed `json_schema` response_format; no timeout/token errors |
 | Edited layout output | ✅ Done | `team_04_edited_layout.json` generated from first agent run |
@@ -23,7 +23,7 @@ _Last updated: 2026-05-09_
 | GH tool specs | ✅ Done | 2 of 23 detailed specs written: tool 1 (`site_boundary_reader`) + tool 5 (`parametric_shape_generator`) |
 | GH cluster parameters | ✅ Done | `team_04_definition_cluster.ghcluster` + working.gh parameter-tuned and verified |
 | Grasshopper tools (remaining) | 🔄 In progress | 21 tools still need GH implementation; stubs exist for all |
-| Test cases | 🔄 In progress | 2/5 written: `simple_rectangle`, `pentagon_with_trees`; 3 pending |
+| Test cases | 🔄 In progress | All 5 defined in notebook (with mock overrides); 2/5 markdown files written |
 
 ---
 
@@ -63,6 +63,13 @@ Five root-cause issues were diagnosed and resolved to make the full agent run (c
 - Switched model to `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in `.env` (faster FP8 variant).
 - Increased `timeout_seconds` to 300 and `max_iterations` to 20 in cell 19.
 
+### Bug 7 — `BadRequestError` from invalid Cloudflare model name (2026-05-10)
+**Symptom:** Cell 19 crashes immediately on the first LLM call: `BadRequestError: Error code: 400 — No such model: @cf/google/gemini-flash-1.5-8b`.  
+**Root cause:** The `.env` file was changed to use `@cf/google/gemini-flash-1.5-8b`, which is not a valid Cloudflare Workers AI model identifier.  
+**Fix:** Restore `CF_MODEL` in `.env` to `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (the previously verified working model).
+
+---
+
 ### Bug 6 — Stale Python module cache in Jupyter kernel
 **Symptom:** File edits to `_runtime/llm.py` and `graph.py` did not take effect — Jupyter kernel served the old cached versions from `sys.modules`.  
 **Root cause:** Python caches imported modules; edits to `.py` files are invisible to the running kernel until the module is reloaded or the kernel is restarted.  
@@ -72,47 +79,100 @@ Five root-cause issues were diagnosed and resolved to make the full agent run (c
 
 ## Completed Work
 
-### 1. LangGraph Workflow Redesign (`graph.py`)
+### 1. LangGraph Workflow Redesign v2 (`graph.py` + `nodes/reason.py`) — 2026-05-11
 
-Replaced the original 2-node reason/tool loop with a **3-node phase-aware graph**:
+Replaced the previous 8-node pipeline with a clearer **9-node category-based pipeline**.
 
-```
-START → reason ──(tool calls)──────────────────────► tool ──► reason
-               └──(final + geometry + !evaluated)──► auto_evaluate ──► reason
-               └──(final + evaluated / no geometry)─────────────────► END
-```
+#### Problem with the previous design
+In the old pipeline each LLM node was invoked multiple times per phase — once to decide which
+tool to call, then again after receiving the tool result to decide what to do next.  This made
+the conversation log ambiguous: it was impossible to tell whether a node's latest message was
+*planning* the next step or *summarising* the previous one.
 
-**New nodes:**
-- `reason` — LLM decides: call tools, finish, or both
-- `tool` — MCP tool execution, auto-extracts `geometry_id` from `parametric_shape_generator_04` responses
-- `auto_evaluate` — fires automatically once per geometry; calls all 3 evaluators sequentially, then clears `final_response` so the LLM synthesises a qualified response
+#### Solution — Two-Mode LLM Pattern
+Each LLM node's system prompt now explicitly describes two modes:
 
-**New `AgentState` fields:**
-| Field | Type | Purpose |
+| Mode | Trigger | Output |
 |---|---|---|
-| `phase` | `str` | `"design"` \| `"evaluate"` \| `"done"` |
-| `geometry_id` | `str \| None` | Active parametric geometry ID — auto-extracted |
-| `evaluation_done` | `bool` | Gate: `True` after `auto_evaluate` has run |
+| **MODE A — Plan** | No tool results in messages yet | `action="tool"` + tool call arguments |
+| **MODE B — Summarise** | Tool results already in messages | `action="final"` + structured phase summary |
 
-**Routing logic (`_route`):**
-1. If `final_response` is set AND `geometry_id` exists AND `evaluation_done=False` → `"evaluate"`
-2. If `final_response` is set AND (no geometry OR already evaluated) → `"finish"`
-3. If `iteration >= max_iterations` → `"finish"`
-4. Otherwise → `"run_tool"`
+After MODE B runs, the summary is appended to `state["messages"]` as an assistant message with a
+tagged header (e.g. `=== SITE READ COMPLETE ===`).  This creates a clean, timestamped log of what
+each phase accomplished.
+
+#### Node → Tool category mapping
+
+```
+START → read_site ──(tool loop)──► plan_form ──(tool loop)──► check_constraints
+          check_constraints ──[access violation]──► fix_orientation ──(tool loop)──► check_constraints  ┐
+          check_constraints ──[form violation]────► fix_form ──(tool loop)──────────► check_constraints  ├ ≤4 cycles
+          check_constraints ──[clean / max cycles]─► evaluate ──► write_report ──► bake_output ──► END  ┘
+```
+
+| Node | Kind | Role | Tools |
+|---|---|---|---|
+| `read_site` | LLM | Read site context | `site_boundary_reader_04`, `context_reader_04`, `legal_constraints_reader_04` |
+| `plan_form` | LLM | Generate building form | `shape_library_loader_04`, `parametric_shape_generator_04` |
+| `check_constraints` | AUTO | Run all 5 constraint checkers | `site_fit_checker_04`, `setback_checker_04`, `area_requirement_checker_04`, `adjacency_access_checker_04`, `tree_constraint_checker_04` |
+| `fix_orientation` | LLM | Rotation/offset fix (access violations) | `rotate_mirror_tool_04`, `scale_shape_tool_04` |
+| `fix_form` | LLM | Shape modification fix (form violations) | `scale_shape_tool_04`, `stretch_arm_tool_04`, `width_modifier_tool_04`, `courtyard_modifier_tool_04`, `bend_angle_tool_04`, `terrace_step_tool_04` |
+| `evaluate` | AUTO | Run all 3 evaluators | `spatial_intention_evaluator_04`, `performance_evaluator_04`, `shape_integrity_evaluator_04` |
+| `write_report` | LLM | Final narrative — **no tools** | (LLM only) |
+| `bake_output` | AUTO | Bake to Rhino | `bake_geometry_id_04` |
+| `tool` | SHARED | Execute any pending tool call | (all phases share this executor) |
+
+**Key improvement:** `write_report` and `bake_output` are now separate nodes.
+Previously `synthesise_reason` had to call `bake_geometry_id_04` AND write the narrative in the
+same turn — the LLM was expected to both "execute an output step" and "compose a design
+summary" simultaneously.  Now baking is automatic (`bake_output` AUTO), and `write_report` is a
+pure LLM task with no tool calls.
+
+#### Node name changes (v1 → v2)
+
+| Old node (8-node) | New node (9-node) | Change |
+|---|---|---|
+| `site_reason` | `read_site` | Renamed for clarity |
+| `form_reason` | `plan_form` | Renamed for clarity |
+| `check_constraints` | `check_constraints` | Unchanged |
+| `orient_reason` | `fix_orientation` | Renamed for clarity |
+| `modify_reason` | `fix_form` | Renamed for clarity |
+| `auto_evaluate` | `evaluate` | Renamed (dropped `auto_` prefix) |
+| `synthesise_reason` | `write_report` | Renamed + role narrowed (no bake) |
+| — | `bake_output` | **New** — baking split into its own AUTO node |
+| `tool` | `tool` | Unchanged |
+
+#### Updated `AgentState` phase values
+
+| Phase value | Active in node |
+|---|---|
+| `"site"` | `read_site` |
+| `"form"` | `plan_form` |
+| `"fix_orient"` | `fix_orientation` |
+| `"fix_form"` | `fix_form` |
+| `"report"` | `write_report` |
+
+#### Builder functions in `nodes/reason.py` (v2)
+
+| Function | Phase | Prompt variable |
+|---|---|---|
+| `build_site_reader_node(llm, site_catalog)` | `"site"` | `SITE_READER_PROMPT` |
+| `build_form_planner_node(llm, form_catalog)` | `"form"` | `FORM_PLANNER_PROMPT` |
+| `build_orientation_fixer_node(llm, orient_catalog)` | `"fix_orient"` | `ORIENTATION_FIXER_PROMPT` |
+| `build_form_modifier_node(llm, modify_catalog)` | `"fix_form"` | `FORM_MODIFIER_PROMPT` |
+| `build_report_writer_node(llm)` | `"report"` | `REPORT_WRITER_PROMPT` |
 
 ---
 
-### 2. System Prompt (`nodes/reason.py`)
+### Previous Design — 8-Node Phase-Gated Pipeline (`graph.py` + `nodes/reason.py`) — 2026-05-10
 
-Updated `SYSTEM_PROMPT` with:
-- TerraPilot design philosophy (site-reading → shape → constraints → manipulation → evaluate)
-- All 23 tools listed with usage guidance
-- Explicit instruction to always run evaluators before concluding
-- Phase-aware instructions for each workflow stage
+Replaced the original single-reason-node ReAct loop with an **8-node phase-gated pipeline**.
+Each phase had a dedicated LLM node with a focused system prompt.  Superseded by the 9-node
+redesign above.
 
 ---
 
-### 3. Tool Catalog (21 MCP tools + 2 LLM-side)
+### 2. Tool Catalog (21 MCP tools + 2 LLM-side)
 
 **Site Input (2):** `site_boundary_reader_04`, `context_reader_04`
 
@@ -130,7 +190,7 @@ Updated `SYSTEM_PROMPT` with:
 
 ---
 
-### 4. Notebook Explorer (`terrapilot_explore.ipynb`)
+### 3. Notebook Explorer (`terrapilot_explore.ipynb`)
 
 19-cell interactive notebook — **all sections functional and fully tested:**
 
@@ -142,14 +202,21 @@ Updated `SYSTEM_PROMPT` with:
 | 7–10 | Mock MCP client + 21 tool stubs | ✅ |
 | 11–12 | Tool catalog review | ✅ |
 | 13–15 | Graph visualization (LangGraph PNG + matplotlib workflow) | ✅ |
-| 16–17 | 5 test case definitions | ✅ |
-| 18–19 | **Full agent run — runs successfully end-to-end** | ✅ **Done** |
+| 16–17 | 5 test cases with `ACTIVE_TEST` selector + per-test `mock_overrides` | ✅ |
+| 18–19 | **Full agent run** | ❌ Broken — invalid model in `.env` (see Bug 7) |
 
-**Cell 19 specifics — what changed:**
+**Cell 19 specifics — current state:**
 - `importlib.reload(_runtime.llm)` and `importlib.reload(graph)` at cell top — always picks up latest file edits
 - `LLM_OVERRIDE["max_iterations"] = 20` — enough for a complete TerraPilot workflow
 - `LLM_OVERRIDE["timeout_seconds"] = 300` — covers multi-turn conversations where history grows
 - `build_llm_from_override()` re-called each run — picks up model/credential changes from `.env`
+- Tool call trace now printed after agent response — shows every tool called and its arguments
+- **Currently broken**: `.env` contains `@cf/google/gemini-flash-1.5-8b`; restore to `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
+
+**Cell 17 — test case improvements (2026-05-10):**
+- All 5 test cases now fully defined with `ACTIVE_TEST` selector — change one variable to switch scenario
+- Each test case has `mock_overrides` dict for per-scenario stub overrides (e.g. tree conflicts, failed area checks)
+- `MockMcpClient` gained `call_history()` and `reset_history()` methods for test inspection
 
 **Visualization outputs:**
 - `terrapilot_workflow.png` — 5-column swimlane diagram of all 21 tools by phase
@@ -192,16 +259,19 @@ Remaining 21 tools: stubs in mock MCP client; specs not yet written.
 
 ---
 
-### 8. Test Cases Written
+### 8. Test Cases
 
-Two detailed test cases added to `test_cases/`:
+Two detailed markdown test cases added to `test_cases/`:
 
 | File | Scenario | Contents |
 |---|---|---|
 | `test_01_simple_rectangle.md` | Simple rectangular site | Site coords, expected tool sequence, pass/fail criteria |
 | `test_02_pentagon_with_trees.md` | Irregular pentagon + 3 trees | Tree constraint testing, setback validation, geometry manipulation |
 
-3 remaining planned scenarios (`sloped_site`, `gfa_deficit`, `irregular_boundary`) not yet written.
+All 5 test cases are now defined **in the notebook** (cell 17) with per-scenario `mock_overrides`. The 3 remaining markdown spec files are still pending:
+- `test_03_sloped_site.md` — slope adaptation scenario (override: performance evaluator scores)
+- `test_04_gfa_deficit.md` — agent must iterate to meet area requirement (override: area checker fails first)
+- `test_05_irregular_boundary.md` — hex site with bend constraint (override: setback checker)
 
 ---
 
@@ -241,7 +311,7 @@ Each tool still needs: GH cluster wiring, real output JSON, and mock stub update
 
 ### Test Cases
 
-3 of 5 planned test cases still to write:
+All 5 scenarios now run in notebook (cell 17). Still needed — markdown spec files:
 - `test_03_sloped_site.md`
 - `test_04_gfa_deficit.md`
 - `test_05_irregular_boundary.md`
