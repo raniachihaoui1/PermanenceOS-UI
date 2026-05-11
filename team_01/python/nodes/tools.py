@@ -7,6 +7,7 @@ from _runtime.llm import write_tool_result
 
 
 def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
+    """Return a tool node function ready to be added to a LangGraph StateGraph."""
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
 
@@ -63,7 +64,7 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path):
             except (json.JSONDecodeError, AttributeError, TypeError):
                 pass
 
-            # Append short summary to conversation history
+            # Append short summary to keep conversation history small
             try:
                 layout_id = json.loads(tool_output).get("layoutId", "?") if tool_output.strip().startswith("{") else "?"
             except Exception:

@@ -1,8 +1,18 @@
 {
+  "rooms": {
+    "kitchen": {
+      "width": 5,
+      "length": 6
+    },
+    "bathroom": {
+      "width": 2,
+      "length": 4
+    }
+  },
   "structure": [
     {
-      "id": "COL_A",
-      "name": "Structural Column COL_A",
+      "id": "A_",
+      "name": "Structural Column A_",
       "geometry": [
         [
           0.0,
@@ -10,12 +20,40 @@
         ]
       ],
       "attributes": {
-        "wall_type": "column",
+        "type": "column",
         "permanence_tag": "permanent",
         "permanence_score": 1,
         "intervention_tier": "prohibitive",
         "reason": "Structural column. Cannot be moved or removed.",
         "reuse_warning": "All layouts must accommodate this column."
+      }
+    },
+    {
+      "id": "",
+      "name": "Structural Beam ",
+      "geometry": [],
+      "attributes": {
+        "type": "beam",
+        "dimensions": "unknown",
+        "permanence_tag": "permanent",
+        "permanence_score": 1,
+        "intervention_tier": "prohibitive",
+        "reason": "Structural beam. Cannot be moved or removed.",
+        "reuse_warning": "All layouts must accommodate this beam."
+      }
+    },
+    {
+      "id": "A_",
+      "name": "Structural Beam A_",
+      "geometry": [],
+      "attributes": {
+        "type": "beam",
+        "dimensions": "unknown",
+        "permanence_tag": "permanent",
+        "permanence_score": 1,
+        "intervention_tier": "prohibitive",
+        "reason": "Structural beam. Cannot be moved or removed.",
+        "reuse_warning": "All layouts must accommodate this beam."
       }
     }
   ]
