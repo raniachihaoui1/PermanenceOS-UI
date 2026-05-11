@@ -1,1 +1,103 @@
-
+{
+  "min_door_width_required": 0.85,
+  "total_doors": 10,
+  "conflicts": [
+    {
+      "door_id": "d03",
+      "connects": [
+        "r01",
+        "r08"
+      ],
+      "width": 0.8,
+      "required": 0.85,
+      "issue": "Door too narrow — 0.8m found, 0.85m required."
+    },
+    {
+      "door_id": "d04",
+      "connects": [
+        "r08",
+        "r01"
+      ],
+      "width": 0.8,
+      "required": 0.85,
+      "issue": "Door too narrow — 0.8m found, 0.85m required."
+    },
+    {
+      "door_id": "d09",
+      "connects": [
+        "r01",
+        "r06"
+      ],
+      "width": 0.7,
+      "required": 0.85,
+      "issue": "Door too narrow — 0.7m found, 0.85m required."
+    },
+    {
+      "door_id": "d10",
+      "connects": [
+        "r08",
+        "r06"
+      ],
+      "width": 0.7,
+      "required": 0.85,
+      "issue": "Door too narrow — 0.7m found, 0.85m required."
+    }
+  ],
+  "clear": [
+    {
+      "door_id": "d01",
+      "connects": [
+        "r03",
+        "r04"
+      ],
+      "width": 1.0,
+      "status": "clear"
+    },
+    {
+      "door_id": "d02",
+      "connects": [
+        "r03",
+        "r08"
+      ],
+      "width": 1.0,
+      "status": "clear"
+    },
+    {
+      "door_id": "d05",
+      "connects": [
+        "r01",
+        "r03"
+      ],
+      "width": 1.0,
+      "status": "clear"
+    },
+    {
+      "door_id": "d06",
+      "connects": [
+        "r05",
+        "r09"
+      ],
+      "width": 1.0,
+      "status": "clear"
+    },
+    {
+      "door_id": "d07",
+      "connects": [
+        "r05",
+        "r01"
+      ],
+      "width": 1.0,
+      "status": "clear"
+    },
+    {
+      "door_id": "d08",
+      "connects": [
+        "r01",
+        "r08"
+      ],
+      "width": 0.869,
+      "status": "clear"
+    }
+  ],
+  "summary": "4 of 10 doors are too narrow for a wheelchair user."
+}
