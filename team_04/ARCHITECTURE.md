@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is an **AI agent system** that uses LangGraph to build a category-based design pipeline for generating and modifying building layouts through a Grasshopper MCP (Model Context Protocol) server. The agent receives natural language design briefs and progresses through a 9-node pipeline — each node has a single, clearly named role. The **Two-Mode LLM pattern** ensures every node output is unambiguously either a tool-call plan (Mode A) or a structured phase summary (Mode B).
+This is an **AI agent system** that uses LangGraph to implement a **hub-and-spoke workflow** for generating and modifying building layouts through a Grasshopper MCP (Model Context Protocol) server. The agent receives natural language design briefs and a **Central Reason Node (LLM hub)** decides what to do next each cycle, dispatching to 15 specialist worker nodes. Three terminal paths (explain / visualize / accept) end the run.
 
 ## System Architecture
 
@@ -34,33 +34,33 @@ This is an **AI agent system** that uses LangGraph to build a category-based des
                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        graph.py                                 │
-│           LangGraph 9-Node Category-Based Pipeline              │
+│              LangGraph Hub-and-Spoke Architecture               │
 │                                                                 │
-│  START → [read_site] ──(tools)──► [tool] ──► [read_site]       │
-│                      └──(done)──► [plan_form]                   │
-│                                     ├──(tools)──► [tool] ──►   │
-│                                     └──(done)──► [check_con-   │
-│                                                  straints]      │
-│                                        (AUTO: all 5 checkers)   │
-│                                          │                      │
-│                         access viol.     ├──► [fix_orientation] │
-│                         form violation   ├──► [fix_form]        │
-│                         clean / max      └──► [evaluate]        │
-│                           (AUTO: all 3 evaluators, no LLM)      │
-│                                               │                 │
-│                                         [write_report]          │
-│                                       (LLM only — no tools)     │
-│                                               │                 │
-│                                         [bake_output]           │
-│                                           (AUTO — no LLM)       │
-│                                               │                 │
-│                                              END                │
+│  START → [central_reason] ─────────────────────────────────┐   │
+│            │ suggest       → [suggestion_layer] ────────────┤   │
+│            │ generate_shape→ [tool_shape_creation]          │   │
+│            │                  → [update_shape_state] ───────┤   │
+│            │ evaluate      → [tool_evaluation]              │   │
+│            │                  → [update_score_state] ───────┤   │
+│            │ ask_user      → [human_feedback] ──────────────┤   │
+│            │ check_con...  → [tool_constraint_check]        │   │
+│            │                  → [update_constraint_state] ──┤   │
+│            │ optimize      → [optimization]                 │   │
+│            │               → [tool_manipulation]            │   │
+│            │               → [update_modified_shape]        │   │
+│            │               → [tool_constraint_check]        │   │
+│            │                  → [update_constraint_state] ──┘   │
+│            │ explain       → [reason_output] ──────────┐        │
+│            │ visualize     → [visualization] ──────────┤        │
+│            └ accept        ────────────────────────────┘        │
+│                                         ↓                       │
+│                                  [final_output]                 │
+│                                  [cache_final_state]            │
+│                                       END                       │
 │                                                                 │
-│   • 5 LLM nodes — each runs in MODE A (plan) or MODE B (sum.)  │
-│   • 3 automatic nodes — no LLM: check_constraints, evaluate,   │
-│                                 bake_output                     │
-│   • 1 shared tool executor                                      │
-│   • fix_orientation / fix_form loop repeats up to 4 times      │
+│   • 3 LLM nodes: central_reason, optimization, reason_output   │
+│   • 12 AUTO nodes handle tools, state updates, I/O             │
+│   • optimize loop re-checks constraints (≤4 cycles)            │
 └─────────────────────────────────────────────────────────────────┘
                  │
      ┌───────────┼───────────┬──────────────────┐
@@ -109,7 +109,7 @@ team_04/
     ├── main.py                             # Entry point
     ├── graph.py                            # LangGraph workflow definition
     ├── terrapilot_explore.ipynb            # 19-cell notebook: 5 test cases, mock client, graph viz
-    ├── terrapilot_workflow.png             # Generated swimlane workflow diagram
+    ├── terrapilot_hub_workflow.png         # Generated hub-and-spoke workflow diagram
     │
     ├── _runtime/                           # Core runtime utilities
     │   ├── __init__.py                     # Empty (package marker)
@@ -120,7 +120,7 @@ team_04/
     │
     └── nodes/                              # Graph node implementations
         ├── __init__.py                     # Empty (package marker)
-        ├── reason.py                       # 5 phase-specific LLM reason nodes
+        ├── reason.py                       # 3 LLM nodes: central_reason, optimization, reason_output
         └── tools.py                        # Shared MCP tool executor node
 ```
 
@@ -189,55 +189,54 @@ Test case for an irregular pentagon site with 3 trees. Covers tree constraint ch
 ---
 
 #### `graph.py`
-**Purpose:** Defines the 9-node category-based LangGraph pipeline
+**Purpose:** Defines the 16-node hub-and-spoke LangGraph workflow
+
+**Architecture — Central Reason Node as hub:**
+The `central_reason` LLM node reads the full conversation history each cycle and picks ONE of 9 actions. Specialist workers execute the action, update state, and return to the hub. Three actions (explain / visualize / accept) terminate the run.
 
 **Node inventory:**
 | Node | Type | Role | Tools |
 |---|---|---|---|
-| `read_site` | LLM | Site reading | `site_boundary_reader_04`, `context_reader_04`, `legal_constraints_reader_04` |
-| `plan_form` | LLM | Shape generation | `shape_library_loader_04`, `parametric_shape_generator_04` |
-| `check_constraints` | AUTO | Run all 5 checkers | `site_fit_checker_04`, `setback_checker_04`, `area_requirement_checker_04`, `adjacency_access_checker_04`, `tree_constraint_checker_04` |
-| `fix_orientation` | LLM | Rotation/offset fix | `rotate_mirror_tool_04`, `scale_shape_tool_04` |
-| `fix_form` | LLM | Shape modification | `scale_shape_tool_04`, `stretch_arm_tool_04`, `width_modifier_tool_04`, `courtyard_modifier_tool_04`, `bend_angle_tool_04`, `terrace_step_tool_04` |
-| `evaluate` | AUTO | Run all 3 evaluators | `spatial_intention_evaluator_04`, `performance_evaluator_04`, `shape_integrity_evaluator_04` |
-| `write_report` | LLM | Final narrative | **(no tools — LLM only)** |
-| `bake_output` | AUTO | Bake to Rhino | `bake_geometry_id_04` |
-| `tool` | SHARED | Execute any pending tool call | (all phases) |
+| `central_reason` | LLM | Hub — decides next action (9 options) | shape + manipulation tools |
+| `suggestion_layer` | AUTO | Presents design alternatives | — |
+| `tool_shape_creation` | TOOL | Executes site/shape MCP calls | `site_boundary_reader_04`, `context_reader_04`, `legal_constraints_reader_04`, `shape_library_loader_04`, `parametric_shape_generator_04` |
+| `update_shape_state` | AUTO | Extracts geometry_id; logs state | — |
+| `tool_evaluation` | AUTO | Runs all 3 evaluators | `spatial_intention_evaluator_04`, `performance_evaluator_04`, `shape_integrity_evaluator_04` |
+| `update_score_state` | AUTO | Stores evaluation scores | — |
+| `human_feedback` | AUTO* | Simulates user feedback | — |
+| `tool_constraint_check` | AUTO | Runs all 5 constraint checkers | `site_fit_checker_04`, `setback_checker_04`, `area_requirement_checker_04`, `adjacency_access_checker_04`, `tree_constraint_checker_04` |
+| `update_constraint_state` | AUTO | Stores violations | — |
+| `optimization` | LLM | Picks ONE manipulation tool to fix top violation | manipulation tools |
+| `tool_manipulation` | TOOL | Executes manipulation MCP calls | `scale_shape_tool_04`, `stretch_arm_tool_04`, `width_modifier_tool_04`, `courtyard_modifier_tool_04`, `rotate_mirror_tool_04`, `bend_angle_tool_04`, `terrace_step_tool_04` |
+| `update_modified_shape` | AUTO | Updates geometry_id after manipulation | — |
+| `reason_output` | LLM | Writes ALIGN/RESIST/FRAME/AVOID narrative | — |
+| `visualization` | AUTO | Generates text-based design summary | — |
+| `final_output` | AUTO | Consolidates final_response | — |
+| `cache_final_state` | AUTO | Saves design JSON to disk | — |
 
-**`AgentState` fields:**
-- `messages` — conversation history
-- `pending_tool_calls` — tool calls queued by the current phase's LLM node
-- `final_response` — set by `write_report` when the narrative is ready
-- `iteration` / `max_iterations` — safety cap on total tool calls
-- `tool_catalog` — full catalog (kept for reference/notebook use)
-- `layout_json_string` — current building layout JSON, updated after each tool call
-- `phase` — `"site"` | `"form"` | `"fix_orient"` | `"fix_form"` | `"report"`
-- `geometry_id` — auto-extracted from `parametric_shape_generator_04` responses
-- `evaluation_done` — set `True` by `evaluate`
-- `constraint_results` — per-tool results dict from all 5 checkers
-- `violations` — list of active violation categories: `"fit"`, `"setback"`, `"area"`, `"access"`, `"trees"`
-- `modification_iters` — number of `check_constraints` cycles (cap: `_MAX_MOD_ITERS = 4`)
+**Decision rules embedded in `central_reason` system prompt:**
+1. No `geometry_id` → `generate_shape`
+2. `geometry_id` exists, not checked → `check_constraints`
+3. Violations + iters < 4 → `optimize`
+4. Violations + iters ≥ 4 → `evaluate` (forced)
+5. No violations, not evaluated → `evaluate`
+6. Evaluation done → `explain`
 
-**Routing logic:**
-- After `read_site`: `pending_tool_calls?` → `tool` else → `plan_form`
-- After `plan_form`: `pending_tool_calls?` → `tool` else → `check_constraints`
-- After `check_constraints`: `"access"` violation → `fix_orientation`; form violations → `fix_form`; clean or max cycles → `evaluate`
-- After `fix_orientation` / `fix_form`: `pending_tool_calls?` → `tool` else → `check_constraints`
-- After `evaluate`: → `write_report` (unconditional)
-- After `write_report`: → `bake_output` (unconditional)
-- After `bake_output`: → `END` (unconditional)
-- After `tool`: routes back to current phase node via `state["phase"]`
+**`tool_constraint_check` is shared** between the `[check_constraints]` spoke and the end of every `[optimize]` cycle. Both paths flow through the same node sequence: `tool_constraint_check → update_constraint_state → central_reason`.
 
-**Key functions:**
-- `build_graph(ctx)` — assembles and compiles the 9-node pipeline
-- `run_agent(prompt, ctx)` — entry point; returns the final response string
-- `_categorize_violations(results)` — maps checker output to violation category list
-- `_build_constraint_checker_node(mcp_client)` — AUTO: runs all 5 checkers, logs "CONSTRAINT CHECK RESULTS (cycle N)" message
-- `_build_evaluate_node(mcp_client)` — AUTO: runs all 3 evaluators, logs "EVALUATION COMPLETE" message
-- `_build_bake_node(mcp_client)` — AUTO: calls `bake_geometry_id_04`, no LLM
-- `_build_tracked_tool_node(ctx)` — shared tool executor with `geometry_id` auto-extraction
-- `_fmt_phase_catalog(all_tools, names)` — builds a filtered tool catalog for one category
-- `_build_initial_state(prompt, ctx)` — initial state with all phase-tracking fields
+#### Builder functions in `nodes/reason.py` (hub-and-spoke)
+
+| Function | Role | Prompt variable |
+|---|---|---|
+| `build_central_reason_node(llm, full_catalog, max_mod_iters)` | Hub — 9-action dispatcher | `CENTRAL_REASON_PROMPT` |
+| `build_optimization_node(llm, manipulation_catalog)` | Picks ONE repair tool | `OPTIMIZATION_PROMPT` |
+| `build_reason_output_node(llm)` | Final ALIGN/RESIST/FRAME/AVOID report | `REASON_OUTPUT_PROMPT` |
+
+---
+
+### Previous Design — 9-Node Category-Based Pipeline (`graph.py` + `nodes/reason.py`) — 2026-05-10
+
+Replaced by the hub-and-spoke redesign above. The previous design used a linear pipeline: `read_site → plan_form → check_constraints → fix_orientation / fix_form → evaluate → write_report → bake_output`. Each LLM node used a **Two-Mode pattern** (MODE A: plan tool calls; MODE B: summarise results). Superseded because the linear pipeline could not represent the flexible hub-driven decision flow shown in the architectural diagram.
 
 ---
 
@@ -335,38 +334,28 @@ Cloudflare defaults the output cap to 2 000 tokens. Setting `max_tokens=8192` li
 ### 📁 `/python/nodes/` (Graph Nodes)
 
 #### `reason.py`
-**Purpose:** Five Two-Mode LLM nodes — one per tool category
+**Purpose:** Three LLM nodes for the hub-and-spoke architecture
 
-**The Two-Mode Pattern:**
-Each node's system prompt describes exactly two modes.  The LLM reads its message history and decides which mode applies:
+**Builder functions:**
 
-| Mode | When active | Output |
+| Builder | Role | Prompt |
 |---|---|---|
-| **A — Plan** | No tool results in messages yet | `action="tool"` + tool call arguments |
-| **B — Summarise** | Tool results already in messages | `action="final"` + structured phase summary |
+| `build_central_reason_node(llm, full_catalog, max_mod_iters)` | Hub — 9-action dispatcher | `CENTRAL_REASON_PROMPT` |
+| `build_optimization_node(llm, manipulation_catalog)` | Picks ONE repair tool per cycle | `OPTIMIZATION_PROMPT` |
+| `build_reason_output_node(llm)` | Final ALIGN/RESIST/FRAME/AVOID narrative | `REASON_OUTPUT_PROMPT` |
 
-After Mode B, the summary is appended to `state["messages"]` as an assistant message tagged with a header (e.g. `=== SITE READ COMPLETE ===`), creating an unambiguous timeline of what each phase accomplished.
+**Shared `_make_node` factory:**  
+All three nodes use the same factory which calls `call_llm()` and parses JSON output:
+- `action="tool"` → sets `pending_tool_calls` + `next_action`
+- `action="final"` → sets `final_response` + `next_action`; appends summary to messages
 
-**Builder functions and their categories:**
-
-| Builder | Phase tag | Prompt | Tools seen |
-|---|---|---|---|
-| `build_site_reader_node(llm, site_catalog)` | `"site"` | `SITE_READER_PROMPT` | 3 site tools |
-| `build_form_planner_node(llm, form_catalog)` | `"form"` | `FORM_PLANNER_PROMPT` | 2 shape tools |
-| `build_orientation_fixer_node(llm, orient_catalog)` | `"fix_orient"` | `ORIENTATION_FIXER_PROMPT` | 2 rotation tools |
-| `build_form_modifier_node(llm, modify_catalog)` | `"fix_form"` | `FORM_MODIFIER_PROMPT` | 6 modification tools |
-| `build_report_writer_node(llm)` | `"report"` | `REPORT_WRITER_PROMPT` | **none** |
-
-**Shared output format (all phases):**
+**Shared output format:**
 ```json
 { "action": "tool" | "final",
-  "final_response": "...",
-  "tool_calls": [{"name": "<tool>", "arguments": {...}}] }
+  "next_action": "suggest|generate_shape|check_constraints|optimize|evaluate|ask_user|explain|visualize|accept",
+  "tool_calls": [{"name": "<tool>", "arguments": {...}}],
+  "final_response": "..." }
 ```
-
-**`write_report` special case:** This node never emits `action="tool"` — it reads the evaluation
-scores appended by the `evaluate` AUTO node and writes the ALIGN/RESIST/FRAME/AVOID narrative
-directly.  Baking (`bake_geometry_id_04`) is handled by the subsequent `bake_output` AUTO node.
 
 ---
 

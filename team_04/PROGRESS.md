@@ -8,8 +8,8 @@ _Last updated: 2026-05-11_
 
 | Area | Status | Notes |
 |---|---|---|
-| LangGraph workflow | ✅ Done | **9-node category-based pipeline** — each node has ONE unambiguous role; Two-Mode LLM pattern eliminates reasoning ambiguity |
-| System prompt | ✅ Done | **5 focused phase prompts** in `reason.py` — each LLM node calls tools (Mode A) then writes a structured summary (Mode B) |
+| LangGraph workflow | ✅ Done | **Hub-and-spoke architecture** — Central Reason Node (LLM) dispatches to 15 specialist workers; 3 terminal paths (explain/visualize/accept); `optimize` loop re-checks constraints (≤4 cycles) |
+| System prompt | ✅ Done | **3 focused prompts** in `reason.py` — `central_reason` (9-action hub), `optimization` (repair picker), `reason_output` (ALIGN/RESIST/FRAME/AVOID) |
 | Tool definitions | ✅ Done | 21 GH tools + 2 LLM-side tools documented |
 | Mock MCP client | ✅ Done | All 21 stubs returning realistic JSON |
 | Notebook explorer | ✅ Done | 19-cell notebook, all sections running |
@@ -74,6 +74,44 @@ Five root-cause issues were diagnosed and resolved to make the full agent run (c
 **Symptom:** File edits to `_runtime/llm.py` and `graph.py` did not take effect — Jupyter kernel served the old cached versions from `sys.modules`.  
 **Root cause:** Python caches imported modules; edits to `.py` files are invisible to the running kernel until the module is reloaded or the kernel is restarted.  
 **Fix:** Added `importlib.reload()` calls at the top of cell 19 for both `_runtime.llm` and `graph`, so every execution picks up the latest disk versions without a kernel restart.
+
+---
+
+## Architecture Redesign (2026-05-11) — Hub-and-Spoke
+
+The LangGraph workflow was redesigned from a **linear 9-node category-based pipeline** to a **hub-and-spoke architecture** to match the intended design diagram.
+
+### Previous design (replaced)
+```
+START → read_site → plan_form → check_constraints
+          ├─[access]──► fix_orientation ──► check_constraints (loop ≤4×)
+          ├─[form]───► fix_form ──────────► check_constraints (loop ≤4×)
+          └─[clean]──► evaluate → write_report → bake_output → END
+```
+
+### New design
+```
+START → central_reason (LLM hub)
+   suggest         → suggestion_layer → central_reason
+   generate_shape  → tool_shape_creation → update_shape_state → central_reason
+   evaluate        → tool_evaluation → update_score_state → central_reason
+   ask_user        → human_feedback → central_reason
+   check_constraints→ tool_constraint_check → update_constraint_state → central_reason
+   optimize        → optimization → tool_manipulation → update_modified_shape
+                   → tool_constraint_check → update_constraint_state → central_reason
+   explain         → reason_output → final_output → cache_final_state → END
+   visualize       → visualization → final_output → cache_final_state → END
+   accept          → final_output → cache_final_state → END
+```
+
+### Changes made
+| File | Change |
+|---|---|
+| `python/graph.py` | Full rewrite — 16-node hub-and-spoke graph replacing 9-node linear pipeline |
+| `python/nodes/reason.py` | Replaced 5 Two-Mode LLM nodes with 3 new nodes: `central_reason`, `optimization`, `reason_output` |
+| `terrapilot_explore.ipynb` | Updated cells 14–15 (graph build + matplotlib diagram) to show new architecture |
+| `ARCHITECTURE.md` | Updated Overview, system diagram, graph.py section, reason.py section |
+| `PROGRESS.md` | This entry |
 
 ---
 
