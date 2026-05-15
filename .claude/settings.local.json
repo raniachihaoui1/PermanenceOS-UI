@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -c \"from dotenv import load_dotenv; from pathlib import Path; load_dotenv\\(dotenv_path=Path\\('.env'\\), override=False\\); import os; print\\('ENDPOINT:', os.environ.get\\('LOCAL_LLM_ENDPOINT', 'NOT SET'\\)\\); print\\('TIMEOUT:', os.environ.get\\('REQUEST_TIMEOUT_SECONDS', 'NOT SET'\\)\\)\")",
+      "Bash(curl -s --max-time 5 http://localhost:1234/v1/models)",
+      "Bash(curl -s --max-time 30 http://localhost:1234/v1/chat/completions -H \"Content-Type: application/json\" -d \"{\\\\\"model\\\\\":\\\\\"local\\\\\",\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"Reply with exactly: {\\\\\\\\\\\\\"action\\\\\\\\\\\\\":\\\\\\\\\\\\\"final\\\\\\\\\\\\\",\\\\\\\\\\\\\"answer\\\\\\\\\\\\\":\\\\\\\\\\\\\"hello\\\\\\\\\\\\\"}\\\\\"}],\\\\\"temperature\\\\\":0}\")",
+      "Bash(curl -s --max-time 15 http://localhost:1234/v1/chat/completions -H \"Content-Type: application/json\" -d \"{\\\\\"model\\\\\":\\\\\"local\\\\\",\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"Say hello\\\\\"}],\\\\\"temperature\\\\\":0,\\\\\"response_format\\\\\":{\\\\\"type\\\\\":\\\\\"json_schema\\\\\",\\\\\"json_schema\\\\\":{\\\\\"name\\\\\":\\\\\"test\\\\\",\\\\\"strict\\\\\":true,\\\\\"schema\\\\\":{\\\\\"type\\\\\":\\\\\"object\\\\\",\\\\\"properties\\\\\":{\\\\\"answer\\\\\":{\\\\\"type\\\\\":\\\\\"string\\\\\"}},\\\\\"required\\\\\":[\\\\\"answer\\\\\"],\\\\\"additionalProperties\\\\\":false}}}}\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(C:/Users/etmaglari/IAAC/AIA26_Studio/.venv/Scripts/python.exe -c ' *)",
+      "Bash(git restore *)"
+    ]
+  }
+}
