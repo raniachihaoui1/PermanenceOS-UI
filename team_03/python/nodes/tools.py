@@ -44,11 +44,11 @@ def build_tool_node(mcp_client, allowed_tools, edited_layout_path = r"D:\05- IAA
             # Store the updated layout returned by the MCP tool to a json file
             write_tool_result(tool_output, edited_layout_path)
 
-            # If the tool returned valid JSON, update the layout in state so
-            # subsequent tool calls in this loop receive the latest layout.
+            # If the tool returned a valid layout JSON (has "rooms" key), update
+            # the layout in state so subsequent tool calls receive the latest layout.
             try:
                 updated = json.loads(tool_output.strip())
-                if isinstance(updated, dict):
+                if isinstance(updated, dict) and "rooms" in updated:
                     state["layout_json_string"] = json.dumps(updated)
             except (json.JSONDecodeError, AttributeError):
                 pass
