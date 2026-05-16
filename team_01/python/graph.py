@@ -38,6 +38,8 @@ def _route_from_reason(state: AgentState) -> str:
 
 
 def _route_from_evaluate(state: AgentState) -> str:
+    if state.get("came_from") == "tag_and_audit":
+        return END
     if state.get("came_from") == "modify":
         return "comparison"
     return "reason"
@@ -58,7 +60,7 @@ def build_graph(ctx: Any) -> Any:
     graph.add_edge(START, "reason")
     graph.add_conditional_edges("reason", _route_from_reason, {"modify": "modify", "evaluate": "evaluate", END: END})
     graph.add_edge("modify", "evaluate")
-    graph.add_conditional_edges("evaluate", _route_from_evaluate, {"reason": "reason", "comparison": "comparison"})
+    graph.add_conditional_edges("evaluate", _route_from_evaluate, {"reason": "reason", "comparison": "comparison", END: END})
     graph.add_edge("comparison", "reason")
 
     return graph.compile()
@@ -72,30 +74,53 @@ def run_agent(prompt: str, ctx: Any) -> str:
     # Persist material override to JSON after graph completes (survives multiple modify cycles)
     material = final_state.get("material_override")
     print(f"[material] final material_override = {material!r}")
-    if material and ctx.edited_layout_path.exists():
-        from nodes.evaluate import DEFAULT_SECTIONS
+    if material:
+        from nodes.evaluate import DEFAULT_SECTIONS, BEAM_SECTION_UPGRADE, COL_SECTION_UPGRADE
         sec = DEFAULT_SECTIONS.get(material)
         if sec:
-            data = json.loads(ctx.edited_layout_path.read_text(encoding="utf-8"))
-            is_steel = "STEEL" in material.upper()
-            count = 0
-            for el in data.get("structure", []):
-                attrs = el.setdefault("attributes", {})
-                attrs["material"] = material
-                if len(el.get("geometry", [])) == 2:
-                    attrs["depth"] = str(sec["beam_depth_mm"])
-                    attrs["width"] = str(sec["beam_width_mm"])
-                    if is_steel and "beam_section" in sec:
-                        attrs["section"] = sec["beam_section"]
-                else:
-                    attrs["dimensions"] = sec["col_dims"]
-                    if is_steel and "col_section" in sec:
-                        attrs["section"] = sec["col_section"]
-                count += 1
-            ctx.edited_layout_path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            print(f"JSON updated: {material} applied to {count} elements → {ctx.edited_layout_path.name}")
+            # Use the in-state layout (which carries per-element upgrades) as the source
+            state_layout = final_state.get("layout_json_string")
+            if state_layout:
+                data = json.loads(state_layout)
+            elif ctx.edited_layout_path.exists():
+                data = json.loads(ctx.edited_layout_path.read_text(encoding="utf-8"))
+            else:
+                data = None
+            if data:
+                is_steel = "STEEL" in material.upper()
+                global_beam_sec = sec.get("beam_section", "") if is_steel else ""
+                global_col_sec  = sec.get("col_section",  "") if is_steel else ""
+                count = 0
+                for el in data.get("structure", []):
+                    attrs = el.setdefault("attributes", {})
+                    attrs["material"] = material
+                    is_beam = len(el.get("geometry", [])) == 2
+                    cur_sec = attrs.get("section", "")
+                    # Preserve individually upgraded sections
+                    if is_beam and global_beam_sec and cur_sec and cur_sec != global_beam_sec:
+                        count += 1
+                        continue
+                    if not is_beam and global_col_sec and cur_sec and cur_sec != global_col_sec:
+                        count += 1
+                        continue
+                    if is_beam:
+                        attrs["depth"] = str(sec["beam_depth_mm"])
+                        attrs["width"] = str(sec["beam_width_mm"])
+                        if is_steel and "beam_section" in sec:
+                            attrs["section"] = sec["beam_section"]
+                        else:
+                            attrs.pop("section", None)
+                    else:
+                        attrs["dimensions"] = sec["col_dims"]
+                        if is_steel and "col_section" in sec:
+                            attrs["section"] = sec["col_section"]
+                        else:
+                            attrs.pop("section", None)
+                    count += 1
+                ctx.edited_layout_path.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+                print(f"JSON updated: {material} applied to {count} elements → {ctx.edited_layout_path.name}")
 
     print("\nWorkflow graph:")
     app.get_graph().print_ascii()
@@ -137,27 +162,27 @@ def _format_evaluation(eval_json: str | None) -> str:
     lines.append("BEAMS:")
     for b in data.get("beams", []):
         checks = []
-        if not b["bend_PASS"]:   checks.append(f"BEND FAIL σ={b['sigma_bend_MPa']}>{b['allow_bend_MPa']}MPa")
-        if not b["shear_PASS"]:  checks.append(f"SHEAR FAIL τ={b['tau_MPa']}>{b['allow_shear_MPa']}MPa")
+        if not b["bend_PASS"]:   checks.append(f"BEND FAIL S={b['sigma_bend_MPa']}>{b['allow_bend_MPa']}MPa")
+        if not b["shear_PASS"]:  checks.append(f"SHEAR FAIL T={b['tau_MPa']}>{b['allow_shear_MPa']}MPa")
         if not b["defl_TL_PASS"]: checks.append(f"DEFL_TL FAIL {b['delta_total_mm']}>{b['limit_TL_mm']}mm")
         if not b["defl_LL_PASS"]: checks.append(f"DEFL_LL FAIL {b['delta_LL_mm']}>{b['limit_LL_mm']}mm")
         flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
         lines.append(
             f"  {b['id']:8s} {b['section_mm']:9s} L={b['span_m']}m  "
-            f"M={b['M_max_kNm']}kNm  σ={b['sigma_bend_MPa']}MPa  "
-            f"δ_LL={b['delta_LL_mm']}mm/{b['limit_LL_mm']}mm{flag}"
+            f"M={b['M_max_kNm']}kNm  S={b['sigma_bend_MPa']}MPa  "
+            f"d_LL={b['delta_LL_mm']}mm/{b['limit_LL_mm']}mm{flag}"
         )
 
     lines.append("")
     lines.append("COLUMNS:")
     for c in data.get("columns", []):
         checks = []
-        if not c["stress_PASS"]:   checks.append(f"STRESS FAIL σ={c['sigma_comp_MPa']}>{c['allow_comp_MPa']}MPa")
+        if not c["stress_PASS"]:   checks.append(f"STRESS FAIL S={c['sigma_comp_MPa']}>{c['allow_comp_MPa']}MPa")
         if not c["buckling_PASS"]: checks.append(f"BUCKLE FAIL SF={c['SF_buckling']}<3")
         flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
         lines.append(
             f"  {c['id']:8s} {c['section_mm']:9s} H={c['height_m']}m  "
-            f"P={c['P_total_kN']}kN  σ={c['sigma_comp_MPa']}MPa  "
+            f"P={c['P_total_kN']}kN  S={c['sigma_comp_MPa']}MPa  "
             f"SF={c['SF_buckling']}{flag}"
         )
 
@@ -171,11 +196,11 @@ def _format_evaluation(eval_json: str | None) -> str:
             span = (f"{r['original_span_m']}m→{r['effective_span_m']}m"
                     if r.get("effective_span_m") else "unsupported")
             checks = []
-            if not r.get("bend_PASS",    True): checks.append(f"BEND σ={r.get('sigma_bend_MPa')}>{r.get('allow_bend_MPa')}MPa")
+            if not r.get("bend_PASS",    True): checks.append(f"BEND S={r.get('sigma_bend_MPa')}>{r.get('allow_bend_MPa')}MPa")
             if not r.get("defl_LL_PASS", True): checks.append(f"DEFL_LL {r.get('delta_LL_mm')}>{r.get('limit_LL_mm')}mm")
             if not r.get("defl_TL_PASS", True): checks.append(f"DEFL_TL {r.get('delta_total_mm')}>{r.get('limit_TL_mm')}mm")
             flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
-            lines.append(f"  {r['id']:8s} {span:14s}  M={r.get('M_max_kNm','?')}kNm  σ={r.get('sigma_bend_MPa','?')}MPa{flag}")
+            lines.append(f"  {r['id']:8s} {span:14s}  M={r.get('M_max_kNm','?')}kNm  S={r.get('sigma_bend_MPa','?')}MPa{flag}")
 
     return "\n".join(lines)
 

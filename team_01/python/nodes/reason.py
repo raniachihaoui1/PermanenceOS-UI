@@ -21,7 +21,8 @@ TAG_AND_AUDIT TOOL:
 - Call it ONLY when structure_count=0 (no structural elements exist yet)
 - NEVER call it if structure_count > 0 — this would overwrite user changes
 - Pass layout_json exactly from state — never simplify or invent it
-- Do not pass optional parameters unless the user explicitly requests them
+- ALWAYS pass typology: use "column_grid" unless user asks for perimeter_load_bearing or shear_wall
+- ALWAYS pass grid_spacing: use 4.0 unless user specifies a different value
 
 WHAT-IF QUESTIONS — two-step process, NEVER call a tool:
 Step 1: User asks "what if we remove X" → set action="final", final_response="" (empty string). The evaluate node runs the simulation automatically.

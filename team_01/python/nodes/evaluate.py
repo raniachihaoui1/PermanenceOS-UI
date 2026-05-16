@@ -61,15 +61,43 @@ DEFAULT_SECTIONS: dict[str, dict] = {
     "STEEL":    {"beam_depth_mm": 160, "beam_width_mm": 82,  "col_dims": "100x100", "beam_section": "IPE160", "col_section": "HSS100x100x6"},
     "STEEL_M":  {"beam_depth_mm": 200, "beam_width_mm": 100, "col_dims": "120x120", "beam_section": "IPE200", "col_section": "HSS120x120x6"},
     "STEEL_L":  {"beam_depth_mm": 240, "beam_width_mm": 120, "col_dims": "150x150", "beam_section": "IPE240", "col_section": "HSS150x150x6"},
-    "TIMBER":   {"beam_depth_mm": 240, "beam_width_mm": 100, "col_dims": "100x100"},
-    "TIMBER_M": {"beam_depth_mm": 300, "beam_width_mm": 120, "col_dims": "120x120"},
-    "TIMBER_L": {"beam_depth_mm": 360, "beam_width_mm": 150, "col_dims": "150x150"},
+    "TIMBER":    {"beam_depth_mm": 240, "beam_width_mm": 100, "col_dims": "100x100"},
+    "TIMBER_M":  {"beam_depth_mm": 300, "beam_width_mm": 120, "col_dims": "120x120"},
+    "TIMBER_L":  {"beam_depth_mm": 360, "beam_width_mm": 150, "col_dims": "150x150"},
+    "TIMBER_XL": {"beam_depth_mm": 480, "beam_width_mm": 200, "col_dims": "200x200"},
 }
 
 SECTION_UPGRADE_MAP: dict[str, str] = {
     "RCC": "RCC_M",       "RCC_M": "RCC_L",
     "STEEL": "STEEL_M",   "STEEL_M": "STEEL_L",
-    "TIMBER": "TIMBER_M", "TIMBER_M": "TIMBER_L",
+    "TIMBER": "TIMBER_M", "TIMBER_M": "TIMBER_L", "TIMBER_L": "TIMBER_XL",
+}
+
+# Per-element steel section upgrades (beam: IPE chain, col: HSS chain)
+BEAM_SECTION_UPGRADE: dict[str, tuple] = {
+    "IPE160": ("IPE200", 200, 100),
+    "IPE200": ("IPE240", 240, 120),
+    "IPE240": ("IPE270", 270, 135),
+}
+COL_SECTION_UPGRADE: dict[str, tuple] = {
+    "HSS100x100x6": ("HSS120x120x6", "120x120"),
+    "HSS120x120x6": ("HSS150x150x6", "150x150"),
+}
+# Per-element RCC / Timber beam upgrades (width x depth → next tier)
+BEAM_DIM_UPGRADE: dict[str, tuple] = {
+    "200x300": ("250x450", 450, 250),   # RCC base → RCC_M
+    "250x450": ("300x600", 600, 300),   # RCC_M   → RCC_L
+    "100x240": ("120x300", 300, 120),   # TIMBER base → TIMBER_M
+    "120x300": ("150x360", 360, 150),   # TIMBER_M    → TIMBER_L
+    "150x360": ("200x480", 480, 200),   # TIMBER_L    → TIMBER_XL
+}
+# Per-element RCC / Timber column upgrades (dims → next tier)
+COL_DIM_UPGRADE: dict[str, str] = {
+    "200x200": "250x250",   # RCC base → RCC_M
+    "250x250": "300x300",   # RCC_M   → RCC_L
+    "100x100": "120x120",   # TIMBER base → TIMBER_M
+    "120x120": "150x150",   # TIMBER_M    → TIMBER_L
+    "150x150": "200x200",   # TIMBER_L    → TIMBER_XL
 }
 
 BASE_MATERIALS = ["RCC", "STEEL", "TIMBER"]
@@ -182,11 +210,11 @@ def _check_beams(beams: list[dict], trib: dict[str, float]) -> list[dict]:
             A      = steel_sec["A_mm2"] / 1e6    # m²
             I      = steel_sec["I_mm4"] / 1e12   # m⁴
             Wy_mm3 = steel_sec["Wy_mm3"]         # mm³
-            sec_label = attrs.get("section", f"{int(b*1000)}×{int(d*1000)}")
+            sec_label = attrs.get("section", f"{int(b*1000)}x{int(d*1000)}")
         else:
             A, I, _ = _rect_props(b, d)
             Wy_mm3 = I / (d / 2) * 1e9          # m³ → mm³
-            sec_label = f"{int(b*1000)}×{int(d*1000)}"
+            sec_label = f"{int(b*1000)}x{int(d*1000)}"
 
         E  = mat["E_MPa"] * 1e6
         tw = trib.get(bm["id"], 2.5)
@@ -259,13 +287,13 @@ def _check_columns(columns: list[dict], trib: dict[str, float]) -> list[dict]:
             A     = steel_sec["A_mm2"]    / 1e6    # m²
             I_min = steel_sec["I_mm4"]    / 1e12   # m⁴ (HSS symmetric, I_x = I_y)
             r_min = steel_sec["r_min_mm"] / 1000.0 # m
-            sec_label = attrs.get("section", f"{int(b*1000)}×{int(d*1000)}")
+            sec_label = attrs.get("section", f"{int(b*1000)}x{int(d*1000)}")
         else:
             A, I_strong, _ = _rect_props(b, d)
             _, I_weak,   _ = _rect_props(d, b)
             I_min = min(I_strong, I_weak)
             r_min = math.sqrt(I_min / A)
-            sec_label = f"{int(b*1000)}×{int(d*1000)}"
+            sec_label = f"{int(b*1000)}x{int(d*1000)}"
 
         E  = mat["E_MPa"] * 1e6
         ta = trib.get(col["id"], 9.0)
@@ -462,7 +490,7 @@ def simulate_what_if_removal(
             "id":               bm["id"],
             "original_span_m":  round(orig_span, 3),
             "effective_span_m": round(eff_span, 3),
-            "section_mm":       f"{int(b*1000)}×{int(d*1000)}",
+            "section_mm":       f"{int(b*1000)}x{int(d*1000)}",
             "M_max_kNm":        round(M, 3),
             "sigma_bend_MPa":   round(sigma_b, 3),
             "allow_bend_MPa":   mat["allow_bend_MPa"],
@@ -547,6 +575,133 @@ def _apply_material_override(layout_json_string: str, material: str) -> str:
     return json.dumps(layout)
 
 
+def _upgrade_element_section(layout_str: str, element_id: str, new_section: str) -> str:
+    """Update a single structural element's section in the layout JSON."""
+    _BEAM_DIMS = {
+        "IPE160": (160, 82), "IPE200": (200, 100),
+        "IPE240": (240, 120), "IPE270": (270, 135),
+    }
+    _COL_DIMS = {
+        "HSS100x100x6": "100x100", "HSS120x120x6": "120x120", "HSS150x150x6": "150x150",
+    }
+    layout = json.loads(layout_str)
+    for el in layout.get("structure", []):
+        if el["id"] == element_id:
+            attrs  = el.setdefault("attributes", {})
+            is_beam = len(el.get("geometry", [])) == 2
+            if new_section in _BEAM_DIMS:                   # Steel beam (IPE)
+                attrs["section"] = new_section
+                d, w = _BEAM_DIMS[new_section]
+                attrs["depth"] = str(d)
+                attrs["width"] = str(w)
+            elif new_section in _COL_DIMS:                  # Steel column (HSS)
+                attrs["section"] = new_section
+                attrs["dimensions"] = _COL_DIMS[new_section]
+            elif is_beam and "x" in new_section:            # RCC/Timber beam (WxD)
+                w_str, d_str = new_section.split("x", 1)
+                attrs["depth"] = d_str
+                attrs["width"] = w_str
+            elif not is_beam and "x" in new_section:        # RCC/Timber column
+                attrs["dimensions"] = new_section
+            break
+    return json.dumps(layout)
+
+
+def _add_midspan_column(layout_str: str, beam_id: str, material: str) -> str:
+    """Split a beam at its midpoint and insert a new column there."""
+    sec = DEFAULT_SECTIONS.get(material, DEFAULT_SECTIONS["RCC"])
+    layout = json.loads(layout_str)
+    structure = layout.get("structure", [])
+    beam = next((e for e in structure if e["id"] == beam_id and len(e.get("geometry", [])) == 2), None)
+    if not beam:
+        return layout_str
+    p1, p2 = beam["geometry"]
+    mid = [round((p1[0] + p2[0]) / 2, 3), round((p1[1] + p2[1]) / 2, 3)]
+    bat = beam.get("attributes", {})
+    new_col = {
+        "id": f"{beam_id}_M",
+        "name": f"Column_{beam_id}_M",
+        "geometry": [mid],
+        "attributes": {
+            "type": "interior",
+            "dimensions": sec["col_dims"],
+            "height": bat.get("height", "3.5"),
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": material,
+            "conflict": "None",
+        },
+    }
+    new_a = {"id": f"{beam_id}a", "name": f"Beam_{beam_id}a",
+             "geometry": [p1, mid], "attributes": dict(bat)}
+    new_b = {"id": f"{beam_id}b", "name": f"Beam_{beam_id}b",
+             "geometry": [mid, p2], "attributes": dict(bat)}
+    new_structure = []
+    for el in structure:
+        if el["id"] == beam_id:
+            new_structure += [new_a, new_b]
+        else:
+            new_structure.append(el)
+    new_structure.append(new_col)
+    layout["structure"] = new_structure
+    return json.dumps(layout)
+
+
+def _switch_element_material(layout_str: str, element_id: str, new_material: str) -> str:
+    """Switch a single beam or column to a different material using its base section."""
+    sec = DEFAULT_SECTIONS.get(new_material)
+    if not sec:
+        return layout_str
+    is_steel = "STEEL" in new_material.upper()
+    layout = json.loads(layout_str)
+    for el in layout.get("structure", []):
+        if el["id"] == element_id:
+            attrs = el.setdefault("attributes", {})
+            attrs["material"] = new_material
+            is_beam = len(el.get("geometry", [])) == 2
+            if is_beam:
+                attrs["depth"] = str(sec["beam_depth_mm"])
+                attrs["width"] = str(sec["beam_width_mm"])
+                if is_steel and "beam_section" in sec:
+                    attrs["section"] = sec["beam_section"]
+                else:
+                    attrs.pop("section", None)
+            else:
+                attrs["dimensions"] = sec["col_dims"]
+                if is_steel and "col_section" in sec:
+                    attrs["section"] = sec["col_section"]
+                else:
+                    attrs.pop("section", None)
+            break
+    return json.dumps(layout)
+
+
+def _auto_upgrade_failing_beams(layout_str: str, result: dict) -> tuple[str, dict]:
+    """Upgrade each failing beam through the section chain until all pass or top tier reached."""
+    for _ in range(6):
+        beam_fails = [b for b in result["beams"]
+                      if not (b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"])]
+        if not beam_fails:
+            break
+        upgraded = False
+        for b in beam_fails:
+            cur = b.get("section_mm", "")
+            if cur in BEAM_SECTION_UPGRADE:
+                nxt, _, _ = BEAM_SECTION_UPGRADE[cur]
+                layout_str = _upgrade_element_section(layout_str, b["id"], nxt)
+                print(f"  Auto-upgrade {b['id']}: {cur} → {nxt}")
+                upgraded = True
+            elif cur in BEAM_DIM_UPGRADE:
+                nxt, _, _ = BEAM_DIM_UPGRADE[cur]
+                layout_str = _upgrade_element_section(layout_str, b["id"], nxt)
+                print(f"  Auto-upgrade {b['id']}: {cur} → {nxt}")
+                upgraded = True
+        if not upgraded:
+            break
+        result = evaluate_structure(layout_str)
+    return layout_str, result
+
+
 def _build_failure_alternatives(
     result: dict,
     remove_ids: list[str],
@@ -575,7 +730,7 @@ def _build_failure_alternatives(
                 )
                 alts.append(
                     f"Replace {bid} with a deeper section to carry {eff}m span "
-                    f"(σ={r.get('sigma_bend_MPa','?')} > {r.get('allow_bend_MPa','?')} MPa)"
+                    f"(S={r.get('sigma_bend_MPa','?')} > {r.get('allow_bend_MPa','?')} MPa)"
                 )
             else:
                 alts.append(f"Both endpoints of {bid} removed — add new support column")
@@ -592,29 +747,59 @@ def _build_failure_alternatives(
         if not (r["stress_PASS"] and r["buckling_PASS"])
     ]
 
-    if next_tier:
+    # Auto-upgrade all failing beams through the section chain
+    if beam_fails:
+        n = len(beam_fails)
+        alts.append(f"Auto-upgrade {n} failing beam{'s' if n > 1 else ''} through section sizes until PASS")
+
+    # Per-element beam upgrades (Steel IPE, RCC dims, Timber dims) — most targeted fix
+    for r in beam_fails:
+        cur_sec = r.get("section_mm", "")
+        if cur_sec in BEAM_SECTION_UPGRADE:
+            next_name, _, _ = BEAM_SECTION_UPGRADE[cur_sec]
+            alts.append(f"Upgrade {r['id']} from {cur_sec} to {next_name}")
+        elif cur_sec in BEAM_DIM_UPGRADE:
+            next_name, _, _ = BEAM_DIM_UPGRADE[cur_sec]
+            alts.append(f"Upgrade {r['id']} from {cur_sec} to {next_name}")
+        if len(alts) >= 2:
+            break
+
+    # Per-element column upgrades
+    for r in col_fails:
+        cur_sec = r.get("section_mm", "")
+        if cur_sec in COL_SECTION_UPGRADE:
+            next_name, _ = COL_SECTION_UPGRADE[cur_sec]
+            alts.append(f"Upgrade {r['id']} from {cur_sec} to {next_name}")
+        elif cur_sec in COL_DIM_UPGRADE:
+            alts.append(f"Upgrade {r['id']} from {cur_sec} to {COL_DIM_UPGRADE[cur_sec]}")
+        if len(alts) >= 2:
+            break
+
+    # Midspan column — always available for failing beams
+    for r in beam_fails:
+        mid = round(r["span_m"] / 2, 2)
+        alts.append(
+            f"Add midspan column under beam {r['id']} "
+            f"(span {r['span_m']}m → {mid}m each side)"
+        )
+        if len(alts) >= 3:
+            break
+
+    # Global material switch (all framing) — offered when at top tier or no upgrade available
+    base = next((m for m in BASE_MATERIALS if current_mat.startswith(m)), "RCC")
+    if len(alts) < 4:
+        for switch_mat in [m for m in BASE_MATERIALS if m != base]:
+            alts.append(f"Switch all framing to {switch_mat}")
+            if len(alts) >= 4:
+                break
+
+    # Global tier upgrade
+    if next_tier and len(alts) < 4:
         ns = DEFAULT_SECTIONS[next_tier]
         alts.append(
-            f"Upgrade section to {next_tier} "
-            f"(beam {ns['beam_width_mm']}×{ns['beam_depth_mm']}mm | col {ns['col_dims']}mm)"
+            f"Upgrade all to {next_tier} "
+            f"(beam {ns['beam_width_mm']}x{ns['beam_depth_mm']}mm | col {ns['col_dims']}mm)"
         )
-
-    for r in beam_fails:
-        if not r.get("defl_TL_PASS") or not r.get("defl_LL_PASS"):
-            mid = round(r["span_m"] / 2, 2)
-            alts.append(
-                f"Add midspan column under beam {r['id']} "
-                f"(span {r['span_m']}m → {mid}m, "
-                f"δ={r.get('delta_total_mm','?')}mm > {r.get('limit_TL_mm','?')}mm)"
-            )
-            break
-    for r in beam_fails:
-        if not r.get("bend_PASS"):
-            alts.append(
-                f"Increase depth of beam {r['id']} "
-                f"(σ={r['sigma_bend_MPa']} > {r['allow_bend_MPa']} MPa, span {r['span_m']}m)"
-            )
-            break
 
     for r in col_fails:
         if not r.get("buckling_PASS"):
@@ -622,10 +807,10 @@ def _build_failure_alternatives(
                 f"Add lateral bracing to column {r['id']} "
                 f"(buckling SF={r['SF_buckling']} < {BUCKLING_SF})"
             )
-        elif not r.get("stress_PASS"):
+        elif not r.get("stress_PASS") and r.get("section_mm", "") not in COL_SECTION_UPGRADE:
             alts.append(
                 f"Add adjacent column to share load from {r['id']} "
-                f"(σ={r['sigma_comp_MPa']} > {r['allow_comp_MPa']} MPa)"
+                f"(S={r['sigma_comp_MPa']} > {r['allow_comp_MPa']} MPa)"
             )
 
     return alts[:4]
@@ -635,6 +820,13 @@ def build_evaluate_node(_):
     """Structural first-principles check node — unused arg kept for graph API compatibility."""
 
     def evaluate_node(state: dict) -> dict:
+        # Skip full evaluation when tag_and_audit just generated a fresh grid
+        if state.get("came_from") == "tag_and_audit":
+            layout = json.loads(state["layout_json_string"])
+            n = len(layout.get("structure", []))
+            state["final_response"] = f"Structural grid generated — {n} elements added to edited layout."
+            return state
+
         # Human-in-the-loop: ask material on first evaluate pass only
         if state.get("evaluation_result") is None:
             current = state.get("material_override") or "RCC"
@@ -646,7 +838,7 @@ def build_evaluate_node(_):
                 active = base_current == mat
                 display_sec = DEFAULT_SECTIONS.get(current if active else mat, DEFAULT_SECTIONS[mat])
                 marker = f" <-- active{tier_note}" if active else ""
-                print(f"  {i}. {mat:6s} — beam {display_sec['beam_width_mm']}×{display_sec['beam_depth_mm']}mm | col {display_sec['col_dims']}mm{marker}")
+                print(f"  {i}. {mat:6s} — beam {display_sec['beam_width_mm']}x{display_sec['beam_depth_mm']}mm | col {display_sec['col_dims']}mm{marker}")
             print("  [Enter] — keep current")
             raw = input("Choice [1/2/3 or RCC/STEEL/TIMBER]: ").strip().upper()
             lookup = {"1": "RCC", "2": "STEEL", "3": "TIMBER"}
@@ -677,7 +869,7 @@ def build_evaluate_node(_):
             print(
                 f"\nStructural FAIL with {current_mat}. "
                 f"Upgrade to {next_tier.replace('_', ' ')} "
-                f"(beam {next_sec['beam_width_mm']}×{next_sec['beam_depth_mm']}mm "
+                f"(beam {next_sec['beam_width_mm']}x{next_sec['beam_depth_mm']}mm "
                 f"| col {next_sec['col_dims']}mm)?"
             )
             if input("Upgrade? [y/N]: ").strip().lower() != "y":
@@ -714,7 +906,7 @@ def build_evaluate_node(_):
             for r in whatif.get("affected_beams", []):
                 flag = ""
                 if not r.get("bend_PASS", True):
-                    flag += f"  BEND FAIL σ={r.get('sigma_bend_MPa','?')}>{r.get('allow_bend_MPa','?')}MPa"
+                    flag += f"  BEND FAIL S={r.get('sigma_bend_MPa','?')}>{r.get('allow_bend_MPa','?')}MPa"
                 if not r.get("defl_LL_PASS", True):
                     flag += f"  DEFL_LL FAIL {r.get('delta_LL_mm','?')}>{r.get('limit_LL_mm','?')}mm"
                 if not r.get("defl_TL_PASS", True):
@@ -726,7 +918,7 @@ def build_evaluate_node(_):
                 lines.append(
                     f"  {r['id']:8s} {span_info:14s}"
                     f"  M={r.get('M_max_kNm','?')}kNm"
-                    f"  σ={r.get('sigma_bend_MPa','?')}MPa"
+                    f"  S={r.get('sigma_bend_MPa','?')}MPa"
                     + (flag if flag else ("  unsupported" if not r.get("effective_span_m") else "  ok"))
                 )
             print("\n".join(lines[lines.index("") + 1:]))
@@ -737,7 +929,7 @@ def build_evaluate_node(_):
                 for r in whatif.get("affected_beams", []):
                     if not r.get("bend_PASS", True):
                         fail_lines.append(
-                            f"{r['id']}: bending σ={r.get('sigma_bend_MPa','?')} > "
+                            f"{r['id']}: bending S={r.get('sigma_bend_MPa','?')} > "
                             f"{r.get('allow_bend_MPa','?')} MPa "
                             f"(span {r.get('original_span_m','?')}m→{r.get('effective_span_m','?')}m)"
                         )
@@ -764,30 +956,30 @@ def build_evaluate_node(_):
             if not r["bend_PASS"]:
                 lines.append(
                     f"  BEAM {r['id']} bending FAIL: "
-                    f"σ={r['sigma_bend_MPa']} MPa > {r['allow_bend_MPa']} MPa "
+                    f"S={r['sigma_bend_MPa']} MPa > {r['allow_bend_MPa']} MPa "
                     f"(span {r['span_m']} m, M={r['M_max_kNm']} kN·m)"
                 )
             if not r["defl_LL_PASS"]:
                 lines.append(
                     f"  BEAM {r['id']} LL deflection FAIL: "
-                    f"δ={r['delta_LL_mm']} mm > L/{DEFL_LIMIT_LL}={r['limit_LL_mm']} mm"
+                    f"d={r['delta_LL_mm']} mm > L/{DEFL_LIMIT_LL}={r['limit_LL_mm']} mm"
                 )
             if not r["defl_TL_PASS"]:
                 lines.append(
                     f"  BEAM {r['id']} TL deflection FAIL: "
-                    f"δ={r['delta_total_mm']} mm > L/{DEFL_LIMIT_TL}={r['limit_TL_mm']} mm"
+                    f"d={r['delta_total_mm']} mm > L/{DEFL_LIMIT_TL}={r['limit_TL_mm']} mm"
                 )
             if not r["shear_PASS"]:
                 lines.append(
                     f"  BEAM {r['id']} shear FAIL: "
-                    f"τ={r['tau_MPa']} MPa > {r['allow_shear_MPa']} MPa"
+                    f"T={r['tau_MPa']} MPa > {r['allow_shear_MPa']} MPa"
                 )
 
         for r in result["columns"]:
             if not r["stress_PASS"]:
                 lines.append(
                     f"  COL {r['id']} stress FAIL: "
-                    f"σ={r['sigma_comp_MPa']} MPa > {r['allow_comp_MPa']} MPa "
+                    f"S={r['sigma_comp_MPa']} MPa > {r['allow_comp_MPa']} MPa "
                     f"(P={r['P_total_kN']} kN)"
                 )
             if not r["buckling_PASS"]:
@@ -814,7 +1006,7 @@ def build_evaluate_node(_):
             if result.get("what_if") else False
         )
 
-        if main_fail or whatif_fail:
+        while main_fail or whatif_fail:
             alts = _build_failure_alternatives(result, remove_ids, current_mat)
 
             print("\nStructural issues detected. Choose an action:")
@@ -823,19 +1015,96 @@ def build_evaluate_node(_):
             print("  [Enter or text] — describe a custom change")
 
             raw = input("Choice: ").strip()
-
-            # Resolve number → alternative text; otherwise use raw text
             if raw.isdigit():
                 idx = int(raw) - 1
                 chosen = alts[idx] if 0 <= idx < len(alts) else raw
             else:
                 chosen = raw
 
-            if chosen:
-                state["messages"].append({
-                    "role":    "user",
-                    "content": f"User instruction after structural failure: {chosen}",
-                })
+            if not chosen:
+                break
+
+            # Auto-upgrade all failing beams through section chain
+            if re.match(r"Auto-upgrade \d+ failing", chosen, re.IGNORECASE):
+                print("\nAuto-upgrading failing beams through section sizes...")
+                layout_str, result = _auto_upgrade_failing_beams(layout_str, result)
+                summary = result["summary"]
+                state["layout_json_string"] = layout_str
+                state["evaluation_result"] = json.dumps(result)
+                print(f"Re-evaluated: {'PASS' if summary['overall_PASS'] else 'FAIL'}")
+                for r in result["beams"]:
+                    if not (r["bend_PASS"] and r["shear_PASS"] and r["defl_TL_PASS"] and r["defl_LL_PASS"]):
+                        print(f"  BEAM {r['id']} still fails at top section size")
+                main_fail   = not summary.get("overall_PASS", True)
+                whatif_fail = False
+                continue
+
+            # Per-element section upgrade: "Upgrade CD_1 from IPE240 to IPE270"
+            m = re.match(r"Upgrade (\S+) from \S+ to (\S+)", chosen, re.IGNORECASE)
+            if m:
+                elem_id, new_sec = m.group(1), m.group(2)
+                layout_str = _upgrade_element_section(layout_str, elem_id, new_sec)
+                state["layout_json_string"] = layout_str
+                result  = evaluate_structure(layout_str)
+                summary = result["summary"]
+                state["evaluation_result"] = json.dumps(result)
+                print(f"\nRe-evaluated after upgrading {elem_id} to {new_sec}: "
+                      f"{'PASS' if summary['overall_PASS'] else 'FAIL'}")
+                for r in result["beams"]:
+                    if not (r["bend_PASS"] and r["shear_PASS"] and r["defl_TL_PASS"] and r["defl_LL_PASS"]):
+                        print(f"  BEAM {r['id']} still fails")
+                for r in result["columns"]:
+                    if not (r["stress_PASS"] and r["buckling_PASS"]):
+                        print(f"  COL {r['id']} still fails")
+                main_fail   = not summary.get("overall_PASS", True)
+                whatif_fail = False
+                continue
+
+            # Add midspan column: "Add midspan column under beam CD_1 ..."
+            m2 = re.match(r"Add midspan column under (?:beam )?(\S+)", chosen, re.IGNORECASE)
+            if m2:
+                beam_id = m2.group(1).rstrip("(")
+                layout_str = _add_midspan_column(layout_str, beam_id, current_mat)
+                state["layout_json_string"] = layout_str
+                result  = evaluate_structure(layout_str)
+                summary = result["summary"]
+                state["evaluation_result"] = json.dumps(result)
+                print(f"\nAdded midspan column under {beam_id} — split into {beam_id}a / {beam_id}b")
+                print(f"Re-evaluated: {'PASS' if summary['overall_PASS'] else 'FAIL'}")
+                for r in result["beams"]:
+                    if not (r["bend_PASS"] and r["shear_PASS"] and r["defl_TL_PASS"] and r["defl_LL_PASS"]):
+                        print(f"  BEAM {r['id']} still fails")
+                main_fail   = not summary.get("overall_PASS", True)
+                whatif_fail = False
+                continue
+
+            # Global material switch: "Switch all framing to STEEL"
+            m3 = re.match(r"Switch all framing to (\w+)", chosen, re.IGNORECASE)
+            if m3:
+                new_mat = m3.group(1).upper()
+                if new_mat in BASE_MATERIALS:
+                    layout_str = _apply_material_override(layout_str, new_mat)
+                    state["layout_json_string"] = layout_str
+                    state["material_override"] = new_mat
+                    current_mat = new_mat
+                    result  = evaluate_structure(layout_str)
+                    summary = result["summary"]
+                    state["evaluation_result"] = json.dumps(result)
+                    print(f"\nSwitched all framing to {new_mat} — Re-evaluated: "
+                          f"{'PASS' if summary['overall_PASS'] else 'FAIL'}")
+                    for r in result["beams"]:
+                        if not (r["bend_PASS"] and r["shear_PASS"] and r["defl_TL_PASS"] and r["defl_LL_PASS"]):
+                            print(f"  BEAM {r['id']} still fails")
+                    main_fail   = not summary.get("overall_PASS", True)
+                    whatif_fail = False
+                    continue
+
+            # Anything else — send to reason node
+            state["messages"].append({
+                "role":    "user",
+                "content": f"User instruction after structural failure: {chosen}",
+            })
+            break
 
         return state
 
