@@ -560,8 +560,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -580,8 +579,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -600,8 +598,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -620,8 +617,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -640,8 +636,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -660,8 +655,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -680,8 +674,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -700,8 +693,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -720,8 +712,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -740,8 +731,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -760,8 +750,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -780,8 +769,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -800,8 +788,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -820,8 +807,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -840,8 +826,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -860,8 +845,7 @@
         "isWallAligned": "true",
         "structuralRole": "primary",
         "material": "RCC_M",
-        "conflict": "None",
-        "section": "HSS150x150x6"
+        "conflict": "None"
       }
     },
     {
@@ -885,8 +869,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -910,8 +893,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -935,8 +917,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -960,8 +941,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -985,8 +965,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1010,8 +989,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1035,8 +1013,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "Floating beam in Living Room",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1060,8 +1037,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "Floating beam in Central Hall",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1085,8 +1061,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1110,8 +1085,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1135,8 +1109,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1160,8 +1133,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1185,8 +1157,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "Floating beam in Kitchen Dining",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1210,8 +1181,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "Floating beam in Central Hall",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1235,8 +1205,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1260,8 +1229,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1285,8 +1253,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1310,8 +1277,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1335,8 +1301,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1360,8 +1325,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1385,8 +1349,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1410,8 +1373,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1435,8 +1397,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     },
     {
@@ -1460,8 +1421,7 @@
         "structuralRole": "primary",
         "material": "RCC_M",
         "conflict": "None",
-        "width": "250",
-        "section": "IPE240"
+        "width": "250"
       }
     }
   ],
