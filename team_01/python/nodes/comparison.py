@@ -1,26 +1,48 @@
 from __future__ import annotations
 import json
 import time
-from typing import Any
 
 
 SYSTEM_PROMPT = """You are a structural design comparison analyst for an architect.
 
-You will be given the original layout and the modified layout. Compare them and summarize:
-1. What structural elements were added, removed, or changed?
-2. Did the modification achieve the intended goal?
-3. Any new issues introduced, or issues resolved?
-
-Be concise (3-5 sentences). Your summary will be passed back to the reasoning agent
-to decide whether to continue refining or accept the result.
+You will be given a compact structural diff (added/removed/changed elements).
+Summarize in 3-5 sentences:
+1. What changed and whether the modification achieved its goal.
+2. Any new issues introduced or old ones resolved.
 
 Return strictly valid JSON:
-{{
+{
   "action": "final",
   "final_response": "<your comparison here>",
   "tool_calls": []
-}}
+}
 """
+
+
+def _structural_diff(original_json: str, modified_json: str) -> str:
+    """Return a compact text diff of the structure arrays only."""
+    def _struct_map(layout_str: str) -> dict:
+        layout = json.loads(layout_str)
+        return {s["id"]: s for s in layout.get("structure", [])}
+
+    orig = _struct_map(original_json)
+    mod  = _struct_map(modified_json)
+
+    added   = [v for k, v in mod.items()  if k not in orig]
+    removed = [v for k, v in orig.items() if k not in mod]
+    changed = [
+        {"id": k, "before": orig[k]["attributes"], "after": mod[k]["attributes"]}
+        for k in orig if k in mod and orig[k]["attributes"] != mod[k]["attributes"]
+    ]
+
+    def _slim(el: dict) -> dict:
+        return {"id": el["id"], "name": el.get("name", ""), "attrs": el.get("attributes", {})}
+
+    return json.dumps({
+        "added":   [_slim(e) for e in added],
+        "removed": [_slim(e) for e in removed],
+        "changed": changed,
+    }, separators=(",", ":"))
 
 
 def build_comparison_node(llm):
@@ -29,14 +51,10 @@ def build_comparison_node(llm):
         print("\nComparing layouts...")
 
         original = state.get("original_layout_json_string") or state["layout_json_string"]
-        context_message = (
-            f"Original layout:\n{original}\n\n"
-            f"Modified layout:\n{state['layout_json_string']}\n\n"
-            "Please compare the two layouts."
-        )
-        # Use only the last 4 messages to stay within token limits
-        recent = state["messages"][-4:] if len(state["messages"]) > 4 else state["messages"]
-        messages = recent + [{"role": "user", "content": context_message}]
+        diff = _structural_diff(original, state["layout_json_string"])
+
+        context_message = f"Structural diff (added/removed/changed elements):\n{diff}"
+        messages = [{"role": "user", "content": context_message}]
 
         result = None
         last_error = None

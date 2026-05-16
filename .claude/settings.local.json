@@ -7,7 +7,8 @@
       "Bash(curl -s --max-time 15 http://localhost:1234/v1/chat/completions -H \"Content-Type: application/json\" -d \"{\\\\\"model\\\\\":\\\\\"local\\\\\",\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"Say hello\\\\\"}],\\\\\"temperature\\\\\":0,\\\\\"response_format\\\\\":{\\\\\"type\\\\\":\\\\\"json_schema\\\\\",\\\\\"json_schema\\\\\":{\\\\\"name\\\\\":\\\\\"test\\\\\",\\\\\"strict\\\\\":true,\\\\\"schema\\\\\":{\\\\\"type\\\\\":\\\\\"object\\\\\",\\\\\"properties\\\\\":{\\\\\"answer\\\\\":{\\\\\"type\\\\\":\\\\\"string\\\\\"}},\\\\\"required\\\\\":[\\\\\"answer\\\\\"],\\\\\"additionalProperties\\\\\":false}}}}\")",
       "Bash(.venv/Scripts/python.exe -c ' *)",
       "Bash(C:/Users/etmaglari/IAAC/AIA26_Studio/.venv/Scripts/python.exe -c ' *)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(python -c ' *)"
     ]
   }
 }

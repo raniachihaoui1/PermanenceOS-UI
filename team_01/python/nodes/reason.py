@@ -27,8 +27,19 @@ STRUCTURAL REASONING RULES:
 - Grid spacing affects which rooms can be reconfigured
 - Always flag MEP conflicts when adding structural elements
 
+STRUCTURAL FAILURE RESPONSE:
+When you receive a "STRUCTURAL FAIL" message from what-if analysis, you MUST:
+- Set action="final" (do NOT call any tool)
+- In final_response, propose exactly 2-3 specific alternatives, for example:
+   - Add an intermediate column between the affected positions (name the grid point)
+   - Increase beam depth (suggest a specific dimension, e.g. 300×800 instead of 300×600)
+   - Add a transfer beam to redirect the load path to adjacent columns
+- Use element IDs from the layout — never invent new ones
+- Never attempt to execute the fix — only describe the options
+
 TAG_AND_AUDIT TOOL:
-- Call it to add structural elements (columns, beams) derived from the layout outline and wall intersections
+- Call it ONLY when structure_count=0 (no structural elements exist yet)
+- NEVER call it if the layout already has columns and beams (structure_count > 0) — this would overwrite user changes
 - Pass layout_json exactly from state — never simplify or invent it
 - Do not pass optional parameters (grid_spacing, typology, radius) unless the user explicitly requests them
 - After the tool runs, summarize: which layout, how many elements added, any conflicts detected
@@ -59,17 +70,31 @@ def build_reason_node(llm):
         print("\nReasoning with LLM...")
 
         # Trim history to stay within token limit
+        # Cap each message at 600 chars so tool results (full layout JSON) don't blow the context
+        def _cap(msg: dict, limit: int = 600) -> dict:
+            c = msg.get("content", "")
+            return {**msg, "content": c[:limit] + " ...[trimmed]"} if len(c) > limit else msg
+
         messages = state["messages"]
-        if len(messages) > 7:
-            state["messages"] = messages[:1] + messages[-6:]
+        kept = (messages[:1] + messages[-3:]) if len(messages) > 4 else messages
+        trimmed_messages = [_cap(m) for m in kept]
 
         result = None
         last_error = None
 
         for attempt in range(3):
             try:
-                result = call_llm(llm, SYSTEM_PROMPT, state["messages"], state["tool_catalog"])
+                result = call_llm(llm, SYSTEM_PROMPT, trimmed_messages, state["tool_catalog"])
                 break
+            except RuntimeError as e:
+                if "non-empty 'tool_calls'" in str(e):
+                    result = {"action": "final", "final_response": ""}
+                    break
+                last_error = e
+                if attempt < 2:
+                    wait = 5 * (attempt + 1)
+                    print(f"LLM call failed (attempt {attempt+1}/3), retrying in {wait}s... {e}")
+                    time.sleep(wait)
             except Exception as e:
                 last_error = e
                 if attempt < 2:

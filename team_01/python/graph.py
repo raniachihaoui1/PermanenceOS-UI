@@ -24,14 +24,17 @@ class AgentState(TypedDict):
     came_from: str | None
     original_layout_json_string: str | None
     cycle: int
+    material_override: str | None
 
 
 def _route_from_reason(state: AgentState) -> str:
     if state.get("pending_tool_calls") and state.get("cycle", 0) < 2:
         return "modify"
-    if state.get("final_response") or state.get("cycle", 0) >= 2:
+    if state.get("cycle", 0) >= 2:
         return END
-    return "evaluate"
+    if state.get("evaluation_result") is not None:
+        return END  # evaluate already ran — done
+    return "evaluate"  # always evaluate before ending
 
 
 def _route_from_evaluate(state: AgentState) -> str:
@@ -66,19 +69,110 @@ def run_agent(prompt: str, ctx: Any) -> str:
     initial_state = _build_initial_state(prompt, ctx)
     final_state = app.invoke(initial_state)
 
+    # Persist material override to JSON after graph completes (survives multiple modify cycles)
+    material = final_state.get("material_override")
+    print(f"[material] final material_override = {material!r}")
+    if material and ctx.edited_layout_path.exists():
+        from nodes.evaluate import DEFAULT_SECTIONS
+        sec = DEFAULT_SECTIONS.get(material)
+        if sec:
+            data = json.loads(ctx.edited_layout_path.read_text(encoding="utf-8"))
+            count = 0
+            for el in data.get("structure", []):
+                attrs = el.setdefault("attributes", {})
+                attrs["material"] = material
+                if len(el.get("geometry", [])) == 2:
+                    attrs["depth"] = str(sec["beam_depth_mm"])
+                    attrs["width"] = str(sec["beam_width_mm"])
+                else:
+                    attrs["dimensions"] = sec["col_dims"]
+                count += 1
+            ctx.edited_layout_path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            print(f"JSON updated: {material} applied to {count} elements → {ctx.edited_layout_path.name}")
+
     print("\nWorkflow graph:")
     app.get_graph().print_ascii()
 
-    final_response = (
+    llm_response = (
         final_state.get("final_response")
         or final_state.get("comparison_result")
         or ""
     )
+    eval_table = _format_evaluation(final_state.get("evaluation_result"))
+
+    if eval_table and llm_response:
+        final_response = llm_response + "\n\n" + eval_table
+    elif eval_table:
+        final_response = eval_table
+    else:
+        final_response = llm_response
 
     if not final_response and ctx.edited_layout_path.exists():
         final_response = f"Done. Layout saved to {ctx.edited_layout_path.name}"
 
     return final_response
+
+
+def _format_evaluation(eval_json: str | None) -> str:
+    if not eval_json:
+        return ""
+    try:
+        data = json.loads(eval_json)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+
+    lines = []
+    summary = data.get("summary", {})
+    status = "PASS" if summary.get("overall_PASS") else "FAIL"
+    lines.append(f"Structural evaluation: {status}")
+    lines.append("")
+
+    lines.append("BEAMS:")
+    for b in data.get("beams", []):
+        checks = []
+        if not b["bend_PASS"]:   checks.append(f"BEND FAIL σ={b['sigma_bend_MPa']}>{b['allow_bend_MPa']}MPa")
+        if not b["shear_PASS"]:  checks.append(f"SHEAR FAIL τ={b['tau_MPa']}>{b['allow_shear_MPa']}MPa")
+        if not b["defl_TL_PASS"]: checks.append(f"DEFL_TL FAIL {b['delta_total_mm']}>{b['limit_TL_mm']}mm")
+        if not b["defl_LL_PASS"]: checks.append(f"DEFL_LL FAIL {b['delta_LL_mm']}>{b['limit_LL_mm']}mm")
+        flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
+        lines.append(
+            f"  {b['id']:8s} {b['section_mm']:9s} L={b['span_m']}m  "
+            f"M={b['M_max_kNm']}kNm  σ={b['sigma_bend_MPa']}MPa  "
+            f"δ_LL={b['delta_LL_mm']}mm/{b['limit_LL_mm']}mm{flag}"
+        )
+
+    lines.append("")
+    lines.append("COLUMNS:")
+    for c in data.get("columns", []):
+        checks = []
+        if not c["stress_PASS"]:   checks.append(f"STRESS FAIL σ={c['sigma_comp_MPa']}>{c['allow_comp_MPa']}MPa")
+        if not c["buckling_PASS"]: checks.append(f"BUCKLE FAIL SF={c['SF_buckling']}<3")
+        flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
+        lines.append(
+            f"  {c['id']:8s} {c['section_mm']:9s} H={c['height_m']}m  "
+            f"P={c['P_total_kN']}kN  σ={c['sigma_comp_MPa']}MPa  "
+            f"SF={c['SF_buckling']}{flag}"
+        )
+
+    whatif = data.get("what_if")
+    if whatif:
+        lines.append("")
+        ws = whatif.get("summary", {})
+        lines.append(f"WHAT-IF — remove {', '.join(whatif.get('removed_ids', []))}: "
+                     f"{'PASS' if ws.get('overall_PASS') else 'FAIL'}")
+        for r in whatif.get("affected_beams", []):
+            span = (f"{r['original_span_m']}m→{r['effective_span_m']}m"
+                    if r.get("effective_span_m") else "unsupported")
+            checks = []
+            if not r.get("bend_PASS",    True): checks.append(f"BEND σ={r.get('sigma_bend_MPa')}>{r.get('allow_bend_MPa')}MPa")
+            if not r.get("defl_LL_PASS", True): checks.append(f"DEFL_LL {r.get('delta_LL_mm')}>{r.get('limit_LL_mm')}mm")
+            if not r.get("defl_TL_PASS", True): checks.append(f"DEFL_TL {r.get('delta_total_mm')}>{r.get('limit_TL_mm')}mm")
+            flag = "  FAIL: " + " | ".join(checks) if checks else "  ok"
+            lines.append(f"  {r['id']:8s} {span:14s}  M={r.get('M_max_kNm','?')}kNm  σ={r.get('sigma_bend_MPa','?')}MPa{flag}")
+
+    return "\n".join(lines)
 
 
 def _load_all_layouts() -> list[dict[str, Any]]:
@@ -94,18 +188,29 @@ def _load_all_layouts() -> list[dict[str, Any]]:
 
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
+    # Prefer the edited layout (current working state with structure) if it exists
+    if ctx.edited_layout_path.exists():
+        edited = json.loads(ctx.edited_layout_path.read_text(encoding="utf-8"))
+        layouts = [edited]
+    else:
+        layouts = _load_all_layouts()
 
-    layouts = _load_all_layouts()
     layout_ids = [l.get("layoutId", "?") for l in layouts]
 
     # Send slim summary to LLM to stay within token limit
     slim = []
     for l in layouts:
+        conflicts = [
+            {"id": s["id"], "conflict": s["attributes"].get("conflict")}
+            for s in l.get("structure", [])
+            if s.get("attributes", {}).get("conflict") not in (None, "None", "none", "")
+        ]
         slim.append({
             "layoutId": l.get("layoutId"),
             "outline": l.get("outline"),
             "rooms": [{"id": r["id"], "name": r["name"]} for r in l.get("rooms", [])],
-            "structure": l.get("structure", []),
+            "structure_count": len(l.get("structure", [])),
+            "structure_conflicts": conflicts,
         })
 
     user_message = (
@@ -114,6 +219,11 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         f"User request:\n{prompt}\n\n"
         f"Layout summaries:\n{json.dumps(slim, indent=2)}"
     )
+
+    # Detect material set by set_material.py — preserve through modify/tag_and_audit
+    structure = layouts[0].get("structure", []) if layouts else []
+    mats = {el.get("attributes", {}).get("material", "RCC") for el in structure if el.get("attributes")}
+    detected_material = next(iter(mats)) if len(mats) == 1 else None
 
     return {
         "messages": [{"role": "user", "content": user_message}],
@@ -128,6 +238,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "came_from": None,
         "original_layout_json_string": None,
         "cycle": 0,
+        "material_override": detected_material,
     }
 
 
