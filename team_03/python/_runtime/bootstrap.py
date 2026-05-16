@@ -27,8 +27,8 @@ def bootstrap() -> Context:
     settings = load_settings()
 
     # Read the layout schema that will be given to the agent as context (shared at repo root)
-    repo_root = Path(__file__).resolve().parents[3]
-    layout_path = repo_root / "layout_input" / "layout_schema.json"
+    team_dir = Path(__file__).resolve().parents[2]
+    layout_path = team_dir / "layout" / "layout_schema.json"
     layout_data: dict[str, Any] = json.loads(layout_path.read_text(encoding="utf-8"))
 
     # Connect to the Grasshopper MCP server and list available tools
@@ -46,7 +46,6 @@ def bootstrap() -> Context:
         model_kwargs=get_llm_response_format(tools),
     )
 
-    team_dir = Path(__file__).resolve().parents[2]
     team_name = team_dir.name
     edited_layout_path = team_dir / f"{team_name}_edited_layout.json"
 

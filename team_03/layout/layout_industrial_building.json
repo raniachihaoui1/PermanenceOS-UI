@@ -1,0 +1,312 @@
+{
+  "layoutId": "Layout-301",
+
+  "outline": [[0.0, 0.0], [40.0, 0.0], [40.0, 10.0], [0.0, 10.0], [0.0, 0.0]],
+
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Reception",
+      "geometry": [[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]],
+      "attributes": { "area": 25.0 }
+    },
+    {
+      "id": "room-2",
+      "name": "Warehouse",
+      "geometry": [[0.0, 5.0], [5.0, 5.0], [5.0, 0.0], [35.0, 0.0], [35.0, 10.0], [0.0, 10.0], [0.0, 5.0]],
+      "attributes": { "area": 325.0 }
+    },
+    {
+      "id": "room-3",
+      "name": "Restroom",
+      "geometry": [[35.0, 0.0], [40.0, 0.0], [40.0, 3.0], [35.0, 3.0], [35.0, 0.0]],
+      "attributes": { "area": 15.0 }
+    },
+    {
+      "id": "room-4",
+      "name": "Office 1",
+      "geometry": [[35.0, 3.0], [40.0, 3.0], [40.0, 6.5], [35.0, 6.5], [35.0, 3.0]],
+      "attributes": { "area": 17.5 }
+    },
+    {
+      "id": "room-5",
+      "name": "Office 2",
+      "geometry": [[35.0, 6.5], [40.0, 6.5], [40.0, 10.0], [35.0, 10.0], [35.0, 6.5]],
+      "attributes": { "area": 17.5 }
+    }
+  ],
+
+  "doors": [
+    {
+      "id": "door-1",
+      "type": "sliding",
+      "name": "Main Entrance Door",
+      "geometry": [[0.0, 6.5], [0.0, 8.5]],
+      "attributes": { "connectsRooms": ["room-2", "exterior"] }
+    },
+    {
+      "id": "door-2",
+      "type": "wooden",
+      "name": "Reception Door",
+      "geometry": [[1.5, 5.0], [2.4, 5.0]],
+      "attributes": { "connectsRooms": ["room-1", "room-2"] }
+    },
+    {
+      "id": "door-3",
+      "type": "wooden",
+      "name": "Restroom Door",
+      "geometry": [[35.0, 0.5], [35.0, 1.4]],
+      "attributes": { "connectsRooms": ["room-2", "room-3"] }
+    },
+    {
+      "id": "door-4",
+      "type": "wooden",
+      "name": "Office 1 Door",
+      "geometry": [[35.0, 4.0], [35.0, 4.9]],
+      "attributes": { "connectsRooms": ["room-2", "room-4"] }
+    },
+    {
+      "id": "door-5",
+      "type": "wooden",
+      "name": "Office 2 Door",
+      "geometry": [[35.0, 7.5], [35.0, 8.4]],
+      "attributes": { "connectsRooms": ["room-2", "room-5"] }
+    }
+  ],
+
+  "windows": [
+    {
+      "id": "window-1",
+      "type": "fixed",
+      "name": "Reception South Window",
+      "geometry": [[2.0, 0.0], [3.0, 0.0]],
+      "attributes": { "roomId": "room-1" }
+    },
+    {
+      "id": "window-2",
+      "type": "fixed",
+      "name": "Warehouse South Window 1",
+      "geometry": [[8.0, 0.0], [9.0, 0.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-3",
+      "type": "fixed",
+      "name": "Warehouse South Window 2",
+      "geometry": [[15.0, 0.0], [16.0, 0.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-4",
+      "type": "fixed",
+      "name": "Warehouse South Window 3",
+      "geometry": [[22.0, 0.0], [23.0, 0.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-5",
+      "type": "fixed",
+      "name": "Warehouse South Window 4",
+      "geometry": [[29.0, 0.0], [30.0, 0.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-6",
+      "type": "awning",
+      "name": "Restroom South Window",
+      "geometry": [[37.0, 0.0], [38.0, 0.0]],
+      "attributes": { "roomId": "room-3" }
+    },
+    {
+      "id": "window-7",
+      "type": "fixed",
+      "name": "Warehouse North Window 1",
+      "geometry": [[8.0, 10.0], [9.0, 10.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-8",
+      "type": "fixed",
+      "name": "Warehouse North Window 2",
+      "geometry": [[15.0, 10.0], [16.0, 10.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-9",
+      "type": "fixed",
+      "name": "Warehouse North Window 3",
+      "geometry": [[22.0, 10.0], [23.0, 10.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-10",
+      "type": "fixed",
+      "name": "Warehouse North Window 4",
+      "geometry": [[29.0, 10.0], [30.0, 10.0]],
+      "attributes": { "roomId": "room-2" }
+    },
+    {
+      "id": "window-11",
+      "type": "casement",
+      "name": "Office 2 North Window",
+      "geometry": [[37.0, 10.0], [38.0, 10.0]],
+      "attributes": { "roomId": "room-5" }
+    },
+    {
+      "id": "window-12",
+      "type": "casement",
+      "name": "Reception West Window",
+      "geometry": [[0.0, 2.0], [0.0, 3.0]],
+      "attributes": { "roomId": "room-1" }
+    },
+    {
+      "id": "window-13",
+      "type": "casement",
+      "name": "Office 1 East Window",
+      "geometry": [[40.0, 4.5], [40.0, 5.5]],
+      "attributes": { "roomId": "room-4" }
+    },
+    {
+      "id": "window-14",
+      "type": "casement",
+      "name": "Office 2 East Window",
+      "geometry": [[40.0, 8.0], [40.0, 9.0]],
+      "attributes": { "roomId": "room-5" }
+    }
+  ],
+
+  "furniture": [
+    {
+      "id": "furn-1",
+      "name": "Reception Desk",
+      "geometry": [[1.5, 2.0], [2.7, 2.0], [2.7, 2.6], [1.5, 2.6], [1.5, 2.0]],
+      "attributes": { "roomId": "room-1" }
+    },
+    {
+      "id": "furn-2",
+      "name": "Reception Chair",
+      "geometry": [[2.0, 2.8], [2.5, 2.8], [2.5, 3.3], [2.0, 3.3], [2.0, 2.8]],
+      "attributes": { "roomId": "room-1" }
+    },
+    {
+      "id": "furn-3",
+      "name": "Toilet",
+      "geometry": [[36.0, 1.0], [36.4, 1.0], [36.4, 1.65], [36.0, 1.65], [36.0, 1.0]],
+      "attributes": { "roomId": "room-3" }
+    },
+    {
+      "id": "furn-4",
+      "name": "Restroom Sink",
+      "geometry": [[37.5, 0.2], [38.1, 0.2], [38.1, 0.65], [37.5, 0.65], [37.5, 0.2]],
+      "attributes": { "roomId": "room-3" }
+    },
+    {
+      "id": "furn-5",
+      "name": "Office 1 Desk",
+      "geometry": [[36.0, 4.0], [37.2, 4.0], [37.2, 4.6], [36.0, 4.6], [36.0, 4.0]],
+      "attributes": { "roomId": "room-4" }
+    },
+    {
+      "id": "furn-6",
+      "name": "Office 1 Chair",
+      "geometry": [[36.3, 4.8], [36.8, 4.8], [36.8, 5.3], [36.3, 5.3], [36.3, 4.8]],
+      "attributes": { "roomId": "room-4" }
+    },
+    {
+      "id": "furn-7",
+      "name": "Office 2 Desk",
+      "geometry": [[36.0, 7.5], [37.2, 7.5], [37.2, 8.1], [36.0, 8.1], [36.0, 7.5]],
+      "attributes": { "roomId": "room-5" }
+    },
+    {
+      "id": "furn-8",
+      "name": "Office 2 Chair",
+      "geometry": [[36.3, 8.3], [36.8, 8.3], [36.8, 8.8], [36.3, 8.8], [36.3, 8.3]],
+      "attributes": { "roomId": "room-5" }
+    }
+  ],
+
+  "mep": [
+    {
+      "id": "mep-1",
+      "name": "Warehouse HVAC Unit",
+      "geometry": [[15.0, 9.5], [15.8, 9.5], [15.8, 9.75], [15.0, 9.75], [15.0, 9.5]],
+      "attributes": { "system": "hvac" }
+    },
+    {
+      "id": "mep-2",
+      "name": "Main Electrical Panel",
+      "geometry": [[1.0, 9.5], [1.6, 9.5], [1.6, 9.8], [1.0, 9.8], [1.0, 9.5]],
+      "attributes": { "system": "electrical" }
+    },
+    {
+      "id": "mep-3",
+      "name": "Restroom Plumbing",
+      "geometry": [[38.5, 0.2], [39.0, 0.2], [39.0, 0.7], [38.5, 0.7], [38.5, 0.2]],
+      "attributes": { "system": "plumbing" }
+    },
+    {
+      "id": "mep-4",
+      "name": "Office 1 AC Unit",
+      "geometry": [[38.0, 6.2], [38.8, 6.2], [38.8, 6.45], [38.0, 6.45], [38.0, 6.2]],
+      "attributes": { "system": "hvac" }
+    }
+  ],
+
+  "structure": [
+    {
+      "id": "wall-1",
+      "name": "South Exterior Wall",
+      "geometry": [[0.0, 0.0], [40.0, 0.0]],
+      "attributes": { "type": "load-bearing", "material": "concrete" }
+    },
+    {
+      "id": "wall-2",
+      "name": "East Exterior Wall",
+      "geometry": [[40.0, 0.0], [40.0, 10.0]],
+      "attributes": { "type": "load-bearing", "material": "concrete" }
+    },
+    {
+      "id": "wall-3",
+      "name": "North Exterior Wall",
+      "geometry": [[0.0, 10.0], [40.0, 10.0]],
+      "attributes": { "type": "load-bearing", "material": "concrete" }
+    },
+    {
+      "id": "wall-4",
+      "name": "West Exterior Wall",
+      "geometry": [[0.0, 0.0], [0.0, 10.0]],
+      "attributes": { "type": "load-bearing", "material": "concrete" }
+    },
+    {
+      "id": "wall-5",
+      "name": "Reception North Wall",
+      "geometry": [[0.0, 5.0], [5.0, 5.0]],
+      "attributes": { "type": "partition", "material": "drywall" }
+    },
+    {
+      "id": "wall-6",
+      "name": "Reception East Wall",
+      "geometry": [[5.0, 0.0], [5.0, 5.0]],
+      "attributes": { "type": "partition", "material": "drywall" }
+    },
+    {
+      "id": "wall-7",
+      "name": "Back Rooms West Wall",
+      "geometry": [[35.0, 0.0], [35.0, 10.0]],
+      "attributes": { "type": "partition", "material": "drywall" }
+    },
+    {
+      "id": "wall-8",
+      "name": "Restroom-Office 1 Divider",
+      "geometry": [[35.0, 3.0], [40.0, 3.0]],
+      "attributes": { "type": "partition", "material": "drywall" }
+    },
+    {
+      "id": "wall-9",
+      "name": "Office 1-Office 2 Divider",
+      "geometry": [[35.0, 6.5], [40.0, 6.5]],
+      "attributes": { "type": "partition", "material": "drywall" }
+    }
+  ]
+}

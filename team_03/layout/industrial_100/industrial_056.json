@@ -1,0 +1,860 @@
+{
+  "layoutId": "Layout-IND-056",
+  "outline": [
+    [
+      0,
+      0
+    ],
+    [
+      70,
+      0
+    ],
+    [
+      70,
+      16.0
+    ],
+    [
+      0,
+      16.0
+    ],
+    [
+      0,
+      0
+    ]
+  ],
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Cafeteria",
+      "geometry": [
+        [
+          64.0,
+          0.0
+        ],
+        [
+          70,
+          0.0
+        ],
+        [
+          70,
+          5.0
+        ],
+        [
+          64.0,
+          5.0
+        ],
+        [
+          64.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 30.0
+      }
+    },
+    {
+      "id": "room-2",
+      "name": "Assembly Hall",
+      "geometry": [
+        [
+          0,
+          0
+        ],
+        [
+          64.0,
+          0
+        ],
+        [
+          64.0,
+          5.0
+        ],
+        [
+          70,
+          5.0
+        ],
+        [
+          70,
+          16.0
+        ],
+        [
+          0,
+          16.0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "attributes": {
+        "area": 1090.0
+      }
+    }
+  ],
+  "doors": [
+    {
+      "id": "door-1",
+      "type": "wooden",
+      "name": "Cafeteria Door",
+      "geometry": [
+        [
+          64.0,
+          2.05
+        ],
+        [
+          64.0,
+          2.95
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-1",
+          "room-2"
+        ]
+      }
+    },
+    {
+      "id": "door-2",
+      "type": "sliding",
+      "name": "Main Entrance",
+      "geometry": [
+        [
+          0,
+          7.0
+        ],
+        [
+          0,
+          9.0
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-2",
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "door-3",
+      "type": "sliding",
+      "name": "Loading Dock",
+      "geometry": [
+        [
+          16.1,
+          16.0
+        ],
+        [
+          20.1,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-2",
+          "exterior"
+        ]
+      }
+    }
+  ],
+  "windows": [
+    {
+      "id": "window-1",
+      "type": "sliding",
+      "name": "Warehouse Window 1",
+      "geometry": [
+        [
+          12.8,
+          0
+        ],
+        [
+          13.8,
+          0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-2",
+      "type": "awning",
+      "name": "Warehouse Window 2",
+      "geometry": [
+        [
+          25.6,
+          0
+        ],
+        [
+          26.6,
+          0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-3",
+      "type": "awning",
+      "name": "Warehouse Window 3",
+      "geometry": [
+        [
+          38.4,
+          0
+        ],
+        [
+          39.4,
+          0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-4",
+      "type": "sliding",
+      "name": "Warehouse Window 4",
+      "geometry": [
+        [
+          51.2,
+          0
+        ],
+        [
+          52.2,
+          0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-5",
+      "type": "awning",
+      "name": "Warehouse Window 5",
+      "geometry": [
+        [
+          12.8,
+          16.0
+        ],
+        [
+          13.8,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-6",
+      "type": "sliding",
+      "name": "Warehouse Window 6",
+      "geometry": [
+        [
+          25.6,
+          16.0
+        ],
+        [
+          26.6,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-7",
+      "type": "sliding",
+      "name": "Warehouse Window 7",
+      "geometry": [
+        [
+          38.4,
+          16.0
+        ],
+        [
+          39.4,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-8",
+      "type": "awning",
+      "name": "Warehouse Window 8",
+      "geometry": [
+        [
+          51.2,
+          16.0
+        ],
+        [
+          52.2,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "window-9",
+      "type": "casement",
+      "name": "Cafeteria Window",
+      "geometry": [
+        [
+          70,
+          2.0
+        ],
+        [
+          70,
+          3.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "window-10",
+      "type": "casement",
+      "name": "Cafeteria Window",
+      "geometry": [
+        [
+          66.5,
+          0
+        ],
+        [
+          67.5,
+          0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    }
+  ],
+  "furniture": [
+    {
+      "id": "furn-1",
+      "name": "Table",
+      "geometry": [
+        [
+          64.3,
+          0.3
+        ],
+        [
+          65.5,
+          0.3
+        ],
+        [
+          65.5,
+          1.1
+        ],
+        [
+          64.3,
+          1.1
+        ],
+        [
+          64.3,
+          0.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-2",
+      "name": "Chair",
+      "geometry": [
+        [
+          65.9,
+          0.3
+        ],
+        [
+          66.4,
+          0.3
+        ],
+        [
+          66.4,
+          0.8
+        ],
+        [
+          65.9,
+          0.8
+        ],
+        [
+          65.9,
+          0.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-3",
+      "name": "Microwave Stand",
+      "geometry": [
+        [
+          66.8,
+          0.3
+        ],
+        [
+          67.4,
+          0.3
+        ],
+        [
+          67.4,
+          0.75
+        ],
+        [
+          66.8,
+          0.75
+        ],
+        [
+          66.8,
+          0.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-4",
+      "name": "Shrink Wrap Station 1",
+      "geometry": [
+        [
+          26.37,
+          4.46
+        ],
+        [
+          28.37,
+          4.46
+        ],
+        [
+          28.37,
+          5.96
+        ],
+        [
+          26.37,
+          5.96
+        ],
+        [
+          26.37,
+          4.46
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-5",
+      "name": "Pallet Stack 2",
+      "geometry": [
+        [
+          42.99,
+          9.69
+        ],
+        [
+          44.19,
+          9.69
+        ],
+        [
+          44.19,
+          10.69
+        ],
+        [
+          42.99,
+          10.69
+        ],
+        [
+          42.99,
+          9.69
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-6",
+      "name": "Shrink Wrap Station 3",
+      "geometry": [
+        [
+          49.23,
+          8.45
+        ],
+        [
+          51.23,
+          8.45
+        ],
+        [
+          51.23,
+          9.95
+        ],
+        [
+          49.23,
+          9.95
+        ],
+        [
+          49.23,
+          8.45
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-7",
+      "name": "Cargo Zone 4",
+      "geometry": [
+        [
+          33.04,
+          10.02
+        ],
+        [
+          39.04,
+          10.02
+        ],
+        [
+          39.04,
+          12.52
+        ],
+        [
+          33.04,
+          12.52
+        ],
+        [
+          33.04,
+          10.02
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-8",
+      "name": "Loading Platform 5",
+      "geometry": [
+        [
+          40.86,
+          5.63
+        ],
+        [
+          45.86,
+          5.63
+        ],
+        [
+          45.86,
+          8.13
+        ],
+        [
+          40.86,
+          8.13
+        ],
+        [
+          40.86,
+          5.63
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-9",
+      "name": "Loading Platform 6",
+      "geometry": [
+        [
+          52.77,
+          2.3
+        ],
+        [
+          57.77,
+          2.3
+        ],
+        [
+          57.77,
+          4.8
+        ],
+        [
+          52.77,
+          4.8
+        ],
+        [
+          52.77,
+          2.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-10",
+      "name": "Loading Platform 7",
+      "geometry": [
+        [
+          19.79,
+          9.19
+        ],
+        [
+          24.79,
+          9.19
+        ],
+        [
+          24.79,
+          11.69
+        ],
+        [
+          19.79,
+          11.69
+        ],
+        [
+          19.79,
+          9.19
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-11",
+      "name": "Pallet Jack Station 8",
+      "geometry": [
+        [
+          17.48,
+          3.58
+        ],
+        [
+          19.48,
+          3.58
+        ],
+        [
+          19.48,
+          4.58
+        ],
+        [
+          17.48,
+          4.58
+        ],
+        [
+          17.48,
+          3.58
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    }
+  ],
+  "mep": [
+    {
+      "id": "mep-1",
+      "name": "HVAC Unit 1",
+      "geometry": [
+        [
+          2,
+          15.5
+        ],
+        [
+          2.8,
+          15.5
+        ],
+        [
+          2.8,
+          15.75
+        ],
+        [
+          2,
+          15.75
+        ],
+        [
+          2,
+          15.5
+        ]
+      ],
+      "attributes": {
+        "system": "hvac"
+      }
+    },
+    {
+      "id": "mep-2",
+      "name": "HVAC Unit 2",
+      "geometry": [
+        [
+          38.5,
+          0.25
+        ],
+        [
+          39.3,
+          0.25
+        ],
+        [
+          39.3,
+          0.5
+        ],
+        [
+          38.5,
+          0.5
+        ],
+        [
+          38.5,
+          0.25
+        ]
+      ],
+      "attributes": {
+        "system": "hvac"
+      }
+    },
+    {
+      "id": "mep-3",
+      "name": "Main Electrical Panel",
+      "geometry": [
+        [
+          0.5,
+          0.2
+        ],
+        [
+          1.1,
+          0.2
+        ],
+        [
+          1.1,
+          0.5
+        ],
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.5,
+          0.2
+        ]
+      ],
+      "attributes": {
+        "system": "electrical"
+      }
+    }
+  ],
+  "structure": [
+    {
+      "id": "wall-1",
+      "name": "South Exterior Wall",
+      "geometry": [
+        [
+          0,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing",
+        "material": "concrete"
+      }
+    },
+    {
+      "id": "wall-2",
+      "name": "East Exterior Wall",
+      "geometry": [
+        [
+          70,
+          0
+        ],
+        [
+          70,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing",
+        "material": "concrete"
+      }
+    },
+    {
+      "id": "wall-3",
+      "name": "North Exterior Wall",
+      "geometry": [
+        [
+          0,
+          16.0
+        ],
+        [
+          70,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing",
+        "material": "concrete"
+      }
+    },
+    {
+      "id": "wall-4",
+      "name": "West Exterior Wall",
+      "geometry": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          16.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing",
+        "material": "concrete"
+      }
+    },
+    {
+      "id": "wall-5",
+      "name": "Interior Wall 5",
+      "geometry": [
+        [
+          64.0,
+          0.0
+        ],
+        [
+          64.0,
+          5.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition",
+        "material": "drywall"
+      }
+    },
+    {
+      "id": "wall-6",
+      "name": "Interior Wall 6",
+      "geometry": [
+        [
+          64.0,
+          5.0
+        ],
+        [
+          70,
+          5.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition",
+        "material": "drywall"
+      }
+    }
+  ]
+}
