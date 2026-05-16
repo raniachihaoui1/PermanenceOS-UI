@@ -555,12 +555,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -574,12 +575,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -593,12 +595,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -612,12 +615,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -631,12 +635,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -650,12 +655,13 @@
       ],
       "attributes": {
         "type": "internal",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -669,12 +675,13 @@
       ],
       "attributes": {
         "type": "internal",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -688,12 +695,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -707,12 +715,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -726,12 +735,13 @@
       ],
       "attributes": {
         "type": "internal",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -745,12 +755,13 @@
       ],
       "attributes": {
         "type": "internal",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -764,12 +775,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -783,12 +795,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -802,12 +815,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -821,12 +835,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -840,12 +855,13 @@
       ],
       "attributes": {
         "type": "exterior",
-        "dimensions": "200x200",
+        "dimensions": "250x250",
         "height": "3.5",
         "isWallAligned": "true",
         "structuralRole": "primary",
-        "material": "STEEL",
-        "conflict": "None"
+        "material": "RCC_M",
+        "conflict": "None",
+        "section": "HSS150x150x6"
       }
     },
     {
@@ -864,12 +880,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "5",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -888,12 +905,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -912,12 +930,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "6",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -936,12 +955,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "4",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -960,12 +980,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -984,12 +1005,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1008,12 +1030,13 @@
       "attributes": {
         "type": "interior",
         "length": "5",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "False",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "Floating beam in Living Room",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1032,12 +1055,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "False",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "Floating beam in Central Hall",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1056,12 +1080,13 @@
       "attributes": {
         "type": "interior",
         "length": "6",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1080,12 +1105,13 @@
       "attributes": {
         "type": "interior",
         "length": "4",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1104,12 +1130,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1128,12 +1155,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1152,12 +1180,13 @@
       "attributes": {
         "type": "interior",
         "length": "5",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "False",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "Floating beam in Kitchen Dining",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1176,12 +1205,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "False",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "Floating beam in Central Hall",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1200,12 +1230,13 @@
       "attributes": {
         "type": "interior",
         "length": "6",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1224,12 +1255,13 @@
       "attributes": {
         "type": "interior",
         "length": "4",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1248,12 +1280,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1272,12 +1305,13 @@
       "attributes": {
         "type": "interior",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1296,12 +1330,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "5",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1320,12 +1355,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1344,12 +1380,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "6",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1368,12 +1405,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "4",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1392,12 +1430,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     },
     {
@@ -1416,12 +1455,13 @@
       "attributes": {
         "type": "perimeter",
         "length": "3",
-        "depth": "400",
+        "depth": "450",
         "isWallAligned": "True",
         "structuralRole": "primary",
-        "material": "STEEL",
+        "material": "RCC_M",
         "conflict": "None",
-        "width": "200"
+        "width": "250",
+        "section": "IPE240"
       }
     }
   ],

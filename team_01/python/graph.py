@@ -77,6 +77,7 @@ def run_agent(prompt: str, ctx: Any) -> str:
         sec = DEFAULT_SECTIONS.get(material)
         if sec:
             data = json.loads(ctx.edited_layout_path.read_text(encoding="utf-8"))
+            is_steel = "STEEL" in material.upper()
             count = 0
             for el in data.get("structure", []):
                 attrs = el.setdefault("attributes", {})
@@ -84,8 +85,12 @@ def run_agent(prompt: str, ctx: Any) -> str:
                 if len(el.get("geometry", [])) == 2:
                     attrs["depth"] = str(sec["beam_depth_mm"])
                     attrs["width"] = str(sec["beam_width_mm"])
+                    if is_steel and "beam_section" in sec:
+                        attrs["section"] = sec["beam_section"]
                 else:
                     attrs["dimensions"] = sec["col_dims"]
+                    if is_steel and "col_section" in sec:
+                        attrs["section"] = sec["col_section"]
                 count += 1
             ctx.edited_layout_path.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
