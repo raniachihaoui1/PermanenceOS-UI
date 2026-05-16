@@ -1,0 +1,133 @@
+{
+  "layoutId": "Layout-RES-019",
+  "outline": [[0,0],[14,0],[14,13],[0,13],[0,0]],
+  "rooms": [
+    {
+      "id": "room-1", "name": "Kitchen",
+      "geometry": [[0,0],[5,0],[5,3],[7,3],[7,6],[0,6],[0,0]],
+      "attributes": {"area": 36.0}
+    },
+    {
+      "id": "room-2", "name": "Entrance Hall",
+      "geometry": [[5,0],[7,0],[7,3],[5,3],[5,0]],
+      "attributes": {"area": 6.0}
+    },
+    {
+      "id": "room-3", "name": "Living and Dining",
+      "geometry": [[7,0],[14,0],[14,6],[7,6],[7,0]],
+      "attributes": {"area": 42.0}
+    },
+    {
+      "id": "room-4", "name": "Corridor",
+      "geometry": [[0,6],[14,6],[14,7],[0,7],[0,6]],
+      "attributes": {"area": 14.0}
+    },
+    {
+      "id": "room-5", "name": "Master Bedroom",
+      "geometry": [[0,7],[6,7],[6,9.5],[4,9.5],[4,13],[0,13],[0,7]],
+      "attributes": {"area": 29.0}
+    },
+    {
+      "id": "room-6", "name": "Master Bathroom",
+      "geometry": [[4,9.5],[6,9.5],[6,13],[4,13],[4,9.5]],
+      "attributes": {"area": 7.0}
+    },
+    {
+      "id": "room-7", "name": "Bedroom 2",
+      "geometry": [[6,7],[10,7],[10,13],[6,13],[6,7]],
+      "attributes": {"area": 24.0}
+    },
+    {
+      "id": "room-8", "name": "Bedroom 3",
+      "geometry": [[10,7],[14,7],[14,11],[12,11],[12,13],[10,13],[10,7]],
+      "attributes": {"area": 20.0}
+    },
+    {
+      "id": "room-9", "name": "Bathroom 2",
+      "geometry": [[12,11],[14,11],[14,13],[12,13],[12,11]],
+      "attributes": {"area": 4.0}
+    }
+  ],
+  "doors": [
+    {"id":"door-1","type":"wooden","name":"Main Entrance","geometry":[[5.5,0],[7.5,0]],"attributes":{"connectsRooms":["room-2","exterior"]}},
+    {"id":"door-2","type":"wooden","name":"Entrance to Kitchen","geometry":[[5,1.2],[5,2.1]],"attributes":{"connectsRooms":["room-1","room-2"]}},
+    {"id":"door-3","type":"glass","name":"Entrance to Living","geometry":[[7,1.2],[7,2.1]],"attributes":{"connectsRooms":["room-2","room-3"]}},
+    {"id":"door-4","type":"wooden","name":"Kitchen to Corridor","geometry":[[2,6],[2.9,6]],"attributes":{"connectsRooms":["room-1","room-4"]}},
+    {"id":"door-5","type":"wooden","name":"Living to Corridor","geometry":[[10,6],[10.9,6]],"attributes":{"connectsRooms":["room-3","room-4"]}},
+    {"id":"door-6","type":"wooden","name":"Corridor to Master Bedroom","geometry":[[1.5,7],[2.4,7]],"attributes":{"connectsRooms":["room-4","room-5"]}},
+    {"id":"door-7","type":"wooden","name":"Corridor to Bedroom 2","geometry":[[7.5,7],[8.4,7]],"attributes":{"connectsRooms":["room-4","room-7"]}},
+    {"id":"door-8","type":"wooden","name":"Corridor to Bedroom 3","geometry":[[11.5,7],[12.4,7]],"attributes":{"connectsRooms":["room-4","room-8"]}},
+    {"id":"door-9","type":"wooden","name":"Master Bed to Master Bath","geometry":[[4,10.8],[4,11.7]],"attributes":{"connectsRooms":["room-5","room-6"]}},
+    {"id":"door-10","type":"wooden","name":"Bedroom 3 to Bathroom 2","geometry":[[12,12],[12,12.9]],"attributes":{"connectsRooms":["room-8","room-9"]}}
+  ],
+  "windows": [
+    {"id":"window-1","type":"casement","name":"Kitchen South Window 1","geometry":[[1,0],[2,0]],"attributes":{"roomId":"room-1"}},
+    {"id":"window-2","type":"casement","name":"Kitchen South Window 2","geometry":[[3,0],[4,0]],"attributes":{"roomId":"room-1"}},
+    {"id":"window-3","type":"casement","name":"Kitchen West Window","geometry":[[0,2],[0,3.5]],"attributes":{"roomId":"room-1"}},
+    {"id":"window-4","type":"sliding","name":"Living South Window 1","geometry":[[7.5,0],[9,0]],"attributes":{"roomId":"room-3"}},
+    {"id":"window-5","type":"sliding","name":"Living South Window 2","geometry":[[10.5,0],[12,0]],"attributes":{"roomId":"room-3"}},
+    {"id":"window-6","type":"casement","name":"Living East Window","geometry":[[14,2],[14,4.5]],"attributes":{"roomId":"room-3"}},
+    {"id":"window-7","type":"casement","name":"Master Bed West Window","geometry":[[0,8],[0,9.5]],"attributes":{"roomId":"room-5"}},
+    {"id":"window-8","type":"casement","name":"Master Bed North Window","geometry":[[1,13],[2.5,13]],"attributes":{"roomId":"room-5"}},
+    {"id":"window-9","type":"awning","name":"Master Bath North Window","geometry":[[4.5,13],[5.3,13]],"attributes":{"roomId":"room-6"}},
+    {"id":"window-10","type":"casement","name":"Bedroom 2 North Window 1","geometry":[[6.5,13],[8,13]],"attributes":{"roomId":"room-7"}},
+    {"id":"window-11","type":"casement","name":"Bedroom 2 North Window 2","geometry":[[8.5,13],[10,13]],"attributes":{"roomId":"room-7"}},
+    {"id":"window-12","type":"casement","name":"Bedroom 3 East Window","geometry":[[14,8],[14,10]],"attributes":{"roomId":"room-8"}},
+    {"id":"window-13","type":"casement","name":"Bedroom 3 North Window","geometry":[[10.5,13],[11.5,13]],"attributes":{"roomId":"room-8"}},
+    {"id":"window-14","type":"awning","name":"Bathroom 2 North Window","geometry":[[12.5,13],[13.5,13]],"attributes":{"roomId":"room-9"}}
+  ],
+  "furniture": [
+    {"id":"furn-1","name":"Kitchen Counter South","geometry":[[0.2,0.2],[4,0.2],[4,0.8],[0.2,0.8],[0.2,0.2]],"attributes":{"roomId":"room-1"}},
+    {"id":"furn-2","name":"Kitchen Counter West","geometry":[[0.2,0.8],[0.8,0.8],[0.8,5.5],[0.2,5.5],[0.2,0.8]],"attributes":{"roomId":"room-1"}},
+    {"id":"furn-3","name":"Refrigerator","geometry":[[4.2,0.2],[4.9,0.2],[4.9,0.9],[4.2,0.9],[4.2,0.2]],"attributes":{"roomId":"room-1"}},
+    {"id":"furn-4","name":"Kitchen Island","geometry":[[1.5,2.5],[4,2.5],[4,3.2],[1.5,3.2],[1.5,2.5]],"attributes":{"roomId":"room-1"}},
+    {"id":"furn-5","name":"Shoe Rack","geometry":[[5.2,0.3],[6.8,0.3],[6.8,0.7],[5.2,0.7],[5.2,0.3]],"attributes":{"roomId":"room-2"}},
+    {"id":"furn-6","name":"Coat Rack","geometry":[[5.2,2.3],[6.8,2.3],[6.8,2.7],[5.2,2.7],[5.2,2.3]],"attributes":{"roomId":"room-2"}},
+    {"id":"furn-7","name":"Sectional Sofa","geometry":[[7.5,0.5],[11.5,0.5],[11.5,3],[7.5,3],[7.5,0.5]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-8","name":"Coffee Table","geometry":[[9,3.3],[12,3.3],[12,4],[9,4],[9,3.3]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-9","name":"TV Stand","geometry":[[7.5,5.2],[10.5,5.2],[10.5,5.6],[7.5,5.6],[7.5,5.2]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-10","name":"Dining Table","geometry":[[11,1],[13.5,1],[13.5,2.5],[11,2.5],[11,1]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-11","name":"Dining Chair 1","geometry":[[11.2,2.7],[11.7,2.7],[11.7,3.2],[11.2,3.2],[11.2,2.7]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-12","name":"Dining Chair 2","geometry":[[12.5,2.7],[13,2.7],[13,3.2],[12.5,3.2],[12.5,2.7]],"attributes":{"roomId":"room-3"}},
+    {"id":"furn-13","name":"King Bed","geometry":[[0.5,7.5],[2.3,7.5],[2.3,9.5],[0.5,9.5],[0.5,7.5]],"attributes":{"roomId":"room-5"}},
+    {"id":"furn-14","name":"Wardrobe","geometry":[[2.5,7.2],[3.8,7.2],[3.8,9],[2.5,9],[2.5,7.2]],"attributes":{"roomId":"room-5"}},
+    {"id":"furn-15","name":"Dresser","geometry":[[0.3,10.5],[1.5,10.5],[1.5,11.8],[0.3,11.8],[0.3,10.5]],"attributes":{"roomId":"room-5"}},
+    {"id":"furn-16","name":"Toilet","geometry":[[4.2,9.7],[4.6,9.7],[4.6,10.35],[4.2,10.35],[4.2,9.7]],"attributes":{"roomId":"room-6"}},
+    {"id":"furn-17","name":"Sink","geometry":[[5.1,9.7],[5.7,9.7],[5.7,10.15],[5.1,10.15],[5.1,9.7]],"attributes":{"roomId":"room-6"}},
+    {"id":"furn-18","name":"Shower","geometry":[[4.2,11],[5.8,11],[5.8,12.8],[4.2,12.8],[4.2,11]],"attributes":{"roomId":"room-6"}},
+    {"id":"furn-19","name":"Queen Bed","geometry":[[6.5,7.5],[8.3,7.5],[8.3,9.5],[6.5,9.5],[6.5,7.5]],"attributes":{"roomId":"room-7"}},
+    {"id":"furn-20","name":"Wardrobe","geometry":[[8.5,7.2],[9.8,7.2],[9.8,9],[8.5,9],[8.5,7.2]],"attributes":{"roomId":"room-7"}},
+    {"id":"furn-21","name":"Desk","geometry":[[6.5,11],[8.5,11],[8.5,11.6],[6.5,11.6],[6.5,11]],"attributes":{"roomId":"room-7"}},
+    {"id":"furn-22","name":"Bookshelf","geometry":[[6.2,12.2],[9.8,12.2],[9.8,12.8],[6.2,12.8],[6.2,12.2]],"attributes":{"roomId":"room-7"}},
+    {"id":"furn-23","name":"Double Bed","geometry":[[10.5,7.5],[12.1,7.5],[12.1,9.5],[10.5,9.5],[10.5,7.5]],"attributes":{"roomId":"room-8"}},
+    {"id":"furn-24","name":"Wardrobe","geometry":[[12.5,7.2],[13.8,7.2],[13.8,9],[12.5,9],[12.5,7.2]],"attributes":{"roomId":"room-8"}},
+    {"id":"furn-25","name":"Study Table","geometry":[[10.3,10],[11.5,10],[11.5,10.6],[10.3,10.6],[10.3,10]],"attributes":{"roomId":"room-8"}},
+    {"id":"furn-26","name":"Toilet","geometry":[[12.2,11.2],[12.6,11.2],[12.6,11.85],[12.2,11.85],[12.2,11.2]],"attributes":{"roomId":"room-9"}},
+    {"id":"furn-27","name":"Sink","geometry":[[13.1,11.2],[13.7,11.2],[13.7,11.65],[13.1,11.65],[13.1,11.2]],"attributes":{"roomId":"room-9"}},
+    {"id":"furn-28","name":"Shower","geometry":[[12.2,12],[13.8,12],[13.8,12.8],[12.2,12.8],[12.2,12]],"attributes":{"roomId":"room-9"}}
+  ],
+  "mep": [
+    {"id":"mep-1","name":"Living Room AC","geometry":[[7.2,5.6],[8,5.6],[8,5.85],[7.2,5.85],[7.2,5.6]],"attributes":{"system":"hvac"}},
+    {"id":"mep-2","name":"Electrical Panel","geometry":[[6.2,6.1],[6.8,6.1],[6.8,6.4],[6.2,6.4],[6.2,6.1]],"attributes":{"system":"electrical"}},
+    {"id":"mep-3","name":"Water Heater","geometry":[[4.2,12],[4.8,12],[4.8,12.3],[4.2,12.3],[4.2,12]],"attributes":{"system":"plumbing"}},
+    {"id":"mep-4","name":"Kitchen Exhaust","geometry":[[2.5,5.6],[3.3,5.6],[3.3,5.85],[2.5,5.85],[2.5,5.6]],"attributes":{"system":"hvac"}}
+  ],
+  "structure": [
+    {"id":"wall-1","name":"South Wall","geometry":[[0,0],[14,0]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-2","name":"East Wall","geometry":[[14,0],[14,13]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-3","name":"North Wall","geometry":[[0,13],[14,13]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-4","name":"West Wall","geometry":[[0,0],[0,13]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-5","name":"Kitchen-Entrance West Wall","geometry":[[5,0],[5,3]],"attributes":{"type":"partition"}},
+    {"id":"wall-6","name":"Entrance Top Wall","geometry":[[5,3],[7,3]],"attributes":{"type":"partition"}},
+    {"id":"wall-7","name":"Living West Wall","geometry":[[7,0],[7,6]],"attributes":{"type":"partition"}},
+    {"id":"wall-8","name":"Corridor South Wall","geometry":[[0,6],[14,6]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-9","name":"Corridor North Wall","geometry":[[0,7],[14,7]],"attributes":{"type":"load-bearing"}},
+    {"id":"wall-10","name":"Master-Bed2 Wall","geometry":[[6,7],[6,13]],"attributes":{"type":"partition"}},
+    {"id":"wall-11","name":"Master Upper East Wall","geometry":[[6,7],[6,9.5]],"attributes":{"type":"partition"}},
+    {"id":"wall-12","name":"Master-Bath Horizontal","geometry":[[4,9.5],[6,9.5]],"attributes":{"type":"partition"}},
+    {"id":"wall-13","name":"Master Bath West Wall","geometry":[[4,9.5],[4,13]],"attributes":{"type":"partition"}},
+    {"id":"wall-14","name":"Bed2-Bed3 Wall","geometry":[[10,7],[10,13]],"attributes":{"type":"partition"}},
+    {"id":"wall-15","name":"Bed3-Bath2 Horizontal","geometry":[[12,11],[14,11]],"attributes":{"type":"partition"}},
+    {"id":"wall-16","name":"Bed3-Bath2 West Wall","geometry":[[12,11],[12,13]],"attributes":{"type":"partition"}}
+  ]
+}

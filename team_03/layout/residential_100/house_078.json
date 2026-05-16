@@ -1,0 +1,1823 @@
+{
+  "layoutId": "Layout-RES-078",
+  "outline": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      20.0,
+      0.0
+    ],
+    [
+      20.0,
+      12.0
+    ],
+    [
+      0.0,
+      12.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Living and Dining",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          7.0,
+          0.0
+        ],
+        [
+          7.0,
+          5.4
+        ],
+        [
+          0.0,
+          5.4
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 37.8
+      }
+    },
+    {
+      "id": "room-2",
+      "name": "Entrance Hall",
+      "geometry": [
+        [
+          7.0,
+          0.0
+        ],
+        [
+          9.0,
+          0.0
+        ],
+        [
+          9.0,
+          5.4
+        ],
+        [
+          7.0,
+          5.4
+        ],
+        [
+          7.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 10.8
+      }
+    },
+    {
+      "id": "room-3",
+      "name": "Kitchen",
+      "geometry": [
+        [
+          9.0,
+          0.0
+        ],
+        [
+          20.0,
+          0.0
+        ],
+        [
+          20.0,
+          5.4
+        ],
+        [
+          9.0,
+          5.4
+        ],
+        [
+          9.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "area": 59.4
+      }
+    },
+    {
+      "id": "room-4",
+      "name": "Corridor",
+      "geometry": [
+        [
+          0.0,
+          5.4
+        ],
+        [
+          20.0,
+          5.4
+        ],
+        [
+          20.0,
+          6.4
+        ],
+        [
+          0.0,
+          6.4
+        ],
+        [
+          0.0,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "area": 20.0
+      }
+    },
+    {
+      "id": "room-5",
+      "name": "Master Suite",
+      "geometry": [
+        [
+          0.0,
+          6.4
+        ],
+        [
+          4.4,
+          6.4
+        ],
+        [
+          4.4,
+          12.0
+        ],
+        [
+          0.0,
+          12.0
+        ],
+        [
+          0.0,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 24.6
+      }
+    },
+    {
+      "id": "room-6",
+      "name": "Master Bathroom",
+      "geometry": [
+        [
+          4.4,
+          6.4
+        ],
+        [
+          6.4,
+          6.4
+        ],
+        [
+          6.4,
+          12.0
+        ],
+        [
+          4.4,
+          12.0
+        ],
+        [
+          4.4,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 11.2
+      }
+    },
+    {
+      "id": "room-7",
+      "name": "Bedroom 2",
+      "geometry": [
+        [
+          6.4,
+          6.4
+        ],
+        [
+          9.8,
+          6.4
+        ],
+        [
+          9.8,
+          12.0
+        ],
+        [
+          6.4,
+          12.0
+        ],
+        [
+          6.4,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 19.0
+      }
+    },
+    {
+      "id": "room-8",
+      "name": "Bathroom 2",
+      "geometry": [
+        [
+          9.8,
+          6.4
+        ],
+        [
+          11.8,
+          6.4
+        ],
+        [
+          11.8,
+          12.0
+        ],
+        [
+          9.8,
+          12.0
+        ],
+        [
+          9.8,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 11.2
+      }
+    },
+    {
+      "id": "room-9",
+      "name": "Bedroom 3",
+      "geometry": [
+        [
+          11.8,
+          6.4
+        ],
+        [
+          14.8,
+          6.4
+        ],
+        [
+          14.8,
+          12.0
+        ],
+        [
+          11.8,
+          12.0
+        ],
+        [
+          11.8,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 16.8
+      }
+    },
+    {
+      "id": "room-10",
+      "name": "Bedroom 4",
+      "geometry": [
+        [
+          14.8,
+          6.4
+        ],
+        [
+          17.4,
+          6.4
+        ],
+        [
+          17.4,
+          12.0
+        ],
+        [
+          14.8,
+          12.0
+        ],
+        [
+          14.8,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 14.6
+      }
+    },
+    {
+      "id": "room-11",
+      "name": "Bedroom 5",
+      "geometry": [
+        [
+          17.4,
+          6.4
+        ],
+        [
+          20.0,
+          6.4
+        ],
+        [
+          20.0,
+          12.0
+        ],
+        [
+          17.4,
+          12.0
+        ],
+        [
+          17.4,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "area": 14.6
+      }
+    }
+  ],
+  "doors": [
+    {
+      "id": "door-1",
+      "type": "wooden",
+      "name": "Main Entrance",
+      "geometry": [
+        [
+          7.2,
+          0.0
+        ],
+        [
+          9.2,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-2",
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "door-2",
+      "type": "glass",
+      "name": "Ent to Living",
+      "geometry": [
+        [
+          7.0,
+          1.9
+        ],
+        [
+          7.0,
+          2.8
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-1",
+          "room-2"
+        ]
+      }
+    },
+    {
+      "id": "door-3",
+      "type": "wooden",
+      "name": "Ent to Kitchen",
+      "geometry": [
+        [
+          9.0,
+          1.9
+        ],
+        [
+          9.0,
+          2.8
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-2",
+          "room-3"
+        ]
+      }
+    },
+    {
+      "id": "door-4",
+      "type": "sliding",
+      "name": "Living to Corr",
+      "geometry": [
+        [
+          1.4,
+          5.4
+        ],
+        [
+          2.4,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-1",
+          "room-4"
+        ]
+      }
+    },
+    {
+      "id": "door-5",
+      "type": "wooden",
+      "name": "Kitchen to Corr",
+      "geometry": [
+        [
+          13.4,
+          5.4
+        ],
+        [
+          14.3,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-3",
+          "room-4"
+        ]
+      }
+    },
+    {
+      "id": "door-6",
+      "type": "wooden",
+      "name": "Corr to Master",
+      "geometry": [
+        [
+          0.9,
+          6.4
+        ],
+        [
+          1.8,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-4",
+          "room-5"
+        ]
+      }
+    },
+    {
+      "id": "door-7",
+      "type": "wooden",
+      "name": "Master to Bath",
+      "geometry": [
+        [
+          4.4,
+          8.6
+        ],
+        [
+          4.4,
+          9.5
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-5",
+          "room-6"
+        ]
+      }
+    },
+    {
+      "id": "door-8",
+      "type": "wooden",
+      "name": "Corr to Bed2",
+      "geometry": [
+        [
+          7.1,
+          6.4
+        ],
+        [
+          8.0,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-4",
+          "room-7"
+        ]
+      }
+    },
+    {
+      "id": "door-9",
+      "type": "wooden",
+      "name": "Bed2 to Bath2",
+      "geometry": [
+        [
+          9.8,
+          8.6
+        ],
+        [
+          9.8,
+          9.5
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-7",
+          "room-8"
+        ]
+      }
+    },
+    {
+      "id": "door-10",
+      "type": "wooden",
+      "name": "Corr to Bed3",
+      "geometry": [
+        [
+          12.4,
+          6.4
+        ],
+        [
+          13.3,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-4",
+          "room-9"
+        ]
+      }
+    },
+    {
+      "id": "door-11",
+      "type": "wooden",
+      "name": "Corr to Bed4",
+      "geometry": [
+        [
+          15.3,
+          6.4
+        ],
+        [
+          16.2,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-4",
+          "room-10"
+        ]
+      }
+    },
+    {
+      "id": "door-12",
+      "type": "wooden",
+      "name": "Corr to Bed5",
+      "geometry": [
+        [
+          17.9,
+          6.4
+        ],
+        [
+          18.8,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "connectsRooms": [
+          "room-4",
+          "room-11"
+        ]
+      }
+    }
+  ],
+  "windows": [
+    {
+      "id": "window-1",
+      "type": "sliding",
+      "name": "Living S 1",
+      "geometry": [
+        [
+          0.5,
+          0.0
+        ],
+        [
+          2.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "window-2",
+      "type": "sliding",
+      "name": "Living S 2",
+      "geometry": [
+        [
+          3.5,
+          0.0
+        ],
+        [
+          5.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "window-3",
+      "type": "casement",
+      "name": "Living W",
+      "geometry": [
+        [
+          0.0,
+          1.6
+        ],
+        [
+          0.0,
+          3.5
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "window-4",
+      "type": "casement",
+      "name": "Kitchen S 1",
+      "geometry": [
+        [
+          10.0,
+          0.0
+        ],
+        [
+          11.5,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "window-5",
+      "type": "casement",
+      "name": "Kitchen S 2",
+      "geometry": [
+        [
+          16.5,
+          0.0
+        ],
+        [
+          18.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "window-6",
+      "type": "casement",
+      "name": "Kitchen E",
+      "geometry": [
+        [
+          20.0,
+          1.6
+        ],
+        [
+          20.0,
+          3.5
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "window-7",
+      "type": "casement",
+      "name": "Master N",
+      "geometry": [
+        [
+          0.8,
+          12.0
+        ],
+        [
+          3.6,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-5"
+      }
+    },
+    {
+      "id": "window-8",
+      "type": "casement",
+      "name": "Master W",
+      "geometry": [
+        [
+          0.0,
+          7.8
+        ],
+        [
+          0.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-5"
+      }
+    },
+    {
+      "id": "window-9",
+      "type": "awning",
+      "name": "MBath N",
+      "geometry": [
+        [
+          4.5,
+          12.0
+        ],
+        [
+          6.3,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-6"
+      }
+    },
+    {
+      "id": "window-10",
+      "type": "casement",
+      "name": "Bed2 N",
+      "geometry": [
+        [
+          6.7,
+          12.0
+        ],
+        [
+          9.5,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-7"
+      }
+    },
+    {
+      "id": "window-11",
+      "type": "casement",
+      "name": "Bed3 N",
+      "geometry": [
+        [
+          12.1,
+          12.0
+        ],
+        [
+          14.5,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-9"
+      }
+    },
+    {
+      "id": "window-12",
+      "type": "casement",
+      "name": "Bed4 N",
+      "geometry": [
+        [
+          15.0,
+          12.0
+        ],
+        [
+          17.2,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-10"
+      }
+    },
+    {
+      "id": "window-13",
+      "type": "casement",
+      "name": "Bed5 N",
+      "geometry": [
+        [
+          17.7,
+          12.0
+        ],
+        [
+          19.7,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-11"
+      }
+    },
+    {
+      "id": "window-14",
+      "type": "casement",
+      "name": "Bed5 E",
+      "geometry": [
+        [
+          20.0,
+          8.1
+        ],
+        [
+          20.0,
+          10.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-11"
+      }
+    }
+  ],
+  "furniture": [
+    {
+      "id": "furn-1",
+      "name": "Large Sofa",
+      "geometry": [
+        [
+          0.4,
+          1.6
+        ],
+        [
+          4.9,
+          1.6
+        ],
+        [
+          4.9,
+          4.1
+        ],
+        [
+          0.4,
+          4.1
+        ],
+        [
+          0.4,
+          1.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-2",
+      "name": "Coffee Table",
+      "geometry": [
+        [
+          1.4,
+          4.2
+        ],
+        [
+          4.5,
+          4.2
+        ],
+        [
+          4.5,
+          4.9
+        ],
+        [
+          1.4,
+          4.9
+        ],
+        [
+          1.4,
+          4.2
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-3",
+      "name": "TV Stand",
+      "geometry": [
+        [
+          4.5,
+          4.9
+        ],
+        [
+          6.8,
+          4.9
+        ],
+        [
+          6.8,
+          5.3
+        ],
+        [
+          4.5,
+          5.3
+        ],
+        [
+          4.5,
+          4.9
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-4",
+      "name": "Dining Table",
+      "geometry": [
+        [
+          0.3,
+          0.3
+        ],
+        [
+          4.2,
+          0.3
+        ],
+        [
+          4.2,
+          1.5
+        ],
+        [
+          0.3,
+          1.5
+        ],
+        [
+          0.3,
+          0.3
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-1"
+      }
+    },
+    {
+      "id": "furn-5",
+      "name": "Shoe Rack",
+      "geometry": [
+        [
+          7.2,
+          0.2
+        ],
+        [
+          8.8,
+          0.2
+        ],
+        [
+          8.8,
+          0.6
+        ],
+        [
+          7.2,
+          0.6
+        ],
+        [
+          7.2,
+          0.2
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-2"
+      }
+    },
+    {
+      "id": "furn-6",
+      "name": "Kitchen Counter S",
+      "geometry": [
+        [
+          9.2,
+          0.2
+        ],
+        [
+          19.8,
+          0.2
+        ],
+        [
+          19.8,
+          0.8
+        ],
+        [
+          9.2,
+          0.8
+        ],
+        [
+          9.2,
+          0.2
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "furn-7",
+      "name": "Kitchen Counter E",
+      "geometry": [
+        [
+          19.3,
+          0.2
+        ],
+        [
+          19.9,
+          0.2
+        ],
+        [
+          19.9,
+          4.9
+        ],
+        [
+          19.3,
+          4.9
+        ],
+        [
+          19.3,
+          0.2
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "furn-8",
+      "name": "Refrigerator",
+      "geometry": [
+        [
+          9.2,
+          0.9
+        ],
+        [
+          9.9,
+          0.9
+        ],
+        [
+          9.9,
+          1.6
+        ],
+        [
+          9.2,
+          1.6
+        ],
+        [
+          9.2,
+          0.9
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "furn-9",
+      "name": "Kitchen Island",
+      "geometry": [
+        [
+          10.5,
+          2.4
+        ],
+        [
+          13.5,
+          2.4
+        ],
+        [
+          13.5,
+          3.1
+        ],
+        [
+          10.5,
+          3.1
+        ],
+        [
+          10.5,
+          2.4
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-3"
+      }
+    },
+    {
+      "id": "furn-10",
+      "name": "King Bed",
+      "geometry": [
+        [
+          0.4,
+          6.8
+        ],
+        [
+          2.9,
+          6.8
+        ],
+        [
+          2.9,
+          10.3
+        ],
+        [
+          0.4,
+          10.3
+        ],
+        [
+          0.4,
+          6.8
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-5"
+      }
+    },
+    {
+      "id": "furn-11",
+      "name": "Wardrobe",
+      "geometry": [
+        [
+          2.9,
+          6.7
+        ],
+        [
+          4.2,
+          6.7
+        ],
+        [
+          4.2,
+          10.9
+        ],
+        [
+          2.9,
+          10.9
+        ],
+        [
+          2.9,
+          6.7
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-5"
+      }
+    },
+    {
+      "id": "furn-12",
+      "name": "Toilet",
+      "geometry": [
+        [
+          4.6,
+          6.6
+        ],
+        [
+          5.0,
+          6.6
+        ],
+        [
+          5.0,
+          7.2
+        ],
+        [
+          4.6,
+          7.2
+        ],
+        [
+          4.6,
+          6.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-6"
+      }
+    },
+    {
+      "id": "furn-13",
+      "name": "Sink",
+      "geometry": [
+        [
+          5.2,
+          6.6
+        ],
+        [
+          6.2,
+          6.6
+        ],
+        [
+          6.2,
+          7.1
+        ],
+        [
+          5.2,
+          7.1
+        ],
+        [
+          5.2,
+          6.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-6"
+      }
+    },
+    {
+      "id": "furn-14",
+      "name": "Shower",
+      "geometry": [
+        [
+          4.6,
+          10.6
+        ],
+        [
+          6.2,
+          10.6
+        ],
+        [
+          6.2,
+          11.8
+        ],
+        [
+          4.6,
+          11.8
+        ],
+        [
+          4.6,
+          10.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-6"
+      }
+    },
+    {
+      "id": "furn-15",
+      "name": "Queen Bed",
+      "geometry": [
+        [
+          6.7,
+          6.8
+        ],
+        [
+          8.6,
+          6.8
+        ],
+        [
+          8.6,
+          10.3
+        ],
+        [
+          6.7,
+          10.3
+        ],
+        [
+          6.7,
+          6.8
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-7"
+      }
+    },
+    {
+      "id": "furn-16",
+      "name": "Toilet B2",
+      "geometry": [
+        [
+          10.0,
+          6.6
+        ],
+        [
+          10.4,
+          6.6
+        ],
+        [
+          10.4,
+          7.2
+        ],
+        [
+          10.0,
+          7.2
+        ],
+        [
+          10.0,
+          6.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-8"
+      }
+    },
+    {
+      "id": "furn-17",
+      "name": "Sink B2",
+      "geometry": [
+        [
+          10.6,
+          6.6
+        ],
+        [
+          11.6,
+          6.6
+        ],
+        [
+          11.6,
+          7.1
+        ],
+        [
+          10.6,
+          7.1
+        ],
+        [
+          10.6,
+          6.6
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-8"
+      }
+    },
+    {
+      "id": "furn-18",
+      "name": "Single Bed 3",
+      "geometry": [
+        [
+          12.1,
+          6.8
+        ],
+        [
+          14.5,
+          6.8
+        ],
+        [
+          14.5,
+          10.0
+        ],
+        [
+          12.1,
+          10.0
+        ],
+        [
+          12.1,
+          6.8
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-9"
+      }
+    },
+    {
+      "id": "furn-19",
+      "name": "Single Bed 4",
+      "geometry": [
+        [
+          15.0,
+          6.8
+        ],
+        [
+          17.2,
+          6.8
+        ],
+        [
+          17.2,
+          10.0
+        ],
+        [
+          15.0,
+          10.0
+        ],
+        [
+          15.0,
+          6.8
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-10"
+      }
+    },
+    {
+      "id": "furn-20",
+      "name": "Single Bed 5",
+      "geometry": [
+        [
+          17.7,
+          6.8
+        ],
+        [
+          19.7,
+          6.8
+        ],
+        [
+          19.7,
+          10.0
+        ],
+        [
+          17.7,
+          10.0
+        ],
+        [
+          17.7,
+          6.8
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-11"
+      }
+    },
+    {
+      "id": "furn-21",
+      "name": "Wardrobe Bed5",
+      "geometry": [
+        [
+          17.7,
+          10.7
+        ],
+        [
+          19.7,
+          10.7
+        ],
+        [
+          19.7,
+          11.8
+        ],
+        [
+          17.7,
+          11.8
+        ],
+        [
+          17.7,
+          10.7
+        ]
+      ],
+      "attributes": {
+        "roomId": "room-11"
+      }
+    }
+  ],
+  "mep": [
+    {
+      "id": "mep-1",
+      "name": "Living AC",
+      "geometry": [
+        [
+          0.2,
+          5.1
+        ],
+        [
+          0.9,
+          5.1
+        ],
+        [
+          0.9,
+          5.3
+        ],
+        [
+          0.2,
+          5.3
+        ],
+        [
+          0.2,
+          5.1
+        ]
+      ],
+      "attributes": {
+        "system": "hvac"
+      }
+    },
+    {
+      "id": "mep-2",
+      "name": "Electrical Panel",
+      "geometry": [
+        [
+          9.7,
+          5.5
+        ],
+        [
+          10.3,
+          5.5
+        ],
+        [
+          10.3,
+          5.8
+        ],
+        [
+          9.7,
+          5.8
+        ],
+        [
+          9.7,
+          5.5
+        ]
+      ],
+      "attributes": {
+        "system": "electrical"
+      }
+    },
+    {
+      "id": "mep-3",
+      "name": "Water Heater",
+      "geometry": [
+        [
+          4.6,
+          11.6
+        ],
+        [
+          5.2,
+          11.6
+        ],
+        [
+          5.2,
+          11.9
+        ],
+        [
+          4.6,
+          11.9
+        ],
+        [
+          4.6,
+          11.6
+        ]
+      ],
+      "attributes": {
+        "system": "plumbing"
+      }
+    },
+    {
+      "id": "mep-4",
+      "name": "Kitchen Exhaust",
+      "geometry": [
+        [
+          17.0,
+          5.1
+        ],
+        [
+          17.8,
+          5.1
+        ],
+        [
+          17.8,
+          5.3
+        ],
+        [
+          17.0,
+          5.3
+        ],
+        [
+          17.0,
+          5.1
+        ]
+      ],
+      "attributes": {
+        "system": "hvac"
+      }
+    }
+  ],
+  "structure": [
+    {
+      "id": "wall-1",
+      "name": "South Wall",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          20.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-2",
+      "name": "East Wall",
+      "geometry": [
+        [
+          20.0,
+          0.0
+        ],
+        [
+          20.0,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-3",
+      "name": "North Wall",
+      "geometry": [
+        [
+          0.0,
+          12.0
+        ],
+        [
+          20.0,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-4",
+      "name": "West Wall",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-5",
+      "name": "Liv-Ent Wall",
+      "geometry": [
+        [
+          7.0,
+          0.0
+        ],
+        [
+          7.0,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-6",
+      "name": "Ent-Kit Wall",
+      "geometry": [
+        [
+          9.0,
+          0.0
+        ],
+        [
+          9.0,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-7",
+      "name": "Corr S Wall",
+      "geometry": [
+        [
+          0.0,
+          5.4
+        ],
+        [
+          20.0,
+          5.4
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-8",
+      "name": "Corr N Wall",
+      "geometry": [
+        [
+          0.0,
+          6.4
+        ],
+        [
+          20.0,
+          6.4
+        ]
+      ],
+      "attributes": {
+        "type": "load-bearing"
+      }
+    },
+    {
+      "id": "wall-9",
+      "name": "Master-MBath",
+      "geometry": [
+        [
+          4.4,
+          6.4
+        ],
+        [
+          4.4,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-10",
+      "name": "MBath-Bed2",
+      "geometry": [
+        [
+          6.4,
+          6.4
+        ],
+        [
+          6.4,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-11",
+      "name": "Bed2-Bath2",
+      "geometry": [
+        [
+          9.8,
+          6.4
+        ],
+        [
+          9.8,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-12",
+      "name": "Bath2-Bed3",
+      "geometry": [
+        [
+          11.8,
+          6.4
+        ],
+        [
+          11.8,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-13",
+      "name": "Bed3-Bed4",
+      "geometry": [
+        [
+          14.8,
+          6.4
+        ],
+        [
+          14.8,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    },
+    {
+      "id": "wall-14",
+      "name": "Bed4-Bed5",
+      "geometry": [
+        [
+          17.4,
+          6.4
+        ],
+        [
+          17.4,
+          12.0
+        ]
+      ],
+      "attributes": {
+        "type": "partition"
+      }
+    }
+  ]
+}
