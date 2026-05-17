@@ -1,7 +1,6 @@
 from typing import Any
 import json
 from pathlib import Path
-from tools.layout_filter import select_layout
 from tools.layout_utils import load_and_save_layout
 
 _SYSTEM_PROMPT = "You are picking the best floor layout. Reply with ONLY the layout ID (e.g., 'layout-1')."
@@ -36,17 +35,16 @@ def build_choice_node(llm: Any) -> Any:
             response = llm.invoke(_SYSTEM_PROMPT + "\n\n" + prompt)
             selected_id = response.content.strip().split()[0]
         
-        # Load full layout
-        full_layout = select_layout(selected_id)
-        if "error" in full_layout:
-            return {"final_response": f"Error: {full_layout['error']}"}
-        
+        # Load layout via layout_utils (single source of truth)
         repo_root = Path(__file__).resolve().parent.parent.parent
         reference_path = repo_root / "team_06_reference_layout.json"
         load_and_save_layout(selected_id, state, reference_path)
         
+        # Get the layout from state (now set by load_and_save_layout)
+        layout_json = state.get("layout_json_string")
+        
         return {
-            "layout_json_string": json.dumps(full_layout),
+            "layout_json_string": layout_json,
             "iteration": iteration + 1,
         }
     
