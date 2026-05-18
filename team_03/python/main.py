@@ -8,6 +8,11 @@ def main():
     # Process the command line arguments (the user instruction)
     parser = argparse.ArgumentParser(description="Run the Grasshopper MCP agent.")
     parser.add_argument("prompt", help="Your instruction for the agent (e.g. 'delete the kitchen')")
+    parser.add_argument(
+        "--layout",
+        default=None,
+        help="Layout name to load e.g. industrial_005",
+    )
     args = parser.parse_args()
 
     # Initialize and run the agent

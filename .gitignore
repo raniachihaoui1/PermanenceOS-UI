@@ -1,4 +1,5 @@
 .env
 *.pyc
 mcp.json
-**/__pycache__/
+
+team_03 - backup

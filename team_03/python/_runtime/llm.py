@@ -1,13 +1,14 @@
 from __future__ import annotations
 from copy import deepcopy
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any
-from langchain_openai import ChatOpenAI
 
 
 # ---------------------------------------------------------------------------
-# LLM factory
+# LLM factory — supports local (OpenAI-compatible) and Anthropic
 # ---------------------------------------------------------------------------
 
 def create_chat_llm(
@@ -16,7 +17,23 @@ def create_chat_llm(
     llm_model: str,
     timeout_seconds: float,
     model_kwargs: dict[str, Any] | None = None,
-) -> ChatOpenAI:
+) -> Any:
+    provider = os.environ.get("LLM_PROVIDER", "local").strip().lower()
+
+    # Anthropic — use SDK directly, not LangChain
+    # Returns a plain dict instead of a ChatOpenAI instance.
+    # call_llm() detects this and routes to _call_anthropic().
+    if provider == "anthropic":
+        import anthropic
+        return {
+            "_type": "anthropic",
+            "_client": anthropic.Anthropic(api_key=api_key),
+            "_model": llm_model,
+            "_timeout": timeout_seconds,
+        }
+
+    # All other providers — use LangChain OpenAI-compatible wrapper
+    from langchain_openai import ChatOpenAI
     return ChatOpenAI(
         api_key=api_key,
         base_url=base_url,
@@ -28,11 +45,8 @@ def create_chat_llm(
 
 
 # ---------------------------------------------------------------------------
-# Structured-output schema builders
-#
-# get_llm_response_format() generates a provider-compatible JSON schema that
-# constrains the LLM's output to a predictable shape for tool decisions.
-# You should not need to modify these directly.
+# Structured-output schema builders — used for local/OpenAI providers only
+# For Anthropic, we use prompt-based JSON instead — no schema needed.
 # ---------------------------------------------------------------------------
 
 LLM_DECISION_SCHEMA: dict[str, Any] = {
@@ -99,6 +113,16 @@ def _build_arguments_schema(tools: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def get_llm_response_format(tools: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Returns model_kwargs for structured output.
+    For Anthropic — returns empty dict (handled via prompt, not response_format).
+    For local/OpenAI — returns JSON schema response format.
+    """
+    provider = os.environ.get("LLM_PROVIDER", "local").strip().lower()
+
+    if provider == "anthropic":
+        return {}
+
     schema = deepcopy(LLM_DECISION_SCHEMA)
     tool_names = [str(tool.get("name")) for tool in tools if tool.get("name")]
     tool_call_schema = schema["properties"]["tool_calls"]["items"]
@@ -118,7 +142,7 @@ def get_llm_response_format(tools: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# LLM response parsing (internal helpers)
+# LLM response parsing helpers
 # ---------------------------------------------------------------------------
 
 def _strip_markdown_code_fence(content: str) -> str:
@@ -134,31 +158,62 @@ def _strip_markdown_code_fence(content: str) -> str:
 
 
 def _parse_llm_json(content: str) -> dict[str, Any]:
-    content = _strip_markdown_code_fence(content)
+    content_stripped = content.strip()
+
+    # Handle Claude's <function_calls> XML format
+    if "<function_calls>" in content_stripped:
+        match = re.search(r'<function_calls>(.*?)</function_calls>', content_stripped, re.DOTALL)
+        if match:
+            calls_text = match.group(1).strip()
+            try:
+                calls = json.loads(calls_text)
+                if isinstance(calls, list):
+                    return {
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [
+                            {
+                                "name": c["name"],
+                                "arguments": c.get("arguments", c.get("parameters", {}))
+                            }
+                            for c in calls
+                        ]
+                    }
+            except json.JSONDecodeError:
+                pass
+
+    # Extract JSON from ```json ... ``` fence anywhere in content
+    fence_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content_stripped, re.DOTALL)
+    if fence_match:
+        try:
+            parsed = json.loads(fence_match.group(1))
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Find raw JSON object anywhere in content
+    json_match = re.search(r'\{.*\}', content_stripped, re.DOTALL)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group(0))
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Try direct parse — pure JSON response with no surrounding text
     try:
-        parsed = json.loads(content)
+        parsed = json.loads(_strip_markdown_code_fence(content_stripped))
         if not isinstance(parsed, dict):
             raise RuntimeError("LLM JSON response must be an object")
         return parsed
-    except json.JSONDecodeError as exc:
-        if "Extra data" not in str(exc):
-            raise
+    except json.JSONDecodeError:
+        pass
 
-    lines = [line.strip() for line in content.splitlines() if line.strip()]
-    if not lines:
-        raise RuntimeError("LLM response was empty")
-
-    tool_calls: list[dict[str, Any]] = []
-    for line in lines:
-        parsed_line = json.loads(line)
-        if not isinstance(parsed_line, dict):
-            raise RuntimeError("Each JSON line must be an object")
-        tool_call = parsed_line.get("tool_call")
-        if not isinstance(tool_call, dict):
-            raise RuntimeError("Each JSON line must contain 'tool_call'")
-        tool_calls.append(tool_call)
-
-    return {"tool_calls": tool_calls}
+    raise RuntimeError(
+        "Could not extract JSON from LLM response: {}".format(content_stripped[:200])
+    )
 
 
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
@@ -197,6 +252,46 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Anthropic-specific call — bypasses LangChain entirely
+# ---------------------------------------------------------------------------
+
+def _call_anthropic(
+    client_dict: dict,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    tool_catalog: str,
+) -> dict[str, Any]:
+    client  = client_dict["_client"]
+    model   = client_dict["_model"]
+    timeout = client_dict["_timeout"]
+
+    formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
+
+    # Anthropic only accepts "user" and "assistant" roles
+    anthropic_messages = []
+    for msg in messages:
+        role    = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "system":
+            continue
+        anthropic_messages.append({"role": role, "content": content})
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=formatted_prompt,
+        messages=anthropic_messages,
+        timeout=timeout,
+    )
+
+    content = response.content[0].text
+    print("\n[anthropic] Raw response preview:")
+    print(content[:400])
+
+    return _normalize_llm_decision(_parse_llm_json(content))
+
+
+# ---------------------------------------------------------------------------
 # Public convenience function used by reason nodes
 # ---------------------------------------------------------------------------
 
@@ -207,11 +302,13 @@ def call_llm(
     tool_catalog: str,
 ) -> dict[str, Any]:
     """Invoke the LLM and return a parsed decision dict.
-
-    Returns one of:
-      {"action": "final", "final_response": "<text>"}
-      {"action": "tool",  "tool_calls": [{"name": "<tool>", "arguments": {...}}]}
+    Handles both Anthropic and local/OpenAI providers.
     """
+    # Anthropic path — use SDK directly
+    if isinstance(llm, dict) and llm.get("_type") == "anthropic":
+        return _call_anthropic(llm, system_prompt, messages, tool_catalog)
+
+    # Local / OpenAI / Cloudflare path — use LangChain
     formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
     llm_messages = [{"role": "system", "content": formatted_prompt}] + messages
 
@@ -226,6 +323,48 @@ def call_llm(
         print("\n[llm] Raw LLM response before crash:")
         print(content)
         raise
+
+
+def call_llm_simple(
+    llm: Any,
+    system_prompt: str,
+    user_message: str,
+) -> dict[str, Any] | None:
+    """
+    Simplified LLM call for pre-agent nodes
+    (profile_agent, space_type_agent).
+    No tool_catalog needed — returns parsed
+    JSON dict or None on failure.
+    Unlike call_llm(), no action/tool_calls
+    schema is expected — just free-form JSON.
+    """
+    try:
+        # Anthropic path — reuse _call_anthropic
+        # with empty tool_catalog
+        if isinstance(llm, dict) and llm.get("_type") == "anthropic":
+            result = _call_anthropic(
+                llm, system_prompt,
+                [{"role": "user", "content": user_message}],
+                ""
+            )
+            return result if isinstance(result, dict) else None
+
+        # Local/OpenAI path — invoke via LangChain
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_message},
+        ]
+        result = llm.invoke(messages)
+        content = result.content
+        if not isinstance(content, str):
+            return None
+        cleaned = _strip_markdown_code_fence(content)
+        parsed  = json.loads(cleaned)
+        return parsed if isinstance(parsed, dict) else None
+
+    except Exception as exc:
+        print(f"[llm_simple] Failed: {exc}")
+        return None
 
 
 # ---------------------------------------------------------------------------
