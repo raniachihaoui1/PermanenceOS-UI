@@ -103,6 +103,10 @@ class AgentState(TypedDict):
     # Populated by add_objects, displayed by user_checkpoint before approval.
     placement_history:   Annotated[list[dict] | None, _keep_last]
 
+    # Previous scoring — snapshot of scoring_results from the last checkpoint
+    # visit, used to show before/after score comparison with deltas.
+    previous_scoring:    Annotated[dict[str, Any] | None, _keep_last]
+
     # Original layout snapshot — used to detect if doors/windows/structure
     # were modified or lost during the pipeline.
     original_layout:     dict | None
@@ -364,32 +368,78 @@ def build_user_checkpoint_node(mcp_client):
         rec   = scoring.get("recommendation", "")
         breakdown = scoring.get("breakdown", {})
 
-        # ── Display report ──────────────────────────────────────────────
-        print(f"\n{'=' * 60}")
-        print(f"LAYOUT SCORE: {score:.1f}/100  Grade: {grade}")
-        print(f"Recommendation: {rec}")
-        print(f"{'=' * 60}")
+        prev_scoring = state.get("previous_scoring") or {}
+        prev_score = prev_scoring.get("total_score")
+        prev_breakdown = prev_scoring.get("breakdown", {})
+        has_previous = prev_score is not None
 
-        print("\nScore breakdown:")
+        # ── ANSI color helpers ──────────────────────────────────────────
+        GREEN  = "\033[92m"
+        RED    = "\033[91m"
+        YELLOW = "\033[93m"
+        CYAN   = "\033[96m"
+        BOLD   = "\033[1m"
+        DIM    = "\033[2m"
+        RESET  = "\033[0m"
+
+        def _delta_str(current: float, previous: float | None) -> str:
+            """Return colored delta string like '▲ +5.2' or '▼ -3.1'."""
+            if previous is None:
+                return ""
+            diff = current - previous
+            if abs(diff) < 0.05:
+                return f"  {DIM}= no change{RESET}"
+            if diff > 0:
+                return f"  {GREEN}▲ +{diff:.1f}{RESET}"
+            return f"  {RED}▼ {diff:.1f}{RESET}"
+
+        def _score_color(s: float) -> str:
+            """Color a score value based on its range."""
+            if s >= 80:
+                return f"{GREEN}{s:5.1f}{RESET}"
+            if s >= 50:
+                return f"{YELLOW}{s:5.1f}{RESET}"
+            return f"{RED}{s:5.1f}{RESET}"
+
+        # ── Display report ──────────────────────────────────────────────
+        print(f"\n{BOLD}{'=' * 60}{RESET}")
+
+        score_display = _score_color(score)
+        delta = _delta_str(score, prev_score)
+        print(f"{BOLD}LAYOUT SCORE: {score_display}/100  Grade: {grade}{delta}{RESET}")
+
+        if has_previous:
+            prev_display = _score_color(prev_score)
+            print(f"{DIM}Previous:     {prev_display}/100{RESET}")
+
+        rec_color = GREEN if "approved" in rec.lower() or "pass" in rec.lower() else YELLOW
+        print(f"Recommendation: {rec_color}{rec}{RESET}")
+        print(f"{BOLD}{'=' * 60}{RESET}")
+
+        print(f"\n{BOLD}Score breakdown:{RESET}")
         for tool_name, details in breakdown.items():
             s = details.get("score", 0)
             w = details.get("weight", 0)
             ws = details.get("weighted", 0)
-            print(f"  {tool_name:15s}  {s:5.1f}/100  (weight {w:.2f}, contribution {ws:.2f})")
+            prev_detail = prev_breakdown.get(tool_name, {})
+            prev_s = prev_detail.get("score") if has_previous else None
+            s_color = _score_color(s)
+            delta = _delta_str(s, prev_s)
+            print(f"  {tool_name:15s}  {s_color}/100  {DIM}(weight {w:.2f}, +{ws:.2f}){RESET}{delta}")
 
         collision = state.get("collision_results") or {}
         violations = collision.get("violations", [])
         if violations:
-            print(f"\nCollision violations ({len(violations)}):")
+            print(f"\n{RED}{BOLD}Collision violations ({len(violations)}):{RESET}")
             for v in violations[:5]:
                 if isinstance(v, str):
-                    print(f"  - {v}")
+                    print(f"  {RED}- {v}{RESET}")
                 elif isinstance(v, dict):
-                    print(f"  - {v.get('type', '?')}: {v.get('description', str(v))}")
+                    print(f"  {RED}- {v.get('type', '?')}: {v.get('description', str(v))}{RESET}")
 
         history = state.get("placement_history")
         if history:
-            print(f"\nFurniture changes made ({len(history)} items):")
+            print(f"\n{CYAN}{BOLD}Furniture changes made ({len(history)} items):{RESET}")
             for c in history:
                 name = c.get("name", "?")
                 action = c.get("action", "?")
@@ -397,37 +447,42 @@ def build_user_checkpoint_node(mcp_client):
                 if action == "moved":
                     fr = c.get("from", [0, 0])
                     to = c.get("to", [0, 0])
-                    print(f"  MOVED  {name:30s}  ({fr[0]:6.1f}, {fr[1]:6.1f}) -> ({to[0]:6.1f}, {to[1]:6.1f})  [{room}]")
+                    print(f"  {YELLOW}MOVED{RESET}  {name:30s}  ({fr[0]:6.1f}, {fr[1]:6.1f}) -> ({to[0]:6.1f}, {to[1]:6.1f})  {DIM}[{room}]{RESET}")
                 else:
                     to = c.get("to", [0, 0])
-                    print(f"  ADDED  {name:30s}  at ({to[0]:6.1f}, {to[1]:6.1f})  [{room}]")
+                    print(f"  {GREEN}ADDED{RESET}  {name:30s}  at ({to[0]:6.1f}, {to[1]:6.1f})  {DIM}[{room}]{RESET}")
 
         if integrity_warnings:
-            print(f"\nStructural integrity fixes applied:")
+            print(f"\n{YELLOW}Structural integrity fixes applied:{RESET}")
             for w in integrity_warnings:
-                print(w)
+                print(f"{YELLOW}{w}{RESET}")
 
         if door_changes:
-            print(f"\nDoor changes detected:")
+            print(f"\n{RED}Door changes detected:{RESET}")
             for dc in door_changes:
-                print(dc)
-            print("  (Review carefully — door modifications may affect accessibility)")
+                print(f"{RED}{dc}{RESET}")
+            print(f"  {DIM}(Review carefully — door modifications may affect accessibility){RESET}")
 
         # ── Interactive toggle loop ─────────────────────────────────────
         # The user can switch viewport views before approving or requesting
         # changes. Each number sends data to GH via MCP; the viewport
         # updates in real time. Non-numeric input exits the loop.
-        _vp = "set_viewport" if _viewport_state["use_set_viewport"] else "collision-detector-grid (slow)"
+        has_changes = bool(state.get("placement_history"))
 
         print(f"\n{'=' * 60}")
-        print(f"Viewport toggles (via {_vp}):")
+        print("Viewport toggles (via set_viewport):")
         print("  1 = BEFORE layout (original)")
-        print("  2 = AFTER layout (current)")
+        if has_changes:
+            print("  2 = AFTER layout (current)")
+        else:
+            print("  2 = AFTER layout (disabled — no changes made yet)")
         print("  3 = Collision analysis")
         print("  4 = Visibility analysis")
         print("  5 = Path analysis")
         print("  6 = Furniture only")
         print("  7 = Rooms + doors only")
+        print("  8 = Structure only")
+        print("  9 = Outline only")
         print(f"{'=' * 60}")
         print("Actions:")
         print("  'approve' -> save final layout and finish")
@@ -443,6 +498,10 @@ def build_user_checkpoint_node(mcp_client):
                     _send_layout_to_viewport(original, profile_config, "BEFORE layout")
                     continue
                 elif user_input == "2":
+                    if not has_changes:
+                        print("  -> No changes made yet — AFTER view not available.")
+                        print("     Describe changes first, then toggle AFTER to compare.")
+                        continue
                     print("  Sending AFTER (current) layout to viewport...")
                     _send_layout_to_viewport(current_layout, profile_config, "AFTER layout")
                     continue
@@ -475,6 +534,16 @@ def build_user_checkpoint_node(mcp_client):
                     _send_layout_to_viewport(current_layout, profile_config,
                                               "Rooms + doors view", mode="rooms")
                     continue
+                elif user_input == "8":
+                    print("  Sending structure view to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "Structure view", mode="structure")
+                    continue
+                elif user_input == "9":
+                    print("  Sending outline-only view to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "Outline view", mode="outline_only")
+                    continue
                 else:
                     # Not a toggle — exit the loop and handle as approve/change
                     break
@@ -482,8 +551,10 @@ def build_user_checkpoint_node(mcp_client):
                 print(f"  -> Viewport toggle failed: {exc}")
                 continue
 
-        # Build base updates — include restored layout if integrity was fixed
-        updates: dict = {}
+        # Build base updates — include restored layout if integrity was fixed.
+        # Always snapshot current scoring as previous_scoring so the next
+        # checkpoint visit can show the delta.
+        updates: dict = {"previous_scoring": scoring}
         if restored:
             updates["layout_json_string"] = json.dumps(current_layout)
 
@@ -797,6 +868,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "user_approved":         None,
         "adjustment_count":      0,
         "placement_history":     None,
+        "previous_scoring":      None,
         "original_layout":       ctx.layout_data,
         "_llm":                  ctx.llm,
     }
