@@ -506,19 +506,44 @@ def build_user_checkpoint_node(mcp_client):
                     _send_layout_to_viewport(current_layout, profile_config, "AFTER layout")
                     continue
                 elif user_input == "3":
-                    print("  Sending collision analysis to viewport...")
+                    print("  Switching to collision analysis view...")
+                    # Clear set_viewport so it doesn't overlap
                     _send_layout_to_viewport(current_layout, profile_config,
-                                              "Collision grid")
+                                              "clear", mode="none")
+                    # Send collision analysis to its own GH component
+                    layout_json = json.dumps(current_layout)
+                    profile = profile_config or {}
+                    gh_user_type = profile.get("profile_type", "wheelchair_user").replace("_user", "")
+                    gh_profile = {
+                        "user_type": gh_user_type,
+                        "body_width_m": profile.get("body_width", 0.70),
+                        "min_corridor_width_m": profile.get("min_path_width", 0.90),
+                        "min_door_width_m": profile.get("min_door_width", 0.85),
+                        "turning_radius_m": profile.get("turning_radius", 1.50),
+                    }
+                    try:
+                        mcp_client.call_tool("collision-detector-grid", {
+                            "layout_json": layout_json,
+                            "user_profile": json.dumps(gh_profile),
+                            "wall_thickness": 0.20,
+                        }, timeout=30.0)
+                        print("  -> Collision analysis sent to viewport")
+                    except Exception as exc:
+                        print(f"  -> Failed: {exc}")
                     continue
                 elif user_input == "4":
-                    print("  Sending visibility analysis to viewport...")
+                    print("  Switching to visibility analysis view...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "clear", mode="none")
                     _send_visibility_to_viewport(
                         state["layout_json_string"],
                         state.get("visibility_results"),
                     )
                     continue
                 elif user_input == "5":
-                    print("  Sending path analysis to viewport...")
+                    print("  Switching to path analysis view...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "clear", mode="none")
                     _send_paths_to_viewport(
                         state["layout_json_string"],
                         state.get("path_results"),

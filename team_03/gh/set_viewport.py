@@ -142,99 +142,104 @@ else:
         # -------------------------------------------------------------------
         # Determine which layers to draw based on mode
         # -------------------------------------------------------------------
-        show_rooms     = _mode in ("all", "rooms", "furniture", "doors")
-        show_doors     = _mode in ("all", "rooms", "doors")
-        show_windows   = _mode in ("all", "rooms")
-        show_furniture = _mode in ("all", "furniture")
-        show_mep       = _mode in ("all",)
-        show_structure = _mode in ("all", "structure")
-        show_outline   = _mode in ("all", "rooms", "outline_only", "structure",
-                                    "furniture", "doors")
+        # "none" mode: clear all geometry (used when switching to analysis views)
+        if _mode == "none":
+            info = json.dumps({"status": "ok", "mode": "none", "message": "cleared"})
 
-        counts = {}
+        else:
+            show_rooms     = _mode in ("all", "rooms", "furniture", "doors")
+            show_doors     = _mode in ("all", "rooms", "doors")
+            show_windows   = _mode in ("all", "rooms")
+            show_furniture = _mode in ("all", "furniture")
+            show_mep       = _mode in ("all",)
+            show_structure = _mode in ("all", "structure")
+            show_outline   = _mode in ("all", "rooms", "outline_only", "structure",
+                                        "furniture", "doors")
 
-        # -- Rooms --
-        if show_rooms:
-            for room in layout.get("rooms", []):
-                name = room.get("name")
-                geometry = room.get("geometry")
-                if name and geometry:
-                    curve = create_polyline(geometry, close=True)
-                    if curve:
-                        room_names.append(name)
-                        room_curves.append(curve)
-            counts["rooms"] = len(room_curves)
+            counts = {}
 
-        # -- Doors --
-        if show_doors:
-            for door in layout.get("doors", []):
-                name = door.get("name")
-                geometry = door.get("geometry")
-                if name and geometry:
-                    curve = create_line(geometry)
-                    if curve:
-                        door_names.append(name)
-                        door_curves.append(curve)
-            counts["doors"] = len(door_curves)
+            # -- Rooms --
+            if show_rooms:
+                for room in layout.get("rooms", []):
+                    name = room.get("name")
+                    geometry = room.get("geometry")
+                    if name and geometry:
+                        curve = create_polyline(geometry, close=True)
+                        if curve:
+                            room_names.append(name)
+                            room_curves.append(curve)
+                counts["rooms"] = len(room_curves)
 
-        # -- Windows --
-        if show_windows:
-            for window in layout.get("windows", []):
-                name = window.get("name")
-                geometry = window.get("geometry")
-                if name and geometry:
-                    curve = create_line(geometry)
-                    if curve:
-                        window_curves.append(curve)
-            counts["windows"] = len(window_curves)
+            # -- Doors --
+            if show_doors:
+                for door in layout.get("doors", []):
+                    name = door.get("name")
+                    geometry = door.get("geometry")
+                    if name and geometry:
+                        curve = create_line(geometry)
+                        if curve:
+                            door_names.append(name)
+                            door_curves.append(curve)
+                counts["doors"] = len(door_curves)
 
-        # -- Furniture --
-        if show_furniture:
-            for furn in layout.get("furniture", []):
-                name = furn.get("name")
-                geometry = furn.get("geometry")
-                if name and geometry:
-                    curve = create_polyline(geometry, close=True)
-                    if curve:
-                        furniture_names.append(name)
-                        furniture_curves.append(curve)
-            counts["furniture"] = len(furniture_curves)
+            # -- Windows --
+            if show_windows:
+                for window in layout.get("windows", []):
+                    name = window.get("name")
+                    geometry = window.get("geometry")
+                    if name and geometry:
+                        curve = create_line(geometry)
+                        if curve:
+                            window_curves.append(curve)
+                counts["windows"] = len(window_curves)
 
-        # -- MEP --
-        if show_mep:
-            for mep_item in layout.get("mep", []):
-                name = mep_item.get("name")
-                geometry = mep_item.get("geometry")
-                if name and geometry:
-                    curve = create_polyline(geometry, close=True)
-                    if curve:
-                        mep_curves.append(curve)
-            counts["mep"] = len(mep_curves)
+            # -- Furniture --
+            if show_furniture:
+                for furn in layout.get("furniture", []):
+                    name = furn.get("name")
+                    geometry = furn.get("geometry")
+                    if name and geometry:
+                        curve = create_polyline(geometry, close=True)
+                        if curve:
+                            furniture_names.append(name)
+                            furniture_curves.append(curve)
+                counts["furniture"] = len(furniture_curves)
 
-        # -- Structure --
-        if show_structure:
-            for s in layout.get("structure", []):
-                name = s.get("name")
-                geometry = s.get("geometry")
-                if name and geometry:
-                    curve = create_line(geometry)
-                    if curve:
-                        structure_curves.append(curve)
-            counts["structure"] = len(structure_curves)
+            # -- MEP --
+            if show_mep:
+                for mep_item in layout.get("mep", []):
+                    name = mep_item.get("name")
+                    geometry = mep_item.get("geometry")
+                    if name and geometry:
+                        curve = create_polyline(geometry, close=True)
+                        if curve:
+                            mep_curves.append(curve)
+                counts["mep"] = len(mep_curves)
 
-        # -- Outline --
-        if show_outline and "outline" in layout:
-            outline_curve = create_polyline(layout["outline"], close=True)
-            if outline_curve:
-                counts["outline"] = 1
+            # -- Structure --
+            if show_structure:
+                for s in layout.get("structure", []):
+                    name = s.get("name")
+                    geometry = s.get("geometry")
+                    if name and geometry:
+                        curve = create_line(geometry)
+                        if curve:
+                            structure_curves.append(curve)
+                counts["structure"] = len(structure_curves)
 
-        # -------------------------------------------------------------------
-        # Build status message (returned to the Python agent via MCP)
-        # -------------------------------------------------------------------
-        layout_id = layout.get("layoutId", "unknown")
-        info = json.dumps({
-            "status": "ok",
-            "mode": _mode,
-            "layoutId": layout_id,
-            "counts": counts,
-        })
+            # -- Outline --
+            if show_outline and "outline" in layout:
+                outline_curve = create_polyline(layout["outline"], close=True)
+                if outline_curve:
+                    counts["outline"] = 1
+
+            # ---------------------------------------------------------------
+            # Build status message (returned to the Python agent via MCP)
+            # ---------------------------------------------------------------
+            layout_id = layout.get("layoutId", "unknown")
+            info = json.dumps({
+                "status": "ok",
+                "mode": _mode,
+                "layoutId": layout_id,
+                "counts": counts,
+            })

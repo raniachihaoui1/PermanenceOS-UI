@@ -70,32 +70,59 @@ def _collision_score(collision_results: dict | None) -> float:
     if collision_results.get("pass"):
         # Full clearance on all checks — perfect score.
         return 100.0
-    summary = collision_results.get("summary", {})
-    # Proportional scoring based on blocked and warning areas.
-    # This allows the score to improve when furniture is repositioned,
-    # even if structural violations (e.g. bathroom turning radius) persist.
-    # Compute total layout area from grid dimensions for normalization.
-    # Python collision node uses "grid_meta"; MCP result uses "grid".
+
+    # Separate structural violations (walls — not actionable) from
+    # furniture/MEP violations (actionable by the agent).
+    # Structure violations penalized at 20% because the agent can't move
+    # walls, but they still represent real accessibility issues.
+    objects = collision_results.get("objects", [])
     grid = collision_results.get("grid_meta") or collision_results.get("grid", {})
     cols = grid.get("cols", 1)
     rows = grid.get("rows", 1)
     resolution = grid.get("resolution_m", 0.2)
     total_area = cols * rows * resolution * resolution
 
-    blocked_area = summary.get("blocked_area_m2", 0.0)
-    warning_area = summary.get("warning_area_m2", 0.0)
-
     if total_area <= 0:
         return 0.0
 
-    # blocked_pct: fraction of layout that is impassable
-    # warning_pct: fraction of layout below spec but still passable
-    blocked_pct = blocked_area / total_area
-    warning_pct = warning_area / total_area
+    furniture_blocked = 0.0
+    furniture_warning = 0.0
+    structure_blocked = 0.0
+    structure_warning = 0.0
 
-    # Score: 100 if no issues, drops proportionally.
-    # Blocked areas penalized 3x more heavily than warnings.
-    score = 100.0 * (1.0 - blocked_pct * 3.0 - warning_pct * 1.0)
+    for obj in objects:
+        obj_type = obj.get("object_type", "")
+        cv = obj.get("clearance_violation")
+        if not cv:
+            continue
+        b_area = cv.get("blocked_area_m2", 0.0)
+        w_area = cv.get("warning_area_m2", 0.0)
+        if obj_type == "structure":
+            structure_blocked += b_area
+            structure_warning += w_area
+        else:
+            furniture_blocked += b_area
+            furniture_warning += w_area
+
+    # Fallback: if no per-object data (older results), use summary totals
+    if not objects:
+        summary = collision_results.get("summary", {})
+        furniture_blocked = summary.get("blocked_area_m2", 0.0)
+        furniture_warning = summary.get("warning_area_m2", 0.0)
+
+    # Furniture: full penalty (agent can fix)
+    furn_blocked_pct = furniture_blocked / total_area
+    furn_warning_pct = furniture_warning / total_area
+
+    # Structure: reduced penalty (20%) — informational, not actionable
+    struct_blocked_pct = structure_blocked / total_area
+    struct_warning_pct = structure_warning / total_area
+
+    score = 100.0 * (1.0
+                     - furn_blocked_pct * 3.0
+                     - furn_warning_pct * 1.0
+                     - struct_blocked_pct * 0.6
+                     - struct_warning_pct * 0.2)
     return max(0.0, min(100.0, score))
 
 
