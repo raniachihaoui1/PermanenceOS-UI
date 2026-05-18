@@ -208,10 +208,48 @@ def group1_join_node(state: AgentState) -> dict:
 
 
 def build_user_checkpoint_node(mcp_client):
-    """Return a checkpoint node with access to MCP for viewport toggles."""
+    """Return a checkpoint node with access to MCP for viewport toggles.
 
-    def _send_layout_to_viewport(layout_data: dict, profile_config: dict | None, label: str):
-        """Push a layout to the GH viewport via collision-detector-grid."""
+    The toggle loop uses the lightweight `set_viewport` MCP tool when
+    available (draws geometry only, no analysis). Falls back to
+    `collision-detector-grid` if `set_viewport` is not registered in GH.
+    """
+
+    # Check once at build time whether set_viewport is available.
+    # Use a mutable list so the closure can disable it on repeated failures.
+    _viewport_state = {"use_set_viewport": False}
+    try:
+        tools = mcp_client.list_tools()
+        if any(t.get("name") == "set_viewport" for t in tools):
+            _viewport_state["use_set_viewport"] = True
+            print("[checkpoint] set_viewport MCP tool detected — using fast viewport toggle")
+    except Exception:
+        pass
+
+    def _send_layout_to_viewport(layout_data: dict, profile_config: dict | None,
+                                  label: str, mode: str = "all"):
+        """Push a layout to the GH viewport.
+
+        Prefers set_viewport (instant, no analysis) over collision-detector-grid
+        (runs full collision analysis — slow). Disables set_viewport after a
+        timeout so subsequent calls fall back immediately.
+        """
+        layout_json = json.dumps(layout_data)
+
+        if _viewport_state["use_set_viewport"]:
+            try:
+                mcp_client.call_tool("set_viewport", {
+                    "layout_json": layout_json,
+                    "mode": mode,
+                }, timeout=10.0)
+                print(f"  -> {label} sent to viewport (set_viewport, mode={mode})")
+                return
+            except Exception as exc:
+                _viewport_state["use_set_viewport"] = False
+                print(f"  -> set_viewport timed out/failed ({exc})")
+                print("  -> Disabled set_viewport for this session — using collision-detector-grid")
+
+        # Fallback: use collision-detector-grid (slower — runs analysis)
         profile = profile_config or {}
         gh_user_type = profile.get("profile_type", "wheelchair_user").replace("_user", "")
         gh_profile = {
@@ -223,11 +261,11 @@ def build_user_checkpoint_node(mcp_client):
         }
         try:
             mcp_client.call_tool("collision-detector-grid", {
-                "layout_json": json.dumps(layout_data),
+                "layout_json": layout_json,
                 "user_profile": json.dumps(gh_profile),
                 "wall_thickness": 0.20,
             })
-            print(f"  -> {label} sent to viewport")
+            print(f"  -> {label} sent to viewport (collision-detector-grid fallback)")
         except Exception as exc:
             print(f"  -> Failed to send {label}: {exc}")
 
@@ -312,6 +350,14 @@ def build_user_checkpoint_node(mcp_client):
             if door_id not in orig_doors:
                 door_changes.append(f"  ADDED: {curr_doors[door_id].get('name', door_id)}")
 
+        # ── Auto-send current layout to viewport on arrival ───────────
+        profile_config = state.get("profile_config")
+        try:
+            print("\n[checkpoint] Sending current layout to viewport...")
+            _send_layout_to_viewport(current_layout, profile_config, "Current layout")
+        except Exception as exc:
+            print(f"[checkpoint] Viewport auto-send failed ({exc}) — continuing without viewport")
+
         scoring = state.get("scoring_results") or {}
         score = scoring.get("total_score", 0)
         grade = scoring.get("grade", "?")
@@ -371,15 +417,17 @@ def build_user_checkpoint_node(mcp_client):
         # The user can switch viewport views before approving or requesting
         # changes. Each number sends data to GH via MCP; the viewport
         # updates in real time. Non-numeric input exits the loop.
-        profile_config = state.get("profile_config")
+        _vp = "set_viewport" if _viewport_state["use_set_viewport"] else "collision-detector-grid (slow)"
 
         print(f"\n{'=' * 60}")
-        print("Viewport toggles:")
+        print(f"Viewport toggles (via {_vp}):")
         print("  1 = BEFORE layout (original)")
         print("  2 = AFTER layout (current)")
         print("  3 = Collision analysis")
         print("  4 = Visibility analysis")
         print("  5 = Path analysis")
+        print("  6 = Furniture only")
+        print("  7 = Rooms + doors only")
         print(f"{'=' * 60}")
         print("Actions:")
         print("  'approve' -> save final layout and finish")
@@ -389,35 +437,50 @@ def build_user_checkpoint_node(mcp_client):
         while True:
             user_input = input("Your decision: ").strip()
 
-            if user_input == "1":
-                print("  Sending BEFORE (original) layout to viewport...")
-                _send_layout_to_viewport(original, profile_config, "BEFORE layout")
+            try:
+                if user_input == "1":
+                    print("  Sending BEFORE (original) layout to viewport...")
+                    _send_layout_to_viewport(original, profile_config, "BEFORE layout")
+                    continue
+                elif user_input == "2":
+                    print("  Sending AFTER (current) layout to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config, "AFTER layout")
+                    continue
+                elif user_input == "3":
+                    print("  Sending collision analysis to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "Collision grid")
+                    continue
+                elif user_input == "4":
+                    print("  Sending visibility analysis to viewport...")
+                    _send_visibility_to_viewport(
+                        state["layout_json_string"],
+                        state.get("visibility_results"),
+                    )
+                    continue
+                elif user_input == "5":
+                    print("  Sending path analysis to viewport...")
+                    _send_paths_to_viewport(
+                        state["layout_json_string"],
+                        state.get("path_results"),
+                    )
+                    continue
+                elif user_input == "6":
+                    print("  Sending furniture-only view to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "Furniture view", mode="furniture")
+                    continue
+                elif user_input == "7":
+                    print("  Sending rooms + doors view to viewport...")
+                    _send_layout_to_viewport(current_layout, profile_config,
+                                              "Rooms + doors view", mode="rooms")
+                    continue
+                else:
+                    # Not a toggle — exit the loop and handle as approve/change
+                    break
+            except Exception as exc:
+                print(f"  -> Viewport toggle failed: {exc}")
                 continue
-            elif user_input == "2":
-                print("  Sending AFTER (current) layout to viewport...")
-                _send_layout_to_viewport(current_layout, profile_config, "AFTER layout")
-                continue
-            elif user_input == "3":
-                print("  Sending collision analysis to viewport...")
-                _send_layout_to_viewport(current_layout, profile_config, "Collision grid")
-                continue
-            elif user_input == "4":
-                print("  Sending visibility analysis to viewport...")
-                _send_visibility_to_viewport(
-                    state["layout_json_string"],
-                    state.get("visibility_results"),
-                )
-                continue
-            elif user_input == "5":
-                print("  Sending path analysis to viewport...")
-                _send_paths_to_viewport(
-                    state["layout_json_string"],
-                    state.get("path_results"),
-                )
-                continue
-            else:
-                # Not a toggle — exit the loop and handle as approve/change
-                break
 
         # Build base updates — include restored layout if integrity was fixed
         updates: dict = {}

@@ -95,6 +95,7 @@ Discovered at runtime from Swiftlet. Currently:
 - `place_objects` — places objects in a room. Params: `layout_json`, `room_name`, `objects_list` (JSON array of `{name, position, size}`), `user_profile`, `clear_room`
 - `visualize_visibility` — pushes visibility results to GH for rendering
 - `visualize_paths` — pushes path results to GH for rendering
+- `set_viewport` — lightweight layout renderer for viewport toggles (no analysis). Params: `layout_json`, `mode` (`"all"`, `"rooms"`, `"furniture"`, `"doors"`, `"structure"`, `"outline_only"`). GHPython script at `gh/set_viewport.py`. Used by the checkpoint toggle for instant before/after switching.
 
 All tool calls automatically receive `layout_json` (current layout state) injected by `nodes/tools.py` or `nodes/add_objects.py`.
 
@@ -398,6 +399,20 @@ The Grasshopper definition (`gh/team_03_working.gh`) contains GHPython scripts t
 **Input:** `room_name` (string)
 **Output:** `point` (Rhino Point3d)
 
+### Script 7 — set_viewport (Viewport Toggle)
+**Source:** `gh/set_viewport.py`
+**Input:** `layout_json` (full layout JSON string), `mode` (string: `"all"`, `"rooms"`, `"furniture"`, `"doors"`, `"structure"`, `"outline_only"`)
+**Output:** `room_curves`, `room_names`, `door_curves`, `door_names`, `furniture_curves`, `furniture_names`, `window_curves`, `structure_curves`, `mep_curves`, `outline_curve`, `info`
+
+**Setup in GH:**
+1. Add a new GHPython component to `team_03_working.gh`
+2. Rename the component to `set_viewport` (this becomes the MCP tool name)
+3. Add input parameters: `layout_json` (str), `mode` (str)
+4. Add output parameters: `room_curves`, `room_names`, `door_curves`, `door_names`, `furniture_curves`, `furniture_names`, `window_curves`, `structure_curves`, `mep_curves`, `outline_curve`, `info`
+5. Paste the contents of `gh/set_viewport.py` into the GHPython editor
+6. Connect outputs to Preview/Custom Preview components
+7. Restart Swiftlet — the tool auto-discovers
+
 ### Script 6 — Visibility Analysis (Isovist)
 **Input:** `path` (to layout.json), `boundary` (Rhino curve — isovist boundary), `current_room` (string)
 **Output:** `a` (JSON with visibility percentages per room)
@@ -484,6 +499,7 @@ team_03/
   output/                           # Final approved layouts (timestamped)
   gh/
     team_03_working.gh              # Main Grasshopper definition
+    set_viewport.py                 # GHPython script for viewport toggle MCP tool
     team_03_definition_cluster.ghcluster
     team_03_result_cluster.ghcluster
   ramon_experiments/                # Archived scripts and conversation analysis
