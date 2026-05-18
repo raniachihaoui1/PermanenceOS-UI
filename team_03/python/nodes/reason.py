@@ -176,12 +176,26 @@ def build_reason_node(llm: Any):
         if context_injection:
             messages = [{"role": "user", "content": context_injection}] + messages
 
-        result = call_llm(llm, SYSTEM_PROMPT, messages, state["tool_catalog"])
+        try:
+            result = call_llm(llm, SYSTEM_PROMPT, messages, state["tool_catalog"])
+        except Exception as exc:
+            print(f"[reason] LLM call failed: {exc}")
+            return {
+                "final_response": f"LLM error: {exc}",
+                "pending_tool_calls": [],
+                "object_to_place": {},
+            }
+
+        # Build an update dict — never mutate state directly.
+        updates: dict = {}
 
         if result["action"] == "final":
             # LLM is done — store the response and clear any queued tool calls.
-            state["final_response"] = result["final_response"]
-            state["pending_tool_calls"] = None
+            # Use empty containers ({} / []) instead of None to clear fields:
+            # _keep_last treats None as "no update" and preserves the old value.
+            updates["final_response"] = result["final_response"]
+            updates["pending_tool_calls"] = []
+            updates["object_to_place"] = {}
 
         else:
             # LLM wants to call tools — split place_object from everything else.
@@ -204,19 +218,23 @@ def build_reason_node(llm: Any):
                 # Signal the graph to route to add_objects on the next edge.
                 # Only the first place_object call is taken per turn so the LLM
                 # can review analysis results before placing the next object.
-                state["object_to_place"] = place_calls[0]["arguments"]
+                updates["object_to_place"] = place_calls[0]["arguments"]
                 print(f"Placing object: {place_calls[0]['arguments'].get('objects_list', '')}")
             else:
-                state["object_to_place"] = None
+                # Clear with {} — _keep_last treats None as "no update" and
+                # would preserve the stale value from a previous placement.
+                updates["object_to_place"] = {}
 
             # Pass any non-placement tool calls to tools.py as normal.
-            state["pending_tool_calls"] = other_calls if other_calls else None
+            # Use [] instead of None so _keep_last actually clears the field.
+            updates["pending_tool_calls"] = other_calls if other_calls else []
 
             # Clear stale final_response so the routing function doesn't
             # mistake a value from a previous turn as "finish".
-            if not other_calls:
-                state["final_response"] = None
+            # Use empty string instead of None — the _keep_last reducer treats
+            # None as "no update" and would preserve the stale value.
+            updates["final_response"] = ""
 
-        return state
+        return updates
 
     return reason_node

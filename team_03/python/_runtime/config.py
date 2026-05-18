@@ -19,8 +19,9 @@ class Settings:
 
 
 def _repo_root() -> Path:
-    # team_03/python/_runtime/config.py → parents[2] is team_03/
-    return Path(__file__).resolve().parents[2]
+    # team_03/python/_runtime/config.py → parents[3] is AIA26_Studio/ (repo root)
+    # .env and mcp.json live at the repo root, not inside team_03/
+    return Path(__file__).resolve().parents[3]
 
 
 def _required_env(name: str) -> str:

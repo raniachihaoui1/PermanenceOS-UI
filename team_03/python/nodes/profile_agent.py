@@ -181,19 +181,34 @@ def build_profile_agent_node(llm: Any, knowledge_dir: Path):
         system = PROFILE_SYSTEM_PROMPT.format(knowledge_context=knowledge_text)
         result = call_llm_simple(llm, system, user_msg)
 
-        # 5. Validate or fall back
-        if result and "profile_type" in result:
+        # 5. Validate or fall back — handle nested LLM responses
+        #    LLM sometimes wraps the profile in extra layers like
+        #    {"accessibility_analysis": {"profile": {"profile_type": ...}}}
+        if result and isinstance(result, dict) and "profile_type" not in result:
+            # Search one or two levels deep for a dict with "profile_type"
+            for v in result.values():
+                if isinstance(v, dict):
+                    if "profile_type" in v:
+                        result = v
+                        break
+                    for v2 in v.values():
+                        if isinstance(v2, dict) and "profile_type" in v2:
+                            result = v2
+                            break
+
+        if result and isinstance(result, dict) and "profile_type" in result:
             profile_config = result
+            print(f"  [profile_agent] Using LLM-generated profile: {result.get('profile_type')}")
         else:
             profile_config = DEFAULT_PROFILES.get(
                 detected_type, DEFAULT_PROFILES["wheelchair_user"]
             )
+            print(f"  [profile_agent] LLM result invalid, falling back to default: {detected_type}")
 
-        state["profile_config"] = profile_config
         ptype = profile_config.get("profile_type", "unknown")
         mpath = profile_config.get("min_path_width", "?")
         turn = profile_config.get("turning_radius", "?")
         print(f"  Profile: {ptype} (min_path: {mpath}m, turning: {turn}m)")
-        return state
+        return {"profile_config": profile_config}
 
     return profile_agent_node

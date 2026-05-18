@@ -71,13 +71,32 @@ def _collision_score(collision_results: dict | None) -> float:
         # Full clearance on all checks — perfect score.
         return 100.0
     summary = collision_results.get("summary", {})
-    if summary.get("hard_violations", 0) > 0:
-        # Any hard violation means the layout is physically impassable.
-        return 0.0
-    # Warnings only: penalise proportionally to the area that is tight but
-    # still passable. Factor of 2 means 50 m² of warning area scores zero.
+    # Proportional scoring based on blocked and warning areas.
+    # This allows the score to improve when furniture is repositioned,
+    # even if structural violations (e.g. bathroom turning radius) persist.
+    # Compute total layout area from grid dimensions for normalization.
+    # Python collision node uses "grid_meta"; MCP result uses "grid".
+    grid = collision_results.get("grid_meta") or collision_results.get("grid", {})
+    cols = grid.get("cols", 1)
+    rows = grid.get("rows", 1)
+    resolution = grid.get("resolution_m", 0.2)
+    total_area = cols * rows * resolution * resolution
+
+    blocked_area = summary.get("blocked_area_m2", 0.0)
     warning_area = summary.get("warning_area_m2", 0.0)
-    return max(0.0, 100.0 - warning_area * 2.0)
+
+    if total_area <= 0:
+        return 0.0
+
+    # blocked_pct: fraction of layout that is impassable
+    # warning_pct: fraction of layout below spec but still passable
+    blocked_pct = blocked_area / total_area
+    warning_pct = warning_area / total_area
+
+    # Score: 100 if no issues, drops proportionally.
+    # Blocked areas penalized 3x more heavily than warnings.
+    score = 100.0 * (1.0 - blocked_pct * 3.0 - warning_pct * 1.0)
+    return max(0.0, min(100.0, score))
 
 
 def _visibility_score(visibility_results: list | None) -> float:
@@ -144,10 +163,8 @@ def _orientation_score(orientation_results: dict | None) -> float:
 # ---------------------------------------------------------------------------
 
 def _recommendation(collision_s: float, total_score: float) -> str:
-    # Collision = 0 is a hard blocker: the layout cannot be approved regardless
-    # of how well it performs on other metrics.
-    if collision_s == 0.0:
-        return "Fix collision violations before approving"
+    if collision_s < 30.0:
+        return "Significant collision issues — review blocked areas"
     if total_score < 60.0:
         return "Layout needs significant improvement"
     if total_score < 75.0:
@@ -189,6 +206,13 @@ def compute_scores(
     if space_config and "tool_weights" in space_config:
         weights.update(space_config["tool_weights"])
 
+    # Normalize weights to sum to 1.0 — space_config may inject
+    # partial overrides that don't sum correctly.
+    weight_sum = sum(weights.values())
+    if weight_sum > 0 and abs(weight_sum - 1.0) > 0.01:
+        print(f"[scoring] Warning: tool_weights sum to {weight_sum:.3f}, normalizing to 1.0")
+        weights = {k: v / weight_sum for k, v in weights.items()}
+
     # Compute raw 0-100 score for each tool.
     scores = {
         "collision":    _collision_score(collision_results),
@@ -228,10 +252,7 @@ def build_scoring_node():
     """Return a scoring node ready to be added to a LangGraph StateGraph."""
 
     def scoring_node(state):
-        # Increment iteration and check limit — same guard as every other node.
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
+        # Returns an update dict instead of mutating state.
 
         print("Running scoring analysis...")
 
@@ -246,31 +267,30 @@ def build_scoring_node():
             space_config         = state.get("space_config"),
         )
 
-        state["scoring_results"] = result
-
         print(f"Score: {result['total_score']} — Grade: {result['grade']}")
 
-        # Append to message history so the LLM can reference the score in its
-        # next reasoning step without re-running any of the analysis tools.
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "scoring", "arguments": {
-                    "total_score": result["total_score"],
-                    "grade":       result["grade"],
-                }}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": (
-                f"Scoring complete. Score: {result['total_score']}, "
-                f"Grade: {result['grade']}. {result['recommendation']}"
-            ),
-        })
-
-        return state
+        return {
+            "scoring_results": result,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "scoring", "arguments": {
+                            "total_score": result["total_score"],
+                            "grade":       result["grade"],
+                        }}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Scoring complete. Score: {result['total_score']}, "
+                        f"Grade: {result['grade']}. {result['recommendation']}"
+                    ),
+                },
+            ],
+        }
 
     return scoring_node

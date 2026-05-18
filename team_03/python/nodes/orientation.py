@@ -182,42 +182,48 @@ def build_orientation_node(mcp_client):
     """Return an orientation node ready to be added to a LangGraph StateGraph."""
 
     def orientation_node(state):
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
+        # Parallel-safe: returns an update dict instead of mutating state.
+        # Do NOT increment iteration — parallel nodes share the counter and
+        # the _keep_last reducer would silently drop increments from siblings.
 
-        layout  = json.loads(state["layout_json_string"])
-        output  = check_orientation(layout)
+        print("Running orientation analysis...")
+        try:
+            layout  = json.loads(state["layout_json_string"])
+            output  = check_orientation(layout)
+        except Exception as exc:
+            print(f"[orientation] Analysis failed: {exc}")
+            output = {"results": [], "summary": {"total": 0, "facing_ok": 0, "facing_wrong": 0, "skipped": 0, "wrong_objects": []}}
         summary = output["summary"]
 
         print(
-            f"Running orientation analysis... "
-            f"{summary['facing_ok']}/{summary['total']} objects correctly oriented "
+            f"  {summary['facing_ok']}/{summary['total']} objects correctly oriented "
             f"({summary['skipped']} skipped)."
         )
 
         # Placeholder — visualize_orientation not yet implemented in GH MCP server
         print("visualize_orientation: placeholder (MCP tool not yet available)")
 
-        state["orientation_results"] = output
-
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "visualize_orientation", "arguments": {
-                    "total":     summary["total"],
-                    "facing_ok": summary["facing_ok"],
-                    "skipped":   summary["skipped"],
-                }}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": "Tool result: visualize_orientation placeholder",
-        })
-
-        return state
+        # Return partial update — LangGraph merges via add_messages / _keep_last.
+        return {
+            "orientation_results": output,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "visualize_orientation", "arguments": {
+                            "total":     summary["total"],
+                            "facing_ok": summary["facing_ok"],
+                            "skipped":   summary["skipped"],
+                        }}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": "Tool result: visualize_orientation placeholder",
+                },
+            ],
+        }
 
     return orientation_node

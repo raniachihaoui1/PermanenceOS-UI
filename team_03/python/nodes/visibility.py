@@ -155,38 +155,48 @@ def build_visibility_node(mcp_client):
     """Return a visibility node ready to be added to a LangGraph StateGraph."""
 
     def visibility_node(state):
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
+        # Parallel-safe: returns an update dict instead of mutating state.
+        # Do NOT increment iteration — parallel nodes share the counter and
+        # the _keep_last reducer would silently drop increments from siblings.
 
-        layout = json.loads(state["layout_json_string"])
-        results = check_visibility(layout)
+        print("Running visibility analysis...")
+        try:
+            layout = json.loads(state["layout_json_string"])
+            results = check_visibility(layout)
+        except Exception as exc:
+            print(f"[visibility] Analysis failed: {exc}")
+            results = []
         visibility_json = json.dumps(results)
 
-        print(f"Running visibility analysis... {len(results)} pairs checked.")
+        print(f"  {len(results)} pairs checked.")
 
-        tool_output = mcp_client.call_tool("visualize_visibility", {
-            "layout_json": state["layout_json_string"],
-            "visibility_json": visibility_json,
-        })
+        try:
+            tool_output = mcp_client.call_tool("visualize_visibility", {
+                "layout_json": state["layout_json_string"],
+                "visibility_json": visibility_json,
+            })
+        except Exception as e:
+            tool_output = f"visualize_visibility error: {e}"
 
-        state["visibility_results"] = results
+        print(f"Visibility tool result: {str(tool_output)[:500]}")
 
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "visualize_visibility", "arguments": {"pairs_checked": len(results)}}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": f"Tool result: {tool_output}",
-        })
-
-        print(f"Visibility tool result: {tool_output[:500]}")
-
-        return state
+        # Return partial update — LangGraph merges via add_messages / _keep_last.
+        return {
+            "visibility_results": results,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "visualize_visibility", "arguments": {"pairs_checked": len(results)}}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": f"Tool result: {str(tool_output)[:500]}",
+                },
+            ],
+        }
 
     return visibility_node

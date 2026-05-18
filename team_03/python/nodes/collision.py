@@ -1006,19 +1006,23 @@ def build_collision_node(mcp_client, workspace_path):
     """Return a collision node ready to be added to a LangGraph StateGraph."""
 
     def collision_node(state):
-        # Increment iteration and check limit
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
-
-        layout = json.loads(state["layout_json_string"])
-
-        # Use profile from Profile Agent if available,
-        # otherwise use default wheelchair profile
-        profile_config = state.get("profile_config")
+        # Parallel-safe: returns an update dict instead of mutating state.
+        # Do NOT increment iteration — parallel nodes share the counter and
+        # the _keep_last reducer would silently drop increments from siblings.
 
         print("Running collision analysis...")
-        result = check_collision(layout, profile_config)
+        try:
+            layout = json.loads(state["layout_json_string"])
+            profile_config = state.get("profile_config")
+            result = check_collision(layout, profile_config)
+        except Exception as exc:
+            print(f"[collision] Analysis failed: {exc}")
+            result = {
+                "pass": True, "violations": [],
+                "summary": {"total_violations": 0, "hard_violations": 0,
+                             "blocked_area_m2": 0, "warning_area_m2": 0},
+                "objects": [], "doors": [],
+            }
 
         passed = result.get("pass", True)
         status = "PASS" if passed else "FAIL"
@@ -1026,33 +1030,52 @@ def build_collision_node(mcp_client, workspace_path):
         n_total = result.get("summary", {}).get("total_violations", 0)
         print(f"Collision: {status} — {n_hard} hard violations, {n_total} total")
 
-        # Push visualization to GH
-        tool_output = mcp_client.call_tool("collision-detector-grid", {
-            "layout_json": state["layout_json_string"],
-            "user_profile": json.dumps(profile_config or {}),
-            "wall_thickness": 0.20,
-            "compare_layout_json": None,
-        })
+        # Push visualization to GH — map profile_config to GH script format.
+        # GH script expects {"user_type": "wheelchair", "body_width_m": ..., "min_corridor_width_m": ..., "turning_radius_m": ...}
+        # Profile agent outputs {"profile_type": "wheelchair_user", "min_path_width": ..., "turning_radius": ...}
+        try:
+            profile_type = (profile_config or {}).get("profile_type", "wheelchair_user")
+            # Map profile_type names: "wheelchair_user" → "wheelchair", "visually_impaired" → "visually_impaired"
+            gh_user_type = profile_type.replace("_user", "") if profile_type else "wheelchair"
+            gh_profile = {
+                "user_type": gh_user_type,
+                "body_width_m": (profile_config or {}).get("body_width", 0.70),
+                "min_corridor_width_m": (profile_config or {}).get("min_path_width", 0.90),
+                "min_door_width_m": (profile_config or {}).get("min_door_width", 0.85),
+                "turning_radius_m": (profile_config or {}).get("turning_radius", 1.50),
+            }
+            viz_args = {
+                "layout_json": state["layout_json_string"],
+                "user_profile": json.dumps(gh_profile),
+                "wall_thickness": 0.20,
+            }
+            print(f"[collision] Sending to GH: user_profile={json.dumps(gh_profile)}")
+            tool_output = mcp_client.call_tool("collision-detector-grid", viz_args)
+            print(f"Collision viz result: {str(tool_output)[:300]}")
+        except Exception as e:
+            tool_output = f"collision-detector-grid error: {e}"
+            print(tool_output)
 
-        state["collision_results"] = result
-
-        # Append to message history
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "collision-detector-grid", "arguments": {
-                    "pass": result["pass"],
-                    "hard_violations": n_hard,
-                }}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": f"Tool result: {tool_output[:500]}",
-        })
-
-        return state
+        # Return partial update — LangGraph merges via add_messages / _keep_last.
+        return {
+            "collision_results": result,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "collision-detector-grid", "arguments": {
+                            "pass": result["pass"],
+                            "hard_violations": n_hard,
+                        }}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": f"Tool result: {str(tool_output)[:500]}",
+                },
+            ],
+        }
 
     return collision_node

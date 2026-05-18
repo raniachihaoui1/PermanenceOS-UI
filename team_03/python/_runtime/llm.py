@@ -216,6 +216,20 @@ def _parse_llm_json(content: str) -> dict[str, Any]:
     )
 
 
+def _extract_tool_name(t: dict) -> str:
+    """Extract tool name from a tool call dict, handling LLM format variations."""
+    return t.get("name") or t.get("tool_name") or t.get("function", "")
+
+
+def _normalize_tool_calls(raw_calls: list) -> list[dict]:
+    """Normalize a list of tool call dicts to [{name, arguments}, ...]."""
+    return [
+        {"name": _extract_tool_name(t), "arguments": t.get("arguments", t.get("input", {}))}
+        for t in raw_calls
+        if _extract_tool_name(t)
+    ]
+
+
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     action = parsed.get("action")
 
@@ -226,10 +240,7 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
         tool_calls = parsed.get("tool_calls")
         if not isinstance(tool_calls, list) or not tool_calls:
             raise RuntimeError("LLM tool decision must include a non-empty 'tool_calls' array")
-        return {
-            "action": "tool",
-            "tool_calls": [{"name": t["name"], "arguments": t["arguments"]} for t in tool_calls],
-        }
+        return {"action": "tool", "tool_calls": _normalize_tool_calls(tool_calls)}
 
     if "final_response" in parsed:
         return {"action": "final", "final_response": parsed["final_response"]}
@@ -238,15 +249,12 @@ def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     if isinstance(tool_call, dict):
         return {
             "action": "tool",
-            "tool_calls": [{"name": tool_call["name"], "arguments": tool_call["arguments"]}],
+            "tool_calls": [{"name": _extract_tool_name(tool_call), "arguments": tool_call.get("arguments", tool_call.get("input", {}))}],
         }
 
     tool_calls = parsed.get("tool_calls")
     if isinstance(tool_calls, list) and tool_calls:
-        return {
-            "action": "tool",
-            "tool_calls": [{"name": t["name"], "arguments": t["arguments"]} for t in tool_calls],
-        }
+        return {"action": "tool", "tool_calls": _normalize_tool_calls(tool_calls)}
 
     raise RuntimeError("LLM response must include either 'final_response' or 'tool_call'")
 
@@ -265,15 +273,27 @@ def _call_anthropic(
     model   = client_dict["_model"]
     timeout = client_dict["_timeout"]
 
-    formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
+    # Use replace() instead of .format() — the prompt may contain literal
+    # braces from JSON content that .format() would choke on.
+    formatted_prompt = system_prompt.replace("{tool_catalog}", tool_catalog)
 
-    # Anthropic only accepts "user" and "assistant" roles
+    # Anthropic only accepts "user" and "assistant" roles.
+    # Handle both plain dicts and LangChain message objects (HumanMessage, etc.)
+    # since the add_messages reducer may convert dicts to message objects.
     anthropic_messages = []
     for msg in messages:
-        role    = msg.get("role", "user")
-        content = msg.get("content", "")
+        if isinstance(msg, dict):
+            role    = msg.get("role", "user")
+            content = msg.get("content", "")
+        else:
+            role    = getattr(msg, "type", "user")
+            content = getattr(msg, "content", "")
         if role == "system":
             continue
+        if role == "human":
+            role = "user"
+        elif role == "ai":
+            role = "assistant"
         anthropic_messages.append({"role": role, "content": content})
 
     response = client.messages.create(
@@ -309,7 +329,7 @@ def call_llm(
         return _call_anthropic(llm, system_prompt, messages, tool_catalog)
 
     # Local / OpenAI / Cloudflare path — use LangChain
-    formatted_prompt = system_prompt.format(tool_catalog=tool_catalog)
+    formatted_prompt = system_prompt.replace("{tool_catalog}", tool_catalog)
     llm_messages = [{"role": "system", "content": formatted_prompt}] + messages
 
     result = llm.invoke(llm_messages)
@@ -339,15 +359,30 @@ def call_llm_simple(
     schema is expected — just free-form JSON.
     """
     try:
-        # Anthropic path — reuse _call_anthropic
-        # with empty tool_catalog
+        # Anthropic path — call API directly and parse as free-form JSON.
+        # Do NOT route through _call_anthropic / _normalize_llm_decision
+        # because pre-agents return free-form JSON (e.g. {"profile_type": ...}),
+        # not the {"action": "final", "tool_calls": [...]} schema that
+        # _normalize_llm_decision expects.
         if isinstance(llm, dict) and llm.get("_type") == "anthropic":
-            result = _call_anthropic(
-                llm, system_prompt,
-                [{"role": "user", "content": user_message}],
-                ""
+            client  = llm["_client"]
+            model   = llm["_model"]
+            timeout = llm["_timeout"]
+            response = client.messages.create(
+                model=model,
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}],
+                timeout=timeout,
             )
-            return result if isinstance(result, dict) else None
+            content = response.content[0].text
+            print(f"\n[llm_simple] Raw response preview:\n{content[:400]}")
+            cleaned = _strip_markdown_code_fence(content)
+            json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(0))
+                return parsed if isinstance(parsed, dict) else None
+            return None
 
         # Local/OpenAI path — invoke via LangChain
         messages = [

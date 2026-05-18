@@ -150,40 +150,44 @@ def build_reachability_node(mcp_client):
     """Return a reachability node ready to be added to a LangGraph StateGraph."""
 
     def reachability_node(state):
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
+        # Returns an update dict instead of mutating state.
 
-        layout  = json.loads(state["layout_json_string"])
-        output  = check_reachability(layout)
+        print("Running reachability analysis...")
+        try:
+            layout  = json.loads(state["layout_json_string"])
+            profile = state.get("profile_config")
+            output  = check_reachability(layout, profile)
+        except Exception as exc:
+            print(f"[reachability] Analysis failed: {exc}")
+            output = {"results": [], "summary": {"total": 0, "reachable": 0, "unreachable": 0, "unreachable_objects": []}}
         summary = output["summary"]
 
         print(
-            f"Running reachability analysis... "
-            f"{summary['reachable']}/{summary['total']} objects reachable."
+            f"  {summary['reachable']}/{summary['total']} objects reachable."
         )
 
         # Placeholder — visualize_reachability not yet implemented in GH MCP server
         print("visualize_reachability: placeholder (MCP tool not yet available)")
 
-        state["reachability_results"] = output
-
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "visualize_reachability", "arguments": {
-                    "total":     summary["total"],
-                    "reachable": summary["reachable"],
-                }}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": "Tool result: visualize_reachability placeholder",
-        })
-
-        return state
+        return {
+            "reachability_results": output,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "visualize_reachability", "arguments": {
+                            "total":     summary["total"],
+                            "reachable": summary["reachable"],
+                        }}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": "Tool result: visualize_reachability placeholder",
+                },
+            ],
+        }
 
     return reachability_node

@@ -14,18 +14,34 @@ def build_tool_node(mcp_client, allowed_tools, workspace_path):
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
 
     def tool_node(state):
+        # Returns an update dict instead of mutating state.
+        new_messages = []
+        layout_json_string = state["layout_json_string"]
+        iteration = state["iteration"]
 
-        for call in state["pending_tool_calls"]:
+        pending = state.get("pending_tool_calls")
+        if not pending:
+            print("[tools] Warning: no pending tool calls — returning to reason")
+            return {
+                "pending_tool_calls": None,
+                "iteration": iteration,
+                "layout_json_string": layout_json_string,
+                "messages": [],
+            }
+
+        for call in pending:
 
             # Stop the process if max number of iterations is reached
-            state["iteration"] += 1
-            if state["iteration"] > state["max_iterations"]:
+            iteration += 1
+            if iteration > state["max_iterations"]:
                 raise RuntimeError("Max iterations exceeded")
 
             # Validate the tool name against the allowed list
             tool_name = call["name"]
             if tool_name not in allowed_names:
-                raise RuntimeError(f"Tool '{tool_name}' is not in the allowed tools list")
+                print(f"[tools] Warning: tool '{tool_name}' not found — skipping")
+                new_messages.append({"role": "user", "content": f"Tool '{tool_name}' is not available. Available tools: {', '.join(sorted(allowed_names))}"})
+                continue
 
             print(f"Calling tool: {tool_name} with arguments: {call['arguments']}")
 
@@ -45,10 +61,14 @@ def build_tool_node(mcp_client, allowed_tools, workspace_path):
                 .get("properties", {})
             )
             if needs_layout:
-                tool_args["layout_json"] = state["layout_json_string"]
+                tool_args["layout_json"] = layout_json_string
 
             # Execute the tool via the MCP client
-            tool_output = mcp_client.call_tool(tool_name, tool_args)
+            try:
+                tool_output = mcp_client.call_tool(tool_name, tool_args)
+            except Exception as exc:
+                print(f"[tools] MCP call failed for {tool_name}: {exc}")
+                tool_output = f"MCP error: {exc}"
 
             # workspace_path is set in AgentState in graph.py — tools.py reads it from state
             try:
@@ -56,21 +76,21 @@ def build_tool_node(mcp_client, allowed_tools, workspace_path):
                 if isinstance(updated, dict):
                     if "rooms" in updated:
                         # Full layout returned — replace the session entirely
-                        state["layout_json_string"] = json.dumps(updated)
+                        layout_json_string = json.dumps(updated)
                         save_session(updated, workspace_path)
                     elif "doors" in updated:
                         # widen_doors returns only the doors array —
                         # merge into the current layout instead of replacing entirely
-                        current = json.loads(state["layout_json_string"])
+                        current = json.loads(layout_json_string)
                         current["doors"] = updated["doors"]
-                        state["layout_json_string"] = json.dumps(current)
+                        layout_json_string = json.dumps(current)
                         save_session(current, workspace_path)
-            except (json.JSONDecodeError, AttributeError, KeyError):
-                pass
+            except (json.JSONDecodeError, AttributeError, KeyError) as exc:
+                print(f"[tools] JSON parse warning: {exc}")
 
             # Append the tool call to conversation history, excluding layout_json
             # to keep logs readable — the full JSON is already in state
-            state["messages"].append({
+            new_messages.append({
                 "role": "assistant",
                 "content": json.dumps({
                     "action": "tool",
@@ -84,12 +104,16 @@ def build_tool_node(mcp_client, allowed_tools, workspace_path):
             # Truncate the tool result log to avoid flooding the console
             print(f"Tool result: {tool_output[:500]}")
 
-            state["messages"].append({
+            new_messages.append({
                 "role": "user",
                 "content": f"Tool result: {tool_output[:500]}",
             })
 
-        state["pending_tool_calls"] = None
-        return state
+        return {
+            "pending_tool_calls": [],
+            "iteration": iteration,
+            "layout_json_string": layout_json_string,
+            "messages": new_messages,
+        }
 
     return tool_node

@@ -17,15 +17,16 @@ def main():
 
     # Initialize and run the agent
     ctx = bootstrap()
-    response = run_agent(args.prompt, ctx)
+    try:
+        response = run_agent(args.prompt, ctx)
 
-    # Print the final response
-    print("\nAgent response:\n")
-    safe_response = response.encode("ascii", errors="replace").decode("ascii")
-    print(safe_response)
-
-    # Clean up by properly closing the MCP client connection
-    ctx.mcp_client.close()
+        # Print the final response
+        print("\nAgent response:\n")
+        safe_response = response.encode("ascii", errors="replace").decode("ascii")
+        print(safe_response)
+    finally:
+        # Always close MCP client, even if run_agent crashes
+        ctx.mcp_client.close()
 
 
 if __name__ == "__main__":

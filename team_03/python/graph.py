@@ -64,8 +64,9 @@ class AgentState(TypedDict):
     max_iterations:      int
     tool_catalog:        str
 
-    # Layout and session paths — stable for the lifetime of one run.
-    layout_json_string:  str
+    # Layout and session paths — layout_json_string is updated by add_objects
+    # and tools nodes after placements; needs _keep_last so updates propagate.
+    layout_json_string:  Annotated[str, _keep_last]
     workspace_path:      str
     layout_name:         str
     _llm:                Any
@@ -93,6 +94,15 @@ class AgentState(TypedDict):
     evaluation_passed:   Annotated[bool | None,           _keep_last]
     user_approved:       Annotated[bool | None,           _keep_last]
 
+    # Adjustment loop counter — prevents infinite loops when collision/reachability
+    # violations persist despite object placement attempts. After max adjustments
+    # the graph continues to scoring regardless.
+    adjustment_count:    Annotated[int, _keep_last]
+
+    # Placement history — list of dicts describing each furniture move.
+    # Populated by add_objects, displayed by user_checkpoint before approval.
+    placement_history:   Annotated[list[dict] | None, _keep_last]
+
 
 # ---------------------------------------------------------------------------
 # Routing functions — pure state reads, no side effects.
@@ -105,44 +115,57 @@ def _route_after_reason(state: AgentState) -> str:
     if state.get("object_to_place"):
         return "add_objects"
     # final_response means the LLM is done reasoning — move to analysis pipeline.
-    if state.get("final_response") is not None:
+    # Empty string "" is treated as "cleared" (not finished); only a real
+    # non-empty string triggers the finish route.
+    fr = state.get("final_response")
+    if fr is not None and fr != "":
         return "finish"
     # Default: a tool call was queued; execute it then return to reason.
     return "run_tool"
+
+
+MAX_ADJUSTMENTS = 3  # Max times the graph loops back to reason for collision/reachability fixes
 
 
 def _route_after_group1(state: AgentState) -> str:
     # Group 1 = collision + visibility + orientation.
     # Hard violations mean the layout is physically impassable — route back
     # to reason immediately rather than wasting time on path checks.
-    # Warnings alone (pass=False, hard_violations=0) do NOT trigger adjustment;
-    # they fall through to "continue" so scoring can still penalise them.
+    # BUT: only loop back if (a) the agent placed objects, and (b) we haven't
+    # exceeded the max adjustment attempts. Otherwise continue to scoring.
+    adj = state.get("adjustment_count", 0)
     collision = state.get("collision_results")
     if collision and not collision.get("pass", True):
         hard = collision.get("summary", {}).get("hard_violations", 0)
-        if hard > 0:
+        if hard > 0 and state.get("last_placement_result") is not None and adj < MAX_ADJUSTMENTS:
+            print(f"[router] Hard collision violations — adjustment {adj + 1}/{MAX_ADJUSTMENTS}")
             return "adjust"
     return "continue"
 
 
 def _route_after_group2(state: AgentState) -> str:
     # Group 2 = path + reachability.
-    # If more than 30% of paths are blocked, or fewer than 70% of objects are
-    # reachable, the layout needs another adjustment round before scoring.
-    path = state.get("path_results")
-    if path:
-        pairs = path.get("pairs", [])
-        unreachable = [p for p in pairs if p.get("status") == "unreachable"]
-        if pairs and len(unreachable) > len(pairs) * 0.3:
-            return "adjust"
+    # Same logic with max adjustment limit.
+    has_placed = state.get("last_placement_result") is not None
+    adj = state.get("adjustment_count", 0)
 
-    reach = state.get("reachability_results")
-    if reach:
-        summary = reach.get("summary", {})
-        total    = summary.get("total", 0)
-        reachable = summary.get("reachable", 0)
-        if total > 0 and reachable / total < 0.7:
-            return "adjust"
+    if has_placed and adj < MAX_ADJUSTMENTS:
+        path = state.get("path_results")
+        if path:
+            pairs = path.get("pairs", [])
+            unreachable = [p for p in pairs if p.get("status") == "unreachable"]
+            if pairs and len(unreachable) > len(pairs) * 0.3:
+                print(f"[router] Path violations — adjustment {adj + 1}/{MAX_ADJUSTMENTS}")
+                return "adjust"
+
+        reach = state.get("reachability_results")
+        if reach:
+            summary = reach.get("summary", {})
+            total    = summary.get("total", 0)
+            reachable = summary.get("reachable", 0)
+            if total > 0 and reachable / total < 0.7:
+                print(f"[router] Reachability violations — adjustment {adj + 1}/{MAX_ADJUSTMENTS}")
+                return "adjust"
 
     return "continue"
 
@@ -159,7 +182,28 @@ def _route_after_checkpoint(state: AgentState) -> str:
 # User checkpoint node — pauses execution to show score and ask for approval.
 # ---------------------------------------------------------------------------
 
-def user_checkpoint_node(state: AgentState) -> AgentState:
+def analysis_fan_out_node(state: AgentState) -> dict:
+    """No-op pass-through that exists solely as a fan-out point.
+    LangGraph needs a single source node to fan out to the three
+    Group 1 analysis nodes (collision, visibility, orientation).
+    Returns an empty update dict — nothing to change in state."""
+    return {}
+
+
+def group1_join_node(state: AgentState) -> dict:
+    """Join point after Group 1 parallel nodes converge.
+    Increments adjustment_count so the router can enforce the max limit.
+    LangGraph waits for all incoming edges (collision, visibility,
+    orientation) to complete before executing this node."""
+    collision = state.get("collision_results")
+    if collision and not collision.get("pass", True):
+        hard = collision.get("summary", {}).get("hard_violations", 0)
+        if hard > 0 and state.get("last_placement_result") is not None:
+            return {"adjustment_count": state.get("adjustment_count", 0) + 1}
+    return {}
+
+
+def user_checkpoint_node(state: AgentState) -> dict:
     # Present the current score to the user and let them decide whether to
     # approve the layout or describe further changes.
     # This is the only node that blocks on user input — all other nodes are
@@ -168,29 +212,67 @@ def user_checkpoint_node(state: AgentState) -> AgentState:
     score = scoring.get("total_score", 0)
     grade = scoring.get("grade", "?")
     rec   = scoring.get("recommendation", "")
+    breakdown = scoring.get("breakdown", {})
 
-    print(f"\n{'=' * 50}")
+    print(f"\n{'=' * 60}")
     print(f"LAYOUT SCORE: {score:.1f}/100  Grade: {grade}")
     print(f"Recommendation: {rec}")
-    print(f"{'=' * 50}")
+    print(f"{'=' * 60}")
+
+    # Show score breakdown per tool
+    print("\nScore breakdown:")
+    for tool_name, details in breakdown.items():
+        s = details.get("score", 0)
+        w = details.get("weight", 0)
+        ws = details.get("weighted", 0)
+        print(f"  {tool_name:15s}  {s:5.1f}/100  (weight {w:.2f}, contribution {ws:.2f})")
+
+    # Show collision violations if any
+    collision = state.get("collision_results") or {}
+    violations = collision.get("violations", [])
+    if violations:
+        print(f"\nCollision violations ({len(violations)}):")
+        for v in violations[:5]:
+            if isinstance(v, str):
+                print(f"  - {v}")
+            elif isinstance(v, dict):
+                print(f"  - {v.get('type', '?')}: {v.get('description', str(v))}")
+
+    # Show placement history — what objects were moved/added
+    history = state.get("placement_history")
+    if history:
+        print(f"\nFurniture changes made ({len(history)} items):")
+        for c in history:
+            name = c.get("name", "?")
+            action = c.get("action", "?")
+            room = c.get("room", "?")
+            if action == "moved":
+                fr = c.get("from", [0, 0])
+                to = c.get("to", [0, 0])
+                print(f"  MOVED  {name:30s}  ({fr[0]:6.1f}, {fr[1]:6.1f}) -> ({to[0]:6.1f}, {to[1]:6.1f})  [{room}]")
+            else:
+                to = c.get("to", [0, 0])
+                print(f"  ADDED  {name:30s}  at ({to[0]:6.1f}, {to[1]:6.1f})  [{room}]")
+
+    print(f"\n{'=' * 60}")
     print("Options:")
-    print("  'approve' → save final layout and finish")
-    print("  anything else → describe what to change")
+    print("  'approve' -> save final layout and finish")
+    print("  anything else -> describe what to change")
     print()
 
     user_input = input("Your decision: ").strip()
 
     if user_input.lower() in ("approve", "yes", "ok", "done"):
-        state["user_approved"] = True
+        return {"user_approved": True}
     else:
         # User wants further changes — inject their message so the reason node
         # picks up their instruction on the next iteration.
-        state["user_approved"] = False
-        state["messages"].append({"role": "user", "content": user_input})
         # Reset iteration counter so the new round gets the full budget.
-        state["iteration"] = 0
-
-    return state
+        return {
+            "user_approved": False,
+            "messages": [{"role": "user", "content": user_input}],
+            "iteration": 0,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +282,7 @@ def user_checkpoint_node(state: AgentState) -> AgentState:
 # ---------------------------------------------------------------------------
 
 
-def explain_node(state: AgentState) -> AgentState:
+def explain_node(state: AgentState) -> dict:
     # Called only once, immediately after the user approves at the checkpoint.
     # The LLM receives a compact summary of every tool's results so it can
     # give grounded feedback without re-reading the full layout JSON.
@@ -236,7 +318,7 @@ def explain_node(state: AgentState) -> AgentState:
     wc = path.get("worst_case", {})
     if wc.get("from"):
         analysis_summary += (
-            f"\nLongest path: {wc['from']} → {wc['to']} ({wc['distance']}m)\n"
+            f"\nLongest path: {wc['from']} -> {wc['to']} ({wc['distance']}m)\n"
         )
 
     # Build the prompt by concatenation — avoids .format() choking on any
@@ -254,24 +336,36 @@ def explain_node(state: AgentState) -> AgentState:
         "Respond with action final and put your explanation in final_response."
     )
 
-    result = call_llm(
-        state.get("_llm"),
-        prompt,
-        state["messages"],
-        state["tool_catalog"],
-    )
-
-    explanation = result.get("final_response", "Layout approved and saved.")
+    try:
+        result = call_llm(
+            state.get("_llm"),
+            prompt,
+            state["messages"],
+            state["tool_catalog"],
+        )
+        explanation = result.get("final_response", "Layout approved and saved.")
+    except Exception:
+        # LLM may return markdown/text instead of JSON — use call_llm_simple
+        # as a fallback to get the raw text response.
+        try:
+            from _runtime.llm import call_llm_simple
+            raw = call_llm_simple(state.get("_llm"), prompt, "Generate the explanation.")
+            if raw and isinstance(raw, dict):
+                explanation = raw.get("final_response", str(raw))
+            else:
+                explanation = "Layout approved and saved."
+        except Exception as exc2:
+            print(f"[explain] Fallback also failed: {exc2}")
+            explanation = "Layout approved and saved."
     print(f"\nLayout Explanation:\n{explanation}")
-    state["final_response"] = explanation
-    return state
+    return {"final_response": explanation}
 
 
 # ---------------------------------------------------------------------------
 # Output node — writes the approved layout to disk and ends the session.
 # ---------------------------------------------------------------------------
 
-def output_node(state: AgentState) -> AgentState:
+def output_node(state: AgentState) -> dict:
     # Called only after user_approved=True.
     # Writes the final layout to output/ with a timestamp, then deletes the
     # workspace session file so the next run starts clean.
@@ -281,8 +375,7 @@ def output_node(state: AgentState) -> AgentState:
         state["layout_name"],
     )
     print(f"\nLayout saved to: {output_path}")
-    state["final_response"] = f"Layout approved and saved to {output_path}"
-    return state
+    return {"final_response": f"Layout approved and saved to {output_path}"}
 
 
 # ---------------------------------------------------------------------------
@@ -313,11 +406,13 @@ def build_graph(ctx: Any) -> Any:
     graph.add_node("reason",           reason)
     graph.add_node("tool",             tool)
     graph.add_node("add_objects",      add_objects)
+    graph.add_node("analysis_fan_out", analysis_fan_out_node)
     graph.add_node("visibility",       visibility)
     graph.add_node("path",             path)
     graph.add_node("reachability",     reachability)
     graph.add_node("orientation",      orientation)
     graph.add_node("collision",        collision)
+    graph.add_node("group1_join",      group1_join_node)
     graph.add_node("scoring",          scoring)
     graph.add_node("user_checkpoint",  user_checkpoint_node)
     graph.add_node("explain",          explain_node)
@@ -330,33 +425,39 @@ def build_graph(ctx: Any) -> Any:
     graph.add_edge("space_type_agent", "reason")
 
     # Reason routes to: place an object, execute a tool, or move to analysis.
+    # "finish" goes to analysis_fan_out which triggers all Group 1 nodes in parallel.
     graph.add_conditional_edges(
         "reason", _route_after_reason,
         {
-            "add_objects": "add_objects",
-            "run_tool":    "tool",
-            "finish":      "visibility",   # start analysis pipeline when done reasoning
+            "add_objects":  "add_objects",
+            "run_tool":     "tool",
+            "finish":       "analysis_fan_out",
         },
     )
 
     # Tool result is fed back to reason so the LLM can interpret it.
     graph.add_edge("tool", "reason")
 
-    # After a placement, run Group 1 analyses in parallel.
-    # LangGraph executes all three before advancing to their shared convergence point.
-    graph.add_edge("add_objects", "collision")
-    graph.add_edge("add_objects", "visibility")
-    graph.add_edge("add_objects", "orientation")
+    # After a placement, go through the same analysis fan-out node
+    # so both paths (placement and direct finish) trigger the same parallel group.
+    graph.add_edge("add_objects", "analysis_fan_out")
 
-    # Group 1 convergence: collision gates progress — hard violations send the
-    # LLM back to fix the layout; otherwise fall through to Group 2.
+    # analysis_fan_out fans out to all three Group 1 nodes in parallel.
+    graph.add_edge("analysis_fan_out", "collision")
+    graph.add_edge("analysis_fan_out", "visibility")
+    graph.add_edge("analysis_fan_out", "orientation")
+
+    # Group 1 convergence: all three feed into group1_join so LangGraph
+    # waits for all of them before evaluating collision results.
+    graph.add_edge("collision",   "group1_join")
+    graph.add_edge("visibility",  "group1_join")
+    graph.add_edge("orientation", "group1_join")
+
+    # group1_join checks collision results — hard violations route back to reason.
     graph.add_conditional_edges(
-        "collision", _route_after_group1,
+        "group1_join", _route_after_group1,
         {"adjust": "reason", "continue": "path"},
     )
-    # Visibility and orientation feed into path (Group 2 entry point).
-    graph.add_edge("visibility",  "path")
-    graph.add_edge("orientation", "path")
 
     # Group 2: path then reachability; poor connectivity sends back to reason.
     graph.add_edge("path", "reachability")
@@ -436,8 +537,9 @@ def _slim_layout(layout_data: dict) -> dict:
 
 def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
     # The user message embeds a slim version of the layout JSON to keep the
-    # LLM context lean. Space and profile config are filled in by the pre-agents
-    # on their first run; all other fields start as None / 0.
+    # LLM context lean. But layout_json_string stores the FULL layout because
+    # MCP tools (collision-detector-grid, visualize_visibility) need all fields
+    # (outline, structure, mep) that _slim_layout strips.
     slim = _slim_layout(ctx.layout_data)
     layout_text = json.dumps(slim, indent=2)
     user_message = (
@@ -453,7 +555,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "iteration":             0,
         "max_iterations":        ctx.max_iterations,
         "tool_catalog":          _format_tool_catalog(ctx.tools),
-        "layout_json_string":    json.dumps(slim),
+        "layout_json_string":    json.dumps(ctx.layout_data),
         "workspace_path":        str(ctx.workspace_path),
         "layout_name":           ctx.layout_name,
         "space_config":          None,
@@ -468,6 +570,8 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "scoring_results":       None,
         "evaluation_passed":     None,
         "user_approved":         None,
+        "adjustment_count":      0,
+        "placement_history":     None,
         "_llm":                  ctx.llm,
     }
 

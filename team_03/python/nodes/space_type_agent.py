@@ -167,18 +167,30 @@ def build_space_type_agent_node(llm: Any, knowledge_dir: Path):
         system = SPACE_TYPE_SYSTEM_PROMPT.format(knowledge_context=knowledge_text)
         result = call_llm_simple(llm, system, agent_input)
 
-        # 7. Validate or fall back
-        if result and "space_type" in result and "tool_weights" in result:
+        # 7. Validate or fall back — handle nested LLM responses
+        if result and isinstance(result, dict) and "space_type" not in result:
+            for v in result.values():
+                if isinstance(v, dict):
+                    if "space_type" in v and "tool_weights" in v:
+                        result = v
+                        break
+                    for v2 in v.values():
+                        if isinstance(v2, dict) and "space_type" in v2 and "tool_weights" in v2:
+                            result = v2
+                            break
+
+        if result and isinstance(result, dict) and "space_type" in result and "tool_weights" in result:
             space_config = result
+            print(f"  [space_type_agent] Using LLM-generated config: {result.get('space_type')}")
         else:
             space_config = DEFAULT_SPACE_CONFIGS.get(
                 category, DEFAULT_SPACE_CONFIGS["residential"]
             )
+            print(f"  [space_type_agent] LLM result invalid, falling back to default: {category}")
 
-        state["space_config"] = space_config
         stype = space_config.get("space_type", "unknown")
         priorities = space_config.get("priorities", [])
         print(f"  Space: {stype} (priorities: {', '.join(priorities[:3])})")
-        return state
+        return {"space_config": space_config}
 
     return space_type_agent_node

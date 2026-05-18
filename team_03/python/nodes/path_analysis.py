@@ -446,40 +446,47 @@ def build_path_node(mcp_client):
     """Return a path analysis node ready to be added to a LangGraph StateGraph."""
 
     def path_node(state):
-        state["iteration"] += 1
-        if state["iteration"] > state["max_iterations"]:
-            raise RuntimeError("Max iterations exceeded")
+        # Returns an update dict instead of mutating state.
 
-        layout = json.loads(state["layout_json_string"])
-        results = check_paths(layout)
+        print("Running path analysis...")
+        try:
+            layout = json.loads(state["layout_json_string"])
+            results = check_paths(layout)
+        except Exception as exc:
+            print(f"[path] Analysis failed: {exc}")
+            results = {"pairs": [], "worst_case": {"from": None, "to": None, "distance": 0.0}}
         results_json = json.dumps(results)
 
-        print(f"Running path analysis... {len(results.get('pairs', []))} pairs checked.")
+        print(f"  {len(results.get('pairs', []))} pairs checked.")
 
-        tool_output = mcp_client.call_tool("visualize_paths", {
-            "layout_json": state["layout_json_string"],
-            "paths_json": results_json,
-        })
+        try:
+            tool_output = mcp_client.call_tool("visualize_paths", {
+                "layout_json": state["layout_json_string"],
+                "paths_json": results_json,
+            })
+        except Exception as e:
+            tool_output = f"visualize_paths error: {e}"
 
-        state["path_results"] = results
+        print(f"Path tool result: {str(tool_output)[:500]}")
 
-        state["messages"].append({
-            "role": "assistant",
-            "content": json.dumps({
-                "action": "tool",
-                "final_response": "",
-                "tool_calls": [{"name": "visualize_paths", "arguments": {
-                    "pairs_checked": len(results.get("pairs", [])),
-                }}],
-            }),
-        })
-        state["messages"].append({
-            "role": "user",
-            "content": f"Tool result: {tool_output}",
-        })
-
-        print(f"Path tool result: {tool_output[:500]}")
-
-        return state
+        return {
+            "path_results": results,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": json.dumps({
+                        "action": "tool",
+                        "final_response": "",
+                        "tool_calls": [{"name": "visualize_paths", "arguments": {
+                            "pairs_checked": len(results.get("pairs", [])),
+                        }}],
+                    }),
+                },
+                {
+                    "role": "user",
+                    "content": f"Tool result: {str(tool_output)[:500]}",
+                },
+            ],
+        }
 
     return path_node
