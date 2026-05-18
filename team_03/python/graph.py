@@ -103,6 +103,10 @@ class AgentState(TypedDict):
     # Populated by add_objects, displayed by user_checkpoint before approval.
     placement_history:   Annotated[list[dict] | None, _keep_last]
 
+    # Original layout snapshot — used to detect if doors/windows/structure
+    # were modified or lost during the pipeline.
+    original_layout:     dict | None
+
 
 # ---------------------------------------------------------------------------
 # Routing functions — pure state reads, no side effects.
@@ -208,6 +212,56 @@ def user_checkpoint_node(state: AgentState) -> dict:
     # approve the layout or describe further changes.
     # This is the only node that blocks on user input — all other nodes are
     # fully automated.
+
+    # ── Structural integrity check ──────────────────────────────────────
+    # Verify that doors, windows, structure, and outline haven't been lost
+    # during the pipeline. If any are missing, restore from the original.
+    original = state.get("original_layout") or {}
+    current_layout = json.loads(state["layout_json_string"])
+    integrity_warnings = []
+    restored = False
+
+    for layer in ("doors", "windows", "mep", "structure", "outline"):
+        orig_data = original.get(layer)
+        curr_data = current_layout.get(layer)
+        if orig_data and not curr_data:
+            current_layout[layer] = orig_data
+            restored = True
+            if layer == "outline":
+                integrity_warnings.append(f"  {layer}: RESTORED (was missing)")
+            else:
+                integrity_warnings.append(f"  {layer}: RESTORED — {len(orig_data)} items recovered")
+        elif isinstance(orig_data, list) and isinstance(curr_data, list):
+            if len(curr_data) < len(orig_data):
+                current_layout[layer] = orig_data
+                restored = True
+                integrity_warnings.append(
+                    f"  {layer}: RESTORED — had {len(curr_data)}, restored to {len(orig_data)}"
+                )
+
+    if restored:
+        layout_json_string = json.dumps(current_layout)
+        from _runtime.session import save_session
+        save_session(current_layout, state["workspace_path"])
+        print("\n[checkpoint] Structural integrity issues detected and fixed:")
+        for w in integrity_warnings:
+            print(w)
+
+    # ── Door change detection ───────────────────────────────────────────
+    # Check if any doors were modified (position or size changed).
+    orig_doors = {d.get("id"): d for d in original.get("doors", [])}
+    curr_doors = {d.get("id"): d for d in current_layout.get("doors", [])}
+    door_changes = []
+    for door_id, orig_door in orig_doors.items():
+        curr_door = curr_doors.get(door_id)
+        if not curr_door:
+            door_changes.append(f"  REMOVED: {orig_door.get('name', door_id)}")
+        elif orig_door.get("geometry") != curr_door.get("geometry"):
+            door_changes.append(f"  MODIFIED: {orig_door.get('name', door_id)}")
+    for door_id in curr_doors:
+        if door_id not in orig_doors:
+            door_changes.append(f"  ADDED: {curr_doors[door_id].get('name', door_id)}")
+
     scoring = state.get("scoring_results") or {}
     score = scoring.get("total_score", 0)
     grade = scoring.get("grade", "?")
@@ -254,6 +308,19 @@ def user_checkpoint_node(state: AgentState) -> dict:
                 to = c.get("to", [0, 0])
                 print(f"  ADDED  {name:30s}  at ({to[0]:6.1f}, {to[1]:6.1f})  [{room}]")
 
+    # Show structural integrity warnings
+    if integrity_warnings:
+        print(f"\nStructural integrity fixes applied:")
+        for w in integrity_warnings:
+            print(w)
+
+    # Show door changes — alert user before they approve
+    if door_changes:
+        print(f"\nDoor changes detected:")
+        for dc in door_changes:
+            print(dc)
+        print("  (Review carefully — door modifications may affect accessibility)")
+
     print(f"\n{'=' * 60}")
     print("Options:")
     print("  'approve' -> save final layout and finish")
@@ -262,17 +329,22 @@ def user_checkpoint_node(state: AgentState) -> dict:
 
     user_input = input("Your decision: ").strip()
 
+    # Build base updates — include restored layout if integrity was fixed
+    updates: dict = {}
+    if restored:
+        updates["layout_json_string"] = json.dumps(current_layout)
+
     if user_input.lower() in ("approve", "yes", "ok", "done"):
-        return {"user_approved": True}
+        updates["user_approved"] = True
+        return updates
     else:
         # User wants further changes — inject their message so the reason node
         # picks up their instruction on the next iteration.
         # Reset iteration counter so the new round gets the full budget.
-        return {
-            "user_approved": False,
-            "messages": [{"role": "user", "content": user_input}],
-            "iteration": 0,
-        }
+        updates["user_approved"] = False
+        updates["messages"] = [{"role": "user", "content": user_input}]
+        updates["iteration"] = 0
+        return updates
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +644,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "user_approved":         None,
         "adjustment_count":      0,
         "placement_history":     None,
+        "original_layout":       ctx.layout_data,
         "_llm":                  ctx.llm,
     }
 

@@ -75,7 +75,13 @@ def build_tool_node(mcp_client, allowed_tools, workspace_path):
                 updated = json.loads(tool_output.strip())
                 if isinstance(updated, dict):
                     if "rooms" in updated:
-                        # Full layout returned — replace the session entirely
+                        # Full layout returned — merge with current state to
+                        # preserve layers the tool might not return.
+                        current = json.loads(layout_json_string)
+                        for key in ("doors", "windows", "mep", "structure", "outline"):
+                            if key not in updated or not updated[key]:
+                                if key in current and current[key]:
+                                    updated[key] = current[key]
                         layout_json_string = json.dumps(updated)
                         save_session(updated, workspace_path)
                     elif "doors" in updated:

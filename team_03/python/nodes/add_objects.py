@@ -92,6 +92,14 @@ def build_add_objects_node(mcp_client, workspace_path):
         # to guarantee the tool receives the latest saved state.
         # ---------------------------------------------------------------------------
         layout_json_string = state["layout_json_string"]
+
+        # Diagnostic: verify doors exist before MCP call
+        _pre_layout = json.loads(layout_json_string)
+        _pre_doors = len(_pre_layout.get("doors", []))
+        print(f"[add_objects] Layout integrity before MCP: {_pre_doors} doors, "
+              f"{len(_pre_layout.get('rooms', []))} rooms, "
+              f"{len(_pre_layout.get('furniture', []))} furniture")
+
         tool_args = {
             "layout_json": layout_json_string,
             "room_name": object_to_place["room_name"],
@@ -121,8 +129,19 @@ def build_add_objects_node(mcp_client, workspace_path):
         try:
             parsed = json.loads(tool_output.strip())
             if isinstance(parsed, dict):
+                _has_rooms = "rooms" in parsed
+                _has_doors = len(parsed.get("doors", [])) if isinstance(parsed.get("doors"), list) else 0
+                print(f"[add_objects] MCP response: has_rooms={_has_rooms}, doors={_has_doors}, keys={list(parsed.keys())[:8]}")
                 if "rooms" in parsed:
-                    # Full layout returned — update state and persist to disk
+                    # Full layout returned — merge with current state to preserve
+                    # layers the MCP tool might not return (doors, windows, mep,
+                    # structure, outline). Only update layers that the response
+                    # explicitly provides; keep everything else from the current state.
+                    current_layout = json.loads(layout_json_string)
+                    for key in ("doors", "windows", "mep", "structure", "outline"):
+                        if key not in parsed or not parsed[key]:
+                            if key in current_layout and current_layout[key]:
+                                parsed[key] = current_layout[key]
                     layout_json_string = json.dumps(parsed)
                     updates["layout_json_string"] = layout_json_string
                     save_session(parsed, workspace_path)
