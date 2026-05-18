@@ -79,7 +79,7 @@ def build_feedback_node(llm: Any) -> Any:
 📊 **Daylight:**
 {daylight_desc}
 **Feedback?**
-- "yes" → finalize
+- "end" → finalize
 - "no" or "different" → search again  
 - "change rooms" → new programs
 - "change boundary" → adjust outline"""

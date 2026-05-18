@@ -67,14 +67,14 @@ def _log_state_changes(node_name: str, state_before: dict, state_after: dict) ->
 # ---------------------------------------------------------------------------
 def _route_after_preprocessing(state: AgentState) -> str:
     result = state.get("preprocessing_result")
-    if result == "evaluate":
-        return "evaluate"
-    elif result == "parse":
-        return "brief"
-    else:
-        if not state.get("final_response"):  # Only set if not already set
-            state["final_response"] = "Preprocessing error."
-        return "end"
+    return {
+        "research": "search",
+        "modify_boundary": "boundary",
+        "select_layout": "choice",
+        "evaluate": "evaluate",
+        "parse": "brief",
+        "end": "end",
+    }.get(result, "end")
 
 def _route_after_brief(state: AgentState) -> str:
     # If brief asked a clarification question, stop here and return to user
@@ -84,25 +84,28 @@ def _route_after_brief(state: AgentState) -> str:
     return "search"
 
 def _route_after_search(state: AgentState) -> str:
-    if state.get("final_response"):
-        return "end"
-    
     search_json = state.get("search_results_json_string", "[]")
     try:
         results = json.loads(search_json)
     except:
         results = []
     
-    if len(results) == 1:
-        return "adapt"
-    elif len(results) > 1:
-        return "choice"
-    else:
+    if len(results) == 0:
         return "end"
+    else:
+        return "choice"
+    
+def _route_after_choice(state: dict) -> str:
+    # If choice returned a question (final_response), show it to user
+    if state.get("final_response"):
+        return "end"
+    # Otherwise choice loaded a layout, proceed to adapt
+    else:
+        return "adapt"
 
 def _route_after_adapt(state: AgentState) -> str:
     if state.get("final_response"):
-        return "end"  # ← WAS "search", now END
+        return "end"  
     return "evaluate"
 
 
@@ -169,8 +172,11 @@ def build_graph(ctx: Any) -> Any:
     
     # Add edges
     workflow.add_conditional_edges("preprocessing", _route_after_preprocessing, {
-        "brief": "brief",  
+        "brief": "brief",
+        "choice": "choice",
         "evaluate": "evaluate",
+        "search": "search",
+        "boundary": "boundary",
         "end": END
     })
     workflow.add_conditional_edges("brief", _route_after_brief, {
@@ -182,10 +188,13 @@ def build_graph(ctx: Any) -> Any:
         "adapt": "adapt",
         "end": END
     })
-    workflow.add_edge("choice", "adapt")
     workflow.add_conditional_edges("adapt", _route_after_adapt, {
-    "evaluate": "evaluate",
-    "end": END
+        "evaluate": "evaluate",
+        "end": END
+    })
+    workflow.add_conditional_edges("choice", _route_after_choice, {
+        "adapt": "adapt",
+        "end": END
     })
     workflow.add_edge("evaluate", "feedback")
     workflow.add_conditional_edges("feedback", _route_after_feedback, {
@@ -214,9 +223,10 @@ def run_agent(prompt: str, ctx: Any, session: dict | None = None) -> tuple[str, 
     app = build_graph(ctx)
     initial_state = _build_initial_state(prompt, ctx, session)
     final_state = app.invoke(initial_state)
-
-    # REMOVED: logger.info("\nWorkflow graph (Mermaid):")
-    # REMOVED: logger.info(app.get_graph().draw_mermaid())
+    
+    # Optional: log the entire graph at the end for debugging
+    #logger.info("\nWorkflow graph (Mermaid):")
+    #logger.info(app.get_graph().draw_mermaid())
 
     final_response = final_state.get("final_response")
     if final_response is None:

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 import logging
 from tools.graph_searcher import GraphSearcher
-from tools.layout_utils import load_and_save_layout
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +48,9 @@ def build_search_node() -> Any:
                 }
             
             logger.info(f"✅ Found {len(candidates)} layouts")
-            best_layout_id = candidates[0]["id"]
-            repo_root = Path(__file__).resolve().parent.parent.parent
-            reference_path = repo_root / "team_06_reference_layout.json"
-            load_and_save_layout(best_layout_id, state, reference_path)
             
             return {
                 "search_results_json_string": json.dumps(candidates),
-                "layout_json_string": state["layout_json_string"],  # Already updated
                 "iteration": iteration + 1,
             }
         except Exception as e:
