@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from nodes.reason import build_reason_node
-from nodes.modify import build_modify_node
+from nodes.tools import build_tool_node, get_action_tools
 from nodes.evaluate import build_evaluate_node
 from nodes.comparison import build_comparison_node
 
@@ -47,7 +47,8 @@ def _route_from_evaluate(state: AgentState) -> str:
 
 def build_graph(ctx: Any) -> Any:
     reason = build_reason_node(ctx.llm)
-    modify = build_modify_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path)
+    tools = getattr(ctx, "tools", None) or get_action_tools()
+    modify = build_tool_node(ctx.edited_layout_path, tools)
     evaluate = build_evaluate_node(ctx.llm)
     comparison = build_comparison_node(ctx.llm)
 
@@ -261,7 +262,7 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "final_response": None,
         "iteration": 0,
         "max_iterations": ctx.max_iterations,
-        "tool_catalog": _format_tool_catalog(ctx.tools),
+        "tool_catalog": _format_tool_catalog(getattr(ctx, "tools", None) or get_action_tools()),
         "layout_json_string": json.dumps(layouts[0] if layouts else {}),
         "evaluation_result": None,
         "comparison_result": None,

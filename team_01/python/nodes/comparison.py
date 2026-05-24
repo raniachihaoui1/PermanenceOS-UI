@@ -45,6 +45,25 @@ def _structural_diff(original_json: str, modified_json: str) -> str:
     }, separators=(",", ":"))
 
 
+def summarize_local_comparison(original_json: str, modified_json: str) -> str:
+    diff = json.loads(_structural_diff(original_json, modified_json))
+    added = diff.get("added", [])
+    removed = diff.get("removed", [])
+    changed = diff.get("changed", [])
+
+    parts = []
+    parts.append(
+        f"The modified grid changed {len(added)} added, {len(removed)} removed, and {len(changed)} updated structural elements."
+    )
+    if added or removed:
+        parts.append("The grid moved away from the initial candidate toward the selected local alternative.")
+    if changed:
+        parts.append("The section or attribute changes reflect the local modification step rather than a tool-based edit.")
+    if not any((added, removed, changed)):
+        parts.append("The final grid matches the initial candidate, so no modification was necessary.")
+    return " ".join(parts)
+
+
 def build_comparison_node(llm):
 
     def comparison_node(state):
