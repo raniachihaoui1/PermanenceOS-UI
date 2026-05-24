@@ -29,19 +29,26 @@ class AgentState(TypedDict):
 
 def _route_from_reason(state: AgentState) -> str:
     if state.get("pending_tool_calls") and state.get("cycle", 0) < 2:
+        print("[route] reason -> modify (pending tool calls)")
         return "modify"
     if state.get("cycle", 0) >= 2:
+        print("[route] reason -> end (max cycle reached)")
         return END
     if state.get("evaluation_result") is not None:
+        print("[route] reason -> end (evaluation already available)")
         return END  # evaluate already ran — done
+    print("[route] reason -> evaluate (default)")
     return "evaluate"  # always evaluate before ending
 
 
 def _route_from_evaluate(state: AgentState) -> str:
     if state.get("came_from") == "tag_and_audit":
+        print("[route] evaluate -> end (post tag_and_audit)")
         return END
     if state.get("came_from") == "modify":
+        print("[route] evaluate -> comparison (post modify)")
         return "comparison"
+    print("[route] evaluate -> reason (continue loop)")
     return "reason"
 
 

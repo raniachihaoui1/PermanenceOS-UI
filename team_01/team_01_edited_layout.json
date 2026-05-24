@@ -543,7 +543,168 @@
   ],
   "furniture": [],
   "mep": [],
-  "structure": [],
+  "structure": [
+    {
+      "id": "C_1_1",
+      "name": "Column_1_1",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_column",
+        "material": "RCC",
+        "dimensions": "200x200",
+        "beamProfile": "200x300",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "C_1_2",
+      "name": "Column_1_2",
+      "geometry": [
+        [
+          0.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_column",
+        "material": "RCC",
+        "dimensions": "200x200",
+        "beamProfile": "200x300",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "C_2_1",
+      "name": "Column_2_1",
+      "geometry": [
+        [
+          14.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_column",
+        "material": "RCC",
+        "dimensions": "200x200",
+        "beamProfile": "200x300",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "C_2_2",
+      "name": "Column_2_2",
+      "geometry": [
+        [
+          14.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_column",
+        "material": "RCC",
+        "dimensions": "200x200",
+        "beamProfile": "200x300",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "BH_1_1",
+      "name": "Beam_H_1_1",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          14.0,
+          0.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_beam",
+        "orientation": "horizontal",
+        "material": "RCC",
+        "width": "200",
+        "depth": "300",
+        "columnDimensions": "200x200",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "BH_2_1",
+      "name": "Beam_H_2_1",
+      "geometry": [
+        [
+          0.0,
+          10.0
+        ],
+        [
+          14.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_beam",
+        "orientation": "horizontal",
+        "material": "RCC",
+        "width": "200",
+        "depth": "300",
+        "columnDimensions": "200x200",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "BV_1_1",
+      "name": "Beam_V_1_1",
+      "geometry": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_beam",
+        "orientation": "vertical",
+        "material": "RCC",
+        "width": "200",
+        "depth": "300",
+        "columnDimensions": "200x200",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "BV_2_1",
+      "name": "Beam_V_2_1",
+      "geometry": [
+        [
+          14.0,
+          0.0
+        ],
+        [
+          14.0,
+          10.0
+        ]
+      ],
+      "attributes": {
+        "type": "structural_beam",
+        "orientation": "vertical",
+        "material": "RCC",
+        "width": "200",
+        "depth": "300",
+        "columnDimensions": "200x200",
+        "conflict": "None"
+      }
+    }
+  ],
   "rooms_summary": "1 bathroom, 2 bedroom, 1 circulation, 1 kitchen_dining, 1 living, 1 study_guest",
   "attributes": {
     "units": "meters",
@@ -551,5 +712,17 @@
     "minimum_exterior_wall_segment_m": 3.5,
     "minimum_interior_wall_segment_m": 2.5,
     "intended_use": "larger residential plot dataset samples"
+  },
+  "gridPlan": {
+    "material": "RCC",
+    "spacing": 5.75,
+    "x_lines": [
+      0.0,
+      14.0
+    ],
+    "y_lines": [
+      0.0,
+      10.0
+    ]
   }
 }

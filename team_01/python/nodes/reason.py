@@ -18,21 +18,12 @@ STRUCTURAL REASONING RULES:
 - Grid spacing affects which rooms can be reconfigured
 - Always flag MEP conflicts when adding structural elements
 
-GRAPH ROUTING RULES (must follow):
-- Check structure_count on every request before deciding.
-- If structure_count=0: set action="tool" and call tag_and_audit to create the structural grid from scratch.
-- If structure_count>0: never regenerate grid.
-- After CREATE GRID: evaluate runs automatically.
-- After MODIFY: evaluate runs automatically.
-- For question-only requests: set action="final" and answer directly.
-- For explicit evaluation requests: set action="final" with final_response="".
-- Never modify without a prior evaluate result in state.
-
-TAG_AND_AUDIT USAGE:
-- If structure_count=0 (grid does not exist): call tag_and_audit with typology="column_grid".
-- If structure_count=0 and user did not provide grid spacing: use grid_spacing=4.0.
-- If structure_count>0: you may call tag_and_audit for read/tag checks, but NEVER pass grid_spacing.
-- Pass layout_json exactly from state — never simplify or invent it.
+TAG_AND_AUDIT TOOL:
+- Call it ONLY when structure_count=0 (no structural elements exist yet)
+- NEVER call it if structure_count > 0 — this would overwrite user changes
+- Pass layout_json exactly from state — never simplify or invent it
+- ALWAYS pass typology: use "column_grid" unless user asks for perimeter_load_bearing or shear_wall
+- ALWAYS pass grid_spacing: use 4.0 unless user specifies a different value
 
 WHAT-IF QUESTIONS — two-step process, NEVER call a tool:
 Step 1: User asks "what if we remove X" → set action="final", final_response="" (empty string). The evaluate node runs the simulation automatically.
@@ -91,70 +82,19 @@ Focus on material selection first, then the candidate grid concept.
 
 
 def run_llm_only_reasoning(llm: Any, prompt: str, layout_data: dict[str, Any]) -> str:
-    # Serialized the layout so the direct LLM path can reason from the input JSON.
     layout_context = json.dumps(layout_data, indent=2, ensure_ascii=False)
-    # Serialized the layout so the LLM can reason directly from the input JSON.
-    # Built the single user message that carries both the request and the layout context.
     messages = [
         {"role": "user", "content": f"User request:\n{prompt}\n\nLayout JSON:\n{layout_context}"},
     ]
-    # Built a single user message because this path intentionally skips the graph and tools.
-    # Invoked the model with a plain system prompt and the user request.
     response = llm.invoke([
         {"role": "system", "content": LLM_ONLY_SYSTEM_PROMPT},
         *messages,
     ])
-    # Sent the plain-text prompt directly to the model without any MCP/tool workflow.
-    # Read the model output in a way that works for LangChain response objects.
     content = getattr(response, "content", "")
-    # Read the model output while tolerating client objects that expose content as an attribute.
-    # Returned a string regardless of whether the model content came back as text or another type.
     return content if isinstance(content, str) else str(content)
-    # Returned the text response so main.py can print it directly.
 
 
 def build_reason_node(llm):
-
-    def _enforce_routing_policy(state: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
-        layout = json.loads(state.get("layout_json_string") or "{}")
-        structure_count = len(layout.get("structure", [])) if isinstance(layout, dict) else 0
-        evaluation_present = state.get("evaluation_result") is not None
-
-        if result.get("action") == "tool":
-            tool_calls = result.get("tool_calls") or []
-            sanitized = []
-
-            for call in tool_calls:
-                name = call.get("name")
-                arguments = dict(call.get("arguments") or {})
-
-                if name == "tag_and_audit":
-                    if structure_count == 0:
-                        arguments.setdefault("typology", "column_grid")
-                        arguments.setdefault("grid_spacing", 4.0)
-                    else:
-                        arguments.pop("grid_spacing", None)
-
-                sanitized.append({"name": name, "arguments": arguments})
-
-            result["tool_calls"] = sanitized
-
-            # Enforce first-time grid creation when no structure exists.
-            if structure_count == 0:
-                has_create_call = any(call.get("name") == "tag_and_audit" for call in sanitized)
-                if not has_create_call:
-                    result["tool_calls"] = [{
-                        "name": "tag_and_audit",
-                        "arguments": {"typology": "column_grid", "grid_spacing": 4.0},
-                    }]
-
-            # Do not modify existing structure before any evaluation has run.
-            if structure_count > 0 and not evaluation_present:
-                result["action"] = "final"
-                result["final_response"] = ""
-                result["tool_calls"] = []
-
-        return result
 
     def reason_node(state):
         cycle = state.get("cycle", 0)
@@ -198,7 +138,14 @@ def build_reason_node(llm):
         if result is None:
             raise RuntimeError(f"LLM failed after 3 attempts: {last_error}")
 
-        result = _enforce_routing_policy(state, result)
+        if result["action"] == "tool":
+            tool_names = [call.get("name", "<unknown>") for call in result.get("tool_calls", [])]
+            print(f"[reason] decision=tool | tool_calls={tool_names}")
+        else:
+            preview = (result.get("final_response") or "").strip().replace("\n", " ")
+            if len(preview) > 140:
+                preview = preview[:140] + "..."
+            print(f"[reason] decision=final | final_response='{preview}'")
 
         if result["action"] == "final":
             state["final_response"] = result["final_response"]
