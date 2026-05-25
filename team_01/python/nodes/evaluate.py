@@ -2,8 +2,27 @@ from __future__ import annotations
 import json
 import math
 import re
+import sys
 from pathlib import Path
 from nodes.comparison import print_diff
+
+
+def _is_interactive() -> bool:
+    """Return True only when running in a real terminal (not Streamlit or piped)."""
+    try:
+        return sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+def _prompt(text: str, default: str = "") -> str:
+    """Input wrapper that skips the prompt and returns *default* in non-interactive mode."""
+    if not _is_interactive():
+        return default
+    try:
+        return input(text).strip()
+    except (EOFError, OSError):
+        return default
 
 SETTINGS_PATH = Path(__file__).parent.parent.parent / "team_01_settings.json"
 from nodes.modify import (
@@ -661,7 +680,7 @@ def _ask_sdl_ll(state: dict) -> None:
     print("  3. Standard— 3.5 kN/m²  (125mm slab + finishes + partitions)")
     print("  4. Heavy   — 5.0 kN/m²  (thick slab, heavy finishes, raised floor)")
     print("  [Enter] — keep current")
-    raw_sdl = input("SDL choice [1-4 or Enter]: ").strip()
+    raw_sdl = _prompt("SDL choice [1-4 or Enter]: ")
     state["sdl_kNm2"] = {"1": 1.5, "2": 2.5, "3": 3.5, "4": 5.0}.get(raw_sdl, cur_sdl)
     print(f"  SDL: {state['sdl_kNm2']} kN/m²")
 
@@ -671,7 +690,7 @@ def _ask_sdl_ll(state: dict) -> None:
     print("  2. Office      — 3.0 kN/m²")
     print("  3. Retail/Public— 5.0 kN/m²")
     print("  [Enter] — keep current")
-    raw_ll = input("LL choice [1-3 or Enter]: ").strip()
+    raw_ll = _prompt("LL choice [1-3 or Enter]: ")
     state["live_load_kNm2"] = {"1": 2.0, "2": 3.0, "3": 5.0}.get(raw_ll, cur_ll)
     print(f"  LL: {state['live_load_kNm2']} kN/m²")
 
@@ -732,14 +751,14 @@ def build_evaluate_node(_):
                 print(f"  {i}. {mat:6s} — beam {display_sec['beam_width_mm']}x{display_sec['beam_depth_mm']}mm | col {display_sec['col_dims']}mm{marker}")
             print("  4. Find minimum — start XS, auto-upgrade to first PASS")
             print("  [Enter] — keep current")
-            raw = input("Choice [1/2/3/4 or RCC/STEEL/TIMBER]: ").strip().upper()
+            raw = _prompt("Choice [1/2/3/4 or RCC/STEEL/TIMBER]: ").upper()
             lookup = {"1": "RCC", "2": "STEEL", "3": "TIMBER"}
             if raw == "4":
                 print("\nMaterial for minimum search:")
                 for i, mat in enumerate(BASE_MATERIALS, 1):
                     xs_sec = DEFAULT_SECTIONS.get(f"{mat}_XS", DEFAULT_SECTIONS[mat])
                     print(f"  {i}. {mat:6s} — beam {xs_sec['beam_width_mm']}x{xs_sec['beam_depth_mm']}mm | col {xs_sec['col_dims']}mm (XS start)")
-                raw2 = input("Choice [1/2/3 or RCC/STEEL/TIMBER]: ").strip().upper()
+                raw2 = _prompt("Choice [1/2/3 or RCC/STEEL/TIMBER]: ").upper()
                 selected = lookup.get(raw2) or (raw2 if raw2 in BASE_MATERIALS else None) or "RCC"
                 state["material_override"] = selected
                 _ask_sdl_ll(state)
@@ -784,7 +803,7 @@ def build_evaluate_node(_):
                     f"(beam {next_sec['beam_width_mm']}x{next_sec['beam_depth_mm']}mm "
                     f"| col {next_sec['col_dims']}mm)?"
                 )
-                if input("Upgrade? [y/N]: ").strip().lower() == "y":
+                if _prompt("Upgrade? [y/N]: ", "y").lower() == "y":
                     state["evaluation_result"] = json.dumps(result)
                     state["pending_structural_change"] = {"type": "tier_upgrade", "tier": next_tier}
                     state["layout_before_change"] = layout_str
@@ -847,7 +866,7 @@ def build_evaluate_node(_):
                 status = "PASS" if ws.get("overall_PASS", True) else "FAIL"
                 print(f"\nWhat-if result: {status}. Apply removal of {', '.join(remove_cols)} permanently?")
                 print("  Connected beams will be merged across the removed column.")
-                if input("Apply? [y/N]: ").strip().lower() == "y":
+                if _prompt("Apply? [y/N]: ", "n").lower() == "y":
                     state["evaluation_result"] = json.dumps(result)
                     state["pending_structural_change"] = {
                         "type":       "remove_element",
@@ -891,7 +910,7 @@ def build_evaluate_node(_):
                 print("  Removing a beam eliminates its load path between the two endpoint columns.")
                 print("  Adjacent parallel beams will carry additional tributary load.")
                 print("  Re-evaluation will run automatically after removal.")
-                if input(f"\nRemove {b_list} permanently? [y/N]: ").strip().lower() == "y":
+                if _prompt(f"\nRemove {b_list} permanently? [y/N]: ", "n").lower() == "y":
                     state["evaluation_result"] = json.dumps(result)
                     state["pending_structural_change"] = {
                         "type":       "remove_element",
@@ -952,7 +971,7 @@ def build_evaluate_node(_):
         already_find_min = bool(_detect_find_min(state.get("messages", []))) or bool(state.get("find_minimum_done"))
         if not main_fail and not already_find_min:
             current_base = next((m for m in BASE_MATERIALS if current_mat.startswith(m)), "RCC")
-            if input("\nAll checks pass. Optimize — find minimum sufficient sections? [y/N]: ").strip().lower() == "y":
+            if _prompt("\nAll checks pass. Optimize — find minimum sufficient sections? [y/N]: ", "n").lower() == "y":
                 state["evaluation_result"] = json.dumps(result)
                 state["pending_structural_change"] = {"type": "find_minimum", "material": current_base}
                 state["layout_before_change"] = layout_str
@@ -967,7 +986,7 @@ def build_evaluate_node(_):
                 print(f"  {i}. {alt}")
             print("  [Enter or text] — describe a custom change")
 
-            raw = input("Choice: ").strip()
+            raw = _prompt("Choice: ", "1")
             if raw.isdigit():
                 idx = int(raw) - 1
                 chosen = alts[idx] if 0 <= idx < len(alts) else raw

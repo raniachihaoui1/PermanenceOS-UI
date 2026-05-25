@@ -576,9 +576,24 @@ def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_f
                     from nodes.tools import build_structural_grid_with_options, _extract_user_prompt
                     prompt_text = _extract_user_prompt(state)
                     mat = str(tool_args.get("material") or state.get("material_override") or "RCC").upper()
-                    bundle = build_structural_grid_with_options(current_layout, prompt_text, material=mat)
-                    tool_output = json.dumps(bundle["recommended"]["layout"])
-                    print(f"[modify] Generated structural grid (material={mat})")
+                    tool_output = None
+                    try:
+                        from nodes.intelligent_grid import generate_layout_aware_grid
+                        raw = generate_layout_aware_grid(current_layout, max_options=3)
+                        if raw:
+                            raw.sort(key=lambda s: sum(1 for el in s if len(el.get("geometry", [])) == 1))
+                            chosen = raw[len(raw) // 2]
+                            chosen_layout = json.loads(apply_material_override(
+                                json.dumps({**current_layout, "structure": chosen}), mat
+                            ))
+                            tool_output = json.dumps(chosen_layout)
+                            print(f"[modify] Generated intelligent grid (material={mat}, {len(chosen)} elements)")
+                    except Exception:
+                        pass
+                    if not tool_output:
+                        bundle = build_structural_grid_with_options(current_layout, prompt_text, material=mat)
+                        tool_output = json.dumps(bundle["recommended"]["layout"])
+                        print(f"[modify] Generated rectangular grid fallback (material={mat})")
                 else:
                     tool_output = json.dumps(current_layout)
                     print(f"[modify] Audit mode — {len(current_layout['structure'])} elements, no overwrite")

@@ -133,7 +133,43 @@ def _strip_markdown_code_fence(content: str) -> str:
     return "\n".join(lines[1:-1]).strip()
 
 
+def _sanitize_control_chars(content: str) -> str:
+    """Escape literal control characters inside JSON string values.
+
+    LLaMA 3.1-8B frequently outputs bare newlines / tabs inside a
+    "final_response" string, which are illegal unescaped in JSON (RFC 7159).
+    This walks the raw text and replaces them only while inside a string.
+    """
+    result: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(content):
+        c = content[i]
+        if c == "\\" and i + 1 < len(content):
+            result.append(c)
+            result.append(content[i + 1])
+            i += 2
+            continue
+        if c == '"':
+            in_string = not in_string
+            result.append(c)
+        elif in_string and ord(c) < 0x20:
+            if c == "\n":
+                result.append("\\n")
+            elif c == "\r":
+                result.append("\\r")
+            elif c == "\t":
+                result.append("\\t")
+            else:
+                result.append(f"\\u{ord(c):04x}")
+        else:
+            result.append(c)
+        i += 1
+    return "".join(result)
+
+
 def _parse_llm_json(content: str) -> dict[str, Any]:
+    content = _sanitize_control_chars(content)
     content = _strip_markdown_code_fence(content)
     try:
         parsed = json.loads(content)

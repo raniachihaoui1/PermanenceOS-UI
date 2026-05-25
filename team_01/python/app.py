@@ -302,6 +302,12 @@ st.markdown("""
   }
   .state-pill-active { background: #1e3a60; color: #8abcf0; }
   div[data-testid="stTabs"] button { font-size: 0.82rem; }
+  .agent-response {
+    color: #c8d8f0; font-size: 0.82rem; line-height: 1.5;
+    background: #161c2a; border-left: 3px solid #3a6aaa;
+    padding: 6px 10px; border-radius: 3px; margin-bottom: 6px;
+    white-space: pre-wrap; word-break: break-word;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -560,7 +566,10 @@ with col_viewer:
         st.markdown('<div class="panel-hdr">Agent Output</div>', unsafe_allow_html=True)
         if st.session_state.output_log:
             for i, msg in enumerate(reversed(st.session_state.output_log[-10:])):
-                st.markdown(f"**{len(st.session_state.output_log) - i}.** {msg}")
+                st.markdown(
+                    f'<div class="agent-response"><b>{len(st.session_state.output_log) - i}.</b> {msg}</div>',
+                    unsafe_allow_html=True,
+                )
         else:
             st.caption("Agent responses appear here after running a prompt.")
 
@@ -632,7 +641,11 @@ with col_eval:
     # Show last agent response inline
     if st.session_state.output_log:
         last = st.session_state.output_log[-1]
-        st.caption(last[:300] + ("..." if len(last) > 300 else ""))
+        preview = last[:300] + ("..." if len(last) > 300 else "")
+        st.markdown(
+            f'<div class="agent-response">{preview}</div>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 

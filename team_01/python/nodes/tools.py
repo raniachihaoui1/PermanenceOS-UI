@@ -122,47 +122,62 @@ def build_structural_grid_with_options(
     Generate Conservative / Balanced / Open column-grid variants.
     Returns {options: [...], recommended: {...}} where each option has
     {label, spacing, layout, score, rationale, failures, cost}.
+    Tries layout-aware intelligent grid first; falls back to rectangular grid.
     """
-    variants = [
-        ("Conservative", 4.25),
-        ("Balanced",     5.0),
-        ("Open",         5.75),
-    ]
-    base_json = json.dumps(layout)
+    # 1. Try intelligent grid (room-corner topology)
+    try:
+        from nodes.intelligent_grid import generate_layout_aware_grid
+        raw_options = generate_layout_aware_grid(layout, max_options=6)
+    except Exception:
+        raw_options = []
+
+    # 2. Fallback: rectangular grid at 3 spacings
+    if not raw_options:
+        base_json = json.dumps(layout)
+        raw_options = [
+            json.loads(_generate_column_grid(base_json, s)).get("structure", [])
+            for s in [4.25, 5.0, 5.75]
+        ]
+
+    # 3. Sort by column count descending (most = Conservative, fewest = Open)
+    raw_options.sort(key=lambda s: -sum(1 for el in s if len(el.get("geometry", [])) == 1))
+
+    # 4. Pick 3 representative options
+    n = len(raw_options)
+    if n >= 3:
+        picks = [raw_options[0], raw_options[n // 2], raw_options[-1]]
+    else:
+        picks = (raw_options + [raw_options[-1]] * 3)[:3]
+
+    variant_labels = ["Conservative", "Balanced", "Open"]
     options = []
-
-    for label, spacing in variants:
-        grid_json    = _generate_column_grid(base_json, spacing)
-        grid_json    = apply_material_override(grid_json, material)
-        grid_layout  = json.loads(grid_json)
-
+    for label, structure in zip(variant_labels, picks):
+        grid_layout = json.loads(apply_material_override(
+            json.dumps({**layout, "structure": structure}), material
+        ))
         try:
-            ev       = evaluate_structure(grid_json)
-            summary  = ev.get("summary", {})
+            ev = evaluate_structure(json.dumps(grid_layout))
+            summary = ev.get("summary", {})
             failures = summary.get("beam_failures", 0) + summary.get("column_failures", 0)
         except Exception:
             failures = 0
 
-        n_el  = len(grid_layout.get("structure", []))
-        cost  = _quick_cost(grid_layout)
-        # Lower score = better: penalise failures heavily, slight preference for compact grids
-        score = round(failures * 100 + abs(n_el - 20) * 2 + cost * 0.001, 2)
+        n_cols = sum(1 for el in structure if len(el.get("geometry", [])) == 1)
+        cost = _quick_cost(grid_layout)
+        score = round(failures * 100 + cost * 0.001, 2)
 
         options.append({
-            "label":    label,
-            "spacing":  spacing,
-            "layout":   grid_layout,
-            "score":    score,
-            "rationale": (
-                f"{n_el} elements at {spacing}m spacing, "
-                f"{failures} structural failures, cost ~€{cost:,.0f}"
-            ),
-            "failures": failures,
-            "cost":     cost,
+            "label":     label,
+            "spacing":   None,
+            "layout":    grid_layout,
+            "score":     score,
+            "rationale": f"{n_cols} columns, {failures} failures, cost ~€{cost:,.0f}",
+            "failures":  failures,
+            "cost":      cost,
         })
 
-    # Allow prompt keywords to bias the recommendation
-    lower = prompt.lower() if prompt else ""
+    # 5. Bias recommendation by prompt keywords
+    lower = (prompt or "").lower()
     if any(k in lower for k in ("conservative", "tight", "dense", "small spacing")):
         recommended = next((o for o in options if o["label"] == "Conservative"), None)
     elif any(k in lower for k in ("open", "wide", "large spacing", "minimal column")):

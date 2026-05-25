@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 from typing import Any
 from _runtime.llm import call_llm
 import time
@@ -24,6 +23,9 @@ TAG_AND_AUDIT TOOL:
 - Pass layout_json exactly from state — never simplify or invent it
 - ALWAYS pass typology: use "column_grid" unless user asks for perimeter_load_bearing or shear_wall
 - ALWAYS pass grid_spacing: use 4.0 unless user specifies a different value
+
+STRUCTURAL EVALUATION (evaluate, check structure, run loads, assess beams/columns, find minimum sections, upgrade sections, optimize structure, check if structure holds):
+Set action="final", final_response="" (empty string). The evaluate node handles all calculations and prompts automatically. NEVER answer the evaluation yourself — not even to say you cannot do it without running checks.
 
 WHAT-IF QUESTIONS — two-step process, NEVER call a tool:
 Step 1: User asks "what if we remove X" → set action="final", final_response="" (empty string). The evaluate node runs the simulation automatically.
@@ -71,7 +73,6 @@ If action is final: tool_calls must be []. If action is tool: final_response mus
 """
 
 
-
 def build_reason_node(llm):
 
     def reason_node(state):
@@ -80,15 +81,24 @@ def build_reason_node(llm):
         print(f"  NODE: REASON  (cycle {cycle})")
         print(f"{'='*50}")
 
+        # Evaluation already complete — skip LLM call (triggered after comparison → reason → END)
+        if state.get("evaluation_result") is not None:
+            state["came_from"] = "reason"
+            return state
+
         # Trim history to stay within token limit
-        # Cap each message at 600 chars so tool results (full layout JSON) don't blow the context
-        def _cap(msg: dict, limit: int = 600) -> dict:
+        # First message is the layout context — give it a large window.
+        # Subsequent messages (tool outputs, LLM responses) are capped tight.
+        def _cap(msg: dict, limit: int) -> dict:
             c = msg.get("content", "")
             return {**msg, "content": c[:limit] + " ...[trimmed]"} if len(c) > limit else msg
 
         messages = state["messages"]
         kept = (messages[:1] + messages[-3:]) if len(messages) > 4 else messages
-        trimmed_messages = [_cap(m) for m in kept]
+        trimmed_messages = [
+            _cap(m, 2500) if i == 0 else _cap(m, 400)
+            for i, m in enumerate(kept)
+        ]
 
         result = None
         last_error = None
@@ -116,30 +126,12 @@ def build_reason_node(llm):
         if result is None:
             raise RuntimeError(f"LLM failed after 3 attempts: {last_error}")
 
-        if result["action"] == "tool":
-            tool_names = [call.get("name", "<unknown>") for call in result.get("tool_calls", [])]
-            print(f"[reason] decision=tool | tool_calls={tool_names}")
-        else:
-            preview = (result.get("final_response") or "").strip().replace("\n", " ")
-            if len(preview) > 140:
-                preview = preview[:140] + "..."
-            print(f"[reason] decision=final | final_response='{preview}'")
-
         if result["action"] == "final":
             state["final_response"] = result["final_response"]
             state["pending_tool_calls"] = None
         else:
             state["pending_tool_calls"] = result["tool_calls"]
             state["final_response"] = None
-
-        # Append structured log entry for the UI reasoning panel
-        tool_names = [c.get("name", "?") for c in (result.get("tool_calls") or [])]
-        log_result = result.get("final_response") or (f"tool: {', '.join(tool_names)}" if tool_names else "")
-        state.setdefault("agent_log", []).append({
-            "cycle": state.get("cycle", 0),
-            "result": log_result,
-            "next": "final" if result["action"] == "final" else "modify",
-        })
 
         state["came_from"] = "reason"
         return state

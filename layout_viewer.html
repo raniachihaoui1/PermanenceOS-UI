@@ -297,31 +297,31 @@
 
     function addLabel(text, x, y, z, color = 0xffffff) {
       const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 256;
+      canvas.width = 384;
+      canvas.height = 176;
       const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "rgba(11, 16, 32, 0.78)";
       ctx.strokeStyle = "rgba(255,255,255,0.10)";
-      ctx.lineWidth = 6;
-      roundRect(ctx, 20, 30, 472, 196, 28);
+      ctx.lineWidth = 4;
+      roundRect(ctx, 14, 18, 356, 140, 20);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
-      ctx.font = "bold 34px Segoe UI";
+      ctx.font = "bold 24px Segoe UI";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const lines = String(text).split("\n");
-      ctx.fillText(lines[0] ?? "", 256, 100);
+      ctx.fillText(lines[0] ?? "", 192, 70);
       ctx.fillStyle = "#e9eefc";
-      ctx.font = "24px Segoe UI";
-      ctx.fillText(lines[1] ?? "", 256, 156);
+      ctx.font = "18px Segoe UI";
+      ctx.fillText(lines[1] ?? "", 192, 112);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
       const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(3.8, 1.9, 1);
+      sprite.scale.set(2.4, 1.1, 1);
       sprite.position.set(x, y, z);
       contentGroup.add(sprite);
     }
@@ -400,6 +400,8 @@
           if (!start || !end) continue;
           // All 2-point elements in structure[] are structural beams (type may be "perimeter", "primary", etc.)
           addStructuralBeam(start, end, attrs);
+          const mid = new THREE.Vector3((start.x + end.x) / 2, 0, (start.z + end.z) / 2);
+          addLabel(item.name || item.id, mid.x, 3.8, mid.z, 0xffd36a);
           pushPoints([start, end]);
         }
       }
