@@ -8,8 +8,11 @@
 # =============================================================================
 
 # --- INPUTS ---
-input_path           = "../data/layout_2bhk.json"
-output_dir           = "../output"
+from pathlib import Path
+
+BASE_DIR             = Path(__file__).resolve().parent.parent
+input_path           = BASE_DIR / "example_layouts" / "layout_2bhk.json"
+output_dir           = BASE_DIR / "output"
 
 TOLERANCE            = 0.01
 MIN_GAP              = 2.5       # min gap for wall edge culling

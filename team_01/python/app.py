@@ -302,12 +302,6 @@ st.markdown("""
   }
   .state-pill-active { background: #1e3a60; color: #8abcf0; }
   div[data-testid="stTabs"] button { font-size: 0.82rem; }
-  .agent-response {
-    color: #c8d8f0; font-size: 0.82rem; line-height: 1.5;
-    background: #161c2a; border-left: 3px solid #3a6aaa;
-    padding: 6px 10px; border-radius: 3px; margin-bottom: 6px;
-    white-space: pre-wrap; word-break: break-word;
-  }
 </style>
 """, unsafe_allow_html=True)
 
