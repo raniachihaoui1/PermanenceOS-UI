@@ -46,7 +46,7 @@
     "windows": [
       {
         "id": "window-1",
-        "type:":"sliding",
+        "type":"sliding",
         "name": "Living Room Window",
         "geometry": [[0.0, 2.0], [0.0, 3.5]],
         "attributes": {

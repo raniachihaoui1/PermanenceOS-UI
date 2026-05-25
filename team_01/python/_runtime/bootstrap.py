@@ -40,7 +40,7 @@ def bootstrap() -> Context:
 
     team_dir = Path(__file__).resolve().parents[2]
     team_name = team_dir.name
-    edited_layout_path = team_dir / f"{team_name}_edited_layout.json"
+    edited_layout_path = repo_root / f"{team_name}_edited_layout.json"
 
     return Context(
         llm=llm,

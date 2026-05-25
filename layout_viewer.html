@@ -51,77 +51,6 @@
       border-radius: 18px;
     }
 
-    .toolbar {
-      top: 16px;
-      left: 16px;
-      right: 16px;
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-      padding: 14px 16px;
-    }
-
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      margin-right: 8px;
-      min-width: 180px;
-    }
-
-    .brand strong {
-      font-size: 14px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .brand span {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .group {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    button, input[type="file"]::file-selector-button {
-      appearance: none;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: linear-gradient(180deg, rgba(120, 183, 255, 0.20), rgba(120, 183, 255, 0.10));
-      color: var(--text);
-      border-radius: 999px;
-      padding: 9px 14px;
-      font: inherit;
-      cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-    }
-
-    button:hover, input[type="file"]::file-selector-button:hover {
-      transform: translateY(-1px);
-      border-color: rgba(120, 183, 255, 0.4);
-    }
-
-    input[type="file"] {
-      color: var(--muted);
-      max-width: 320px;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
     .legend {
       left: 16px;
       bottom: 16px;
@@ -151,31 +80,8 @@
       vertical-align: middle;
     }
 
-    .note {
-      right: 16px;
-      bottom: 16px;
-      padding: 14px 16px;
-      max-width: 360px;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    #status {
-      min-width: 260px;
-    }
-
     @media (max-width: 720px) {
-      .toolbar {
-        padding-top: 12px;
-      }
-      .brand {
-        min-width: 100%;
-      }
-      #status {
-        min-width: 100%;
-      }
-      .legend, .note {
+      .legend {
         max-width: calc(100vw - 32px);
       }
     }
@@ -193,21 +99,6 @@
   <div id="app">
     <div id="viewport"></div>
 
-    <div class="hud toolbar">
-      <div class="brand">
-        <strong>Layout Viewer</strong>
-        <span>Three.js view for `team_01_edited_layout.json`</span>
-      </div>
-      <div class="group">
-        <button id="reloadBtn">Load default layout</button>
-        <button id="fitBtn">Fit view</button>
-      </div>
-      <div class="group">
-        <input id="fileInput" type="file" accept="application/json,.json" />
-      </div>
-      <div id="status" class="chip">Loading layout...</div>
-    </div>
-
     <div class="hud legend">
       <h2>Legend</h2>
       <div class="legend-grid">
@@ -219,10 +110,6 @@
         <div><span class="dot" style="background:#8ad4ff"></span>Windows</div>
       </div>
     </div>
-
-    <div class="hud note">
-      Use the mouse to orbit, pan, and zoom. The viewer treats the JSON as a 2D plan and lifts it into 3D: polygons become thin floor plates, points become columns, and segments become beams/walls/doors/windows.
-    </div>
   </div>
 
   <script type="module">
@@ -231,10 +118,6 @@
 
     const DEFAULT_LAYOUT_URL = "./team_01_edited_layout.json";
     const viewport = document.getElementById("viewport");
-    const status = document.getElementById("status");
-    const reloadBtn = document.getElementById("reloadBtn");
-    const fitBtn = document.getElementById("fitBtn");
-    const fileInput = document.getElementById("fileInput");
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b1020);
@@ -284,10 +167,6 @@
       window: new THREE.MeshStandardMaterial({ color: 0x8ad4ff, roughness: 0.65 }),
       outline: new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }),
     };
-
-    function setStatus(text) {
-      status.textContent = text;
-    }
 
     function clearContent() {
       scene.remove(contentGroup);
@@ -375,17 +254,33 @@
       return mesh;
     }
 
+    function parseDimensionPair(value, fallbackA, fallbackB) {
+      const raw = String(value || "");
+      const [aRaw, bRaw] = raw.split("x");
+      const a = Math.max(0.01, (Number(aRaw) || fallbackA) / 1000);
+      const b = Math.max(0.01, (Number(bRaw) || fallbackB) / 1000);
+      return [a, b];
+    }
+
     function addColumn(point, attrs = {}) {
-      const dims = String(attrs.dimensions || "200x200");
-      const [wRaw, dRaw] = dims.split("x");
-      const width = Math.max(0.15, (Number(wRaw) || 200) / 1000);
-      const depth = Math.max(0.15, (Number(dRaw) || 200) / 1000);
+      const [width, depth] = parseDimensionPair(attrs.dimensions, 200, 200);
       const height = 2.8;
       const geometry = new THREE.BoxGeometry(width, height, depth);
       const mesh = new THREE.Mesh(geometry, materials.column);
       mesh.position.set(point.x, height / 2, point.z);
       contentGroup.add(mesh);
       return mesh;
+    }
+
+    function addStructuralBeam(start, end, attrs = {}) {
+      const orientation = String(attrs.orientation || "").toLowerCase();
+      const [columnWidth, columnDepth] = parseDimensionPair(attrs.columnDimensions, 200, 200);
+      const beamWidth = Math.max(0.05, (Number(attrs.width) || 250) / 1000);
+      const beamDepth = Math.max(0.08, (Number(attrs.depth) || 450) / 1000);
+      const columnHeight = 2.8;
+      const beamThickness = orientation === "vertical" ? columnWidth : beamDepth;
+      const beamCenterY = columnHeight + beamDepth / 2;
+      return addSegment(start, end, 0xffd36a, beamThickness, beamDepth, beamCenterY - beamDepth / 2);
     }
 
     function addRoom(room, index) {
@@ -503,8 +398,11 @@
         if (geometryType >= 2) {
           const [start, end] = extractLine(item) || [];
           if (!start || !end) continue;
-          const color = type.includes("beam") ? 0xffd36a : 0xf0b35f;
-          addSegment(start, end, color, type.includes("beam") ? 0.16 : 0.10, type.includes("beam") ? 0.18 : 0.12, 0.02);
+          if (type.includes("beam")) {
+            addStructuralBeam(start, end, attrs);
+          } else {
+            addSegment(start, end, 0xf0b35f, 0.10, 0.12, 0.02);
+          }
           pushPoints([start, end]);
         }
       }
@@ -537,40 +435,11 @@
     }
 
     async function loadLayoutFromUrl(url) {
-      setStatus(`Loading ${url}...`);
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`Unable to load layout: ${res.status} ${res.statusText}`);
       const layout = await res.json();
       renderLayout(layout);
-      const counts = ["outline", "rooms", "doors", "windows", "furniture", "mep", "structure"]
-        .map((key) => `${key}=${Array.isArray(layout[key]) ? layout[key].length : 0}`)
-        .join(" • ");
-      setStatus(`Loaded ${layout.layoutId || "layout"} | ${counts}`);
     }
-
-    reloadBtn.addEventListener("click", () => {
-      loadLayoutFromUrl(DEFAULT_LAYOUT_URL).catch((err) => setStatus(err.message));
-    });
-
-    fitBtn.addEventListener("click", () => {
-      controls.target.set(4.5, 0, 2.5);
-      camera.position.set(22, 18, 22);
-      controls.update();
-    });
-
-    fileInput.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      try {
-        setStatus(`Reading ${file.name}...`);
-        const text = await file.text();
-        const layout = JSON.parse(text);
-        renderLayout(layout);
-        setStatus(`Loaded ${layout.layoutId || file.name} from local file`);
-      } catch (err) {
-        setStatus(`Could not read file: ${err.message}`);
-      }
-    });
 
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -586,7 +455,6 @@
 
     loadLayoutFromUrl(DEFAULT_LAYOUT_URL).catch((err) => {
       console.error(err);
-      setStatus(`${err.message} - use the file picker to load a JSON layout`);
     });
     animate();
   </script>

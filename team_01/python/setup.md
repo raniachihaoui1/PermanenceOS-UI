@@ -1,139 +1,103 @@
-# Grasshopper MCP Agent — Startup Checklist
-
-Follow these steps **every time** before running the agent.
+# PermanenceOS — Setup & Run Checklist
 
 ---
 
 ## Step 1 — Activate the Virtual Environment
 
-Open **Windows PowerShell** (`Win + R` → type `powershell` → Enter).
+Open **Windows PowerShell** and navigate to the repo root:
 
-Navigate to the repo root:
 ```powershell
-cd D:\IAAC\AIA26\Studio_AIA\Database\AIA26_Studio # its your destination address
-```
-
-Activate the venv:
-```powershell
+cd C:\Users\Win11\Desktop\AIA2026\PermanenceOS-UI
 .\.venv\Scripts\Activate.ps1
 ```
 
-✅ You should see `(.venv)` at the start of your terminal line.
+You should see `(.venv)` at the start of the prompt.
 
 ---
 
-## Step 2 — Open LM Studio
-
-Open the **LM Studio** application from your desktop or Start menu.
-
----
-
-## Step 3 — Load the Model
-
-1. In LM Studio, click the **Chat** tab (top of left sidebar)
-2. At the top of the window, click the model selector dropdown
-3. Find and load: **`meta-llama-3.1-8b-instruct`**
-4. Wait until the model finishes loading (progress bar completes)
-
-✅ You should see the model name shown as active at the top.
-
----
-
-## Step 4 — Start the LM Studio Server
-
-1. In LM Studio, click **"Local Server"** or **"Developer"** in the left sidebar
-2. Click **"Start Server"**
-3. Wait for the status message — it should say something like:
-
-```
-Reachable at 127.0.0.1:1234
-```
-
-4. **Note down the address shown** (it should always be `127.0.0.1:1234`)
-
-✅ Confirm it works — open your browser and go to:
-```
-http://localhost:1234/v1/models
-```
-You should see a JSON response with the model name.
-
----
-
-## Step 5 — Open Grasshopper and Check the Port
-
-1. Open **Rhino**, then open your team's Grasshopper file:
-   ```
-   team_01\gh\team_01_working.gh
-   ```
-2. Look at the **panel** connected to the free-port script — it will show a number like `3001`, `3002`, etc.
-3. **Note that port number**
-
-### Update `mcp.json` with the correct port
-
-Open `mcp.json` (at the repo root) in **VS Code** and update the port to match what Grasshopper shows:
-
-```json
-{
-  "mcpServers": {
-    "Swiftlet": {
-      "command": "C:\\Users\\Scott\\AppData\\Roaming\\McNeel\\Rhinoceros\\packages\\8.0\\swiftlet\\0.2.0\\SwiftletBridge.exe",
-      "args": [
-        "http://localhost:3001/mcp/"
-      ]
-    }
-  }
-}
-```
-
-Replace `3001` with whatever port Grasshopper panel shows today.
-
-> **Also update in LM Studio:** Go to Local Server → MCP settings → update the Swiftlet URL to the same port.
-
----
-
-## Step 6 — Run the Agent
-
-In **VS Code**, open the terminal (`Ctrl + `` ` ```) and make sure you are in the right folder:
+## Step 2 — Install dependencies (first time only)
 
 ```powershell
-cd D:\IAAC\AIA26\Studio_AIA\Database\AIA26_Studio\team_01\python
-```
-
-Run the agent with your prompt:
-
-```powershell
-python main.py "your instruction here"
-```
-
-### Example prompts:
-```powershell
-python main.py "delete the kitchen"
-python main.py "add a window to Bedroom 1"
-```
-
-✅ You should see:
-```
-Discovered MCP tools: [...]
-Reasoning with LLM...
-Agent response:
-...
+pip install -r requirements.txt
 ```
 
 ---
 
-## Quick Reference
+## Step 3 — Open LM Studio and start the server
 
-| Service | Address | Config file |
-|---|---|---|
-| LM Studio API | `http://localhost:1234/v1/` | `.env` |
-| Swiftlet MCP | `http://localhost:300X/mcp/` | `mcp.json` |
+1. Open **LM Studio**
+2. Load the model: **`meta-llama-3.1-8b-instruct`**
+3. Go to **Local Server** → click **Start Server**
+4. Confirm it's reachable at `http://127.0.0.1:1234`
 
-## `.env` should look like this:
+Verify:
+```powershell
+curl http://localhost:1234/v1/models
+```
+
+---
+
+## Step 4 — Check `.env`
+
+The `.env` file at the repo root should contain:
+
 ```dotenv
-LLM_PROVIDER = "local"
-LOCAL_LLM_ENDPOINT = "http://localhost:1234/v1/"
+LOCAL_LLM_ENDPOINT = "http://127.0.0.1:1234/v1/"
+LOCAL_LLM_MODEL    = "meta-llama-3.1-8b-instruct"
 ```
+
+No other variables are required.
 
 ---
 
-> If anything fails, check: (1) venv is activated, (2) LM Studio server is running, (3) Grasshopper is open with the correct port, (4) `mcp.json` port matches Grasshopper panel.
+## Step 5 — Run the agent (CLI)
+
+From the `team_01/python/` folder:
+
+```powershell
+cd team_01\python
+python main.py "add a structural grid"
+python main.py "evaluate the structural layout"
+python main.py "what if we remove column C_1_2"
+```
+
+The agent will:
+1. Reason with the LLM about your request
+2. Call the appropriate local Python function (grid generation, structural modification, evaluation)
+3. Save the result to `team_01_edited_layout.json`
+4. Print a written response with the evaluation table
+
+---
+
+## Step 6 — Run the visual dashboard (Streamlit)
+
+In a second terminal (venv activated), from `team_01/python/`:
+
+```powershell
+streamlit run app.py
+```
+
+Then in a third terminal, start the Three.js tile server from the repo root:
+
+```powershell
+cd C:\Users\Win11\Desktop\AIA2026\PermanenceOS-UI
+python -m http.server 8000
+```
+
+Open the browser at `http://localhost:8501`.
+
+### Streamlit tabs
+| Tab | What it does |
+|-----|-------------|
+| Layout & Grid | Upload layout JSON, create a structural grid visually, see element counts |
+| Cost Calculator | Configure material prices, run structural evaluation, calculate total cost |
+
+---
+
+## Quick reference
+
+| Service | Address |
+|---------|---------|
+| LM Studio API | `http://127.0.0.1:1234/v1/` |
+| Streamlit app | `http://localhost:8501` |
+| Three.js tile server | `http://127.0.0.1:8000` |

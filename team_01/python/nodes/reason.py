@@ -71,28 +71,6 @@ If action is final: tool_calls must be []. If action is tool: final_response mus
 """
 
 
-LLM_ONLY_SYSTEM_PROMPT = """You are a structural design assistant.
-
-You will receive a layout JSON and a user request.
-Do not call tools.
-Do not mention MCP.
-Respond in plain text with the shortest useful answer.
-Focus on material selection first, then the candidate grid concept.
-"""
-
-
-def run_llm_only_reasoning(llm: Any, prompt: str, layout_data: dict[str, Any]) -> str:
-    layout_context = json.dumps(layout_data, indent=2, ensure_ascii=False)
-    messages = [
-        {"role": "user", "content": f"User request:\n{prompt}\n\nLayout JSON:\n{layout_context}"},
-    ]
-    response = llm.invoke([
-        {"role": "system", "content": LLM_ONLY_SYSTEM_PROMPT},
-        *messages,
-    ])
-    content = getattr(response, "content", "")
-    return content if isinstance(content, str) else str(content)
-
 
 def build_reason_node(llm):
 
@@ -153,6 +131,15 @@ def build_reason_node(llm):
         else:
             state["pending_tool_calls"] = result["tool_calls"]
             state["final_response"] = None
+
+        # Append structured log entry for the UI reasoning panel
+        tool_names = [c.get("name", "?") for c in (result.get("tool_calls") or [])]
+        log_result = result.get("final_response") or (f"tool: {', '.join(tool_names)}" if tool_names else "")
+        state.setdefault("agent_log", []).append({
+            "cycle": state.get("cycle", 0),
+            "result": log_result,
+            "next": "final" if result["action"] == "final" else "modify",
+        })
 
         state["came_from"] = "reason"
         return state
