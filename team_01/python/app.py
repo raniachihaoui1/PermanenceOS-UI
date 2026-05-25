@@ -21,6 +21,12 @@ PYTHON_DIR = Path(__file__).resolve().parent
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
 
+# Ensure EDITED_LAYOUT_PATH exists on first run
+if not EDITED_LAYOUT_PATH.exists() and DEFAULT_LAYOUT_PATH.exists():
+    EDITED_LAYOUT_PATH.write_text(
+        DEFAULT_LAYOUT_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 
 def _read_json(path: Path) -> dict:
@@ -47,7 +53,9 @@ def _normalize_layout(payload: object) -> dict:
 def _load_working_layout() -> dict:
     if EDITED_LAYOUT_PATH.exists():
         return _normalize_layout(_read_json(EDITED_LAYOUT_PATH))
-    return _normalize_layout(_read_json(DEFAULT_LAYOUT_PATH))
+    if DEFAULT_LAYOUT_PATH.exists():
+        return _normalize_layout(_read_json(DEFAULT_LAYOUT_PATH))
+    return {}
 
 
 def _viewer_is_reachable() -> bool:
@@ -104,7 +112,7 @@ def _count_elements(layout: dict) -> tuple[int, int]:
     return cols, beams
 
 
-# ── Structural Python helpers (lazy imports to avoid startup-path errors) ──────
+# ── Structural Python helpers (lazy imports) ───────────────────────────────────
 
 def _run_evaluate(layout_json_str: str) -> dict | None:
     try:
@@ -136,7 +144,7 @@ def _run_agent_capture(prompt: str) -> tuple[str, list[dict], dict | None]:
     initial_state = _build_initial_state(prompt, ctx)
     final_state = app_graph.invoke(initial_state)
 
-    # Persist material override to JSON after graph completes
+    # Persist material override
     material = final_state.get("material_override")
     if material:
         from nodes.modify import DEFAULT_SECTIONS
@@ -225,7 +233,7 @@ def _ensure_session() -> None:
 # ── Page setup ─────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Structural Layout Studio",
+    page_title="PermanenceOS",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -237,9 +245,9 @@ st.markdown("""
 <style>
   [data-testid="stAppViewContainer"] { background: #111318; }
   [data-testid="block-container"] { padding-top: 0.7rem; padding-bottom: 0.4rem; }
-  .studio-title {
+  .os-title {
     font-size: 1.25rem; font-weight: 700; color: #e0e6f0;
-    letter-spacing: 0.4px; line-height: 2.2rem;
+    letter-spacing: 0.4px; line-height: 2.4rem;
   }
   .stat-chip {
     display: inline-block; background: #1c2030;
@@ -265,9 +273,7 @@ st.markdown("""
   .grid-stats { font-size: 0.76rem; color: #8898b0; margin-top: 2px; }
   .fail-ct { color: #ff6060; font-weight: 700; }
   .pass-ct { color: #40c040; font-weight: 700; }
-  .eval-big {
-    font-size: 2.6rem; font-weight: 800; line-height: 1.1;
-  }
+  .eval-big { font-size: 2.6rem; font-weight: 800; line-height: 1.1; }
   .eval-label {
     font-size: 0.70rem; color: #6a7a90;
     text-transform: uppercase; letter-spacing: 0.5px;
@@ -315,25 +321,10 @@ has_failures = (
 
 # ── Header row ────────────────────────────────────────────────────────────────
 
-hdr_title, hdr_mat, hdr_stats, hdr_export = st.columns([2, 2, 5, 1])
+hdr_title, hdr_stats, hdr_export = st.columns([2, 6, 1])
 
 with hdr_title:
-    st.markdown('<span class="studio-title">Structural Layout Studio</span>', unsafe_allow_html=True)
-
-with hdr_mat:
-    _MAT_LABELS = {"RCC": "Concrete", "STEEL": "Steel", "TIMBER": "Timber"}
-    mat_choice = st.radio(
-        "Material",
-        options=list(_MAT_LABELS.keys()),
-        format_func=lambda k: _MAT_LABELS[k],
-        index=list(_MAT_LABELS.keys()).index(st.session_state.material),
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    if mat_choice != st.session_state.material:
-        st.session_state.material = mat_choice
-        st.session_state.grid_options = []
-        st.rerun()
+    st.markdown('<span class="os-title">PermanenceOS</span>', unsafe_allow_html=True)
 
 with hdr_stats:
     review_badge = (
@@ -349,10 +340,9 @@ with hdr_stats:
     )
 
 with hdr_export:
-    layout_str_export = json.dumps(layout_obj, indent=2, ensure_ascii=False)
     st.download_button(
         "Export JSON",
-        data=layout_str_export,
+        data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
         file_name="layout_export.json",
         mime="application/json",
         use_container_width=True,
@@ -371,7 +361,8 @@ col_input, col_viewer, col_eval = st.columns([1, 2, 1], gap="medium")
 with col_input:
     st.markdown('<div class="panel-hdr">Input</div>', unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("Load JSON", type=["json"])
+    # ── Upload JSON ──────────────────────────────────────────────────────────
+    uploaded = st.file_uploader("Upload Layout JSON", type=["json"])
     if uploaded is not None:
         try:
             payload = json.loads(uploaded.getvalue().decode("utf-8"))
@@ -381,21 +372,44 @@ with col_input:
             st.session_state.eval_result = None
             st.session_state.agent_log = []
             st.session_state.grid_options = []
+            st.session_state.selected_grid = None
             st.success(f"Loaded '{loaded.get('layoutId', 'unnamed')}'")
             st.rerun()
         except Exception as exc:
             st.error(f"Invalid JSON: {exc}")
 
     if st.button("Reset to default", use_container_width=True, key="btn_reset"):
-        _write_json(EDITED_LAYOUT_PATH, _read_json(DEFAULT_LAYOUT_PATH))
+        if DEFAULT_LAYOUT_PATH.exists():
+            _write_json(EDITED_LAYOUT_PATH, _read_json(DEFAULT_LAYOUT_PATH))
+        elif EDITED_LAYOUT_PATH.exists():
+            EDITED_LAYOUT_PATH.unlink()
         st.session_state.viewer_nonce += 1
         st.session_state.eval_result = None
         st.session_state.agent_log = []
         st.session_state.state_history = []
         st.session_state.prev_cost = None
         st.session_state.grid_options = []
+        st.session_state.selected_grid = None
+        st.session_state.output_log = []
         st.rerun()
 
+    # ── Material selector ─────────────────────────────────────────────────────
+    st.markdown('<div class="panel-hdr">Material</div>', unsafe_allow_html=True)
+    _MAT_LABELS = {"RCC": "Concrete", "STEEL": "Steel", "TIMBER": "Timber"}
+    mat_choice = st.radio(
+        "material_selector",
+        options=list(_MAT_LABELS.keys()),
+        format_func=lambda k: _MAT_LABELS[k],
+        index=list(_MAT_LABELS.keys()).index(st.session_state.material),
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    if mat_choice != st.session_state.material:
+        st.session_state.material = mat_choice
+        st.session_state.grid_options = []
+        st.rerun()
+
+    # ── JSON viewer ───────────────────────────────────────────────────────────
     with st.expander("JSON Preview", expanded=False):
         layout_str_preview = json.dumps(layout_obj, indent=2, ensure_ascii=False)
         st.code(
@@ -403,7 +417,8 @@ with col_input:
             language="json",
         )
 
-    st.markdown('<div class="panel-hdr" style="margin-top:12px;">Grid Options</div>', unsafe_allow_html=True)
+    # ── Grid Options ──────────────────────────────────────────────────────────
+    st.markdown('<div class="panel-hdr">Grid Options</div>', unsafe_allow_html=True)
 
     if not st.session_state.grid_options:
         with st.spinner("Computing grid variants..."):
@@ -468,14 +483,15 @@ with col_viewer:
                 new_str = remove_element(json.dumps(layout_obj), selected_col)
                 _write_json(EDITED_LAYOUT_PATH, json.loads(new_str))
                 st.session_state.viewer_nonce += 1
+                st.session_state.grid_options = []
                 st.rerun()
 
         if _viewer_is_reachable():
             components.iframe(_viewer_url(), height=480, scrolling=False)
         else:
             st.warning(
-                "Three.js viewer not running.  "
-                "Start with `python -m http.server 8000` from the repo root."
+                "Three.js viewer not running — "
+                "start with `python -m http.server 8000` from the repo root."
             )
 
     with tab_costs:
@@ -514,9 +530,12 @@ with col_viewer:
                 c = vol * 200.0
             mat_costs[mat] = mat_costs.get(mat, 0) + c
 
-        for mat_name, mat_cost in sorted(mat_costs.items()):
-            pct = mat_cost / total_cost * 100 if total_cost > 0 else 0
-            st.write(f"**{mat_name}**: €{mat_cost:,.0f} ({pct:.0f}%)")
+        if mat_costs:
+            for mat_name, mat_cost in sorted(mat_costs.items()):
+                pct = mat_cost / total_cost * 100 if total_cost > 0 else 0
+                st.write(f"**{mat_name}**: €{mat_cost:,.0f} ({pct:.0f}%)")
+        else:
+            st.caption("No structural elements yet.")
 
     with tab_history:
         st.markdown('<div class="panel-hdr">State History</div>', unsafe_allow_html=True)
@@ -534,6 +553,7 @@ with col_viewer:
                     _write_json(EDITED_LAYOUT_PATH, snap["layout_json"])
                     st.session_state.viewer_nonce += 1
                     st.session_state.eval_result = snap.get("eval_result")
+                    st.session_state.grid_options = []
                     st.rerun()
 
     with tab_output:
@@ -562,8 +582,24 @@ with col_viewer:
                     unsafe_allow_html=True,
                 )
 
-    st.markdown("---")
-    prompt = st.chat_input("Ask the structural agent...", key="chat_input")
+# ══════════════════════════════════════════════════════════════════════════════
+# RIGHT — Evaluation panel (chat input at top, then evaluate button, then results)
+# ══════════════════════════════════════════════════════════════════════════════
+
+with col_eval:
+    # ── Structural agent chat ─────────────────────────────────────────────────
+    st.markdown('<div class="panel-hdr">Ask Structural Agent</div>', unsafe_allow_html=True)
+
+    with st.form("agent_form", clear_on_submit=True):
+        prompt_input = st.text_area(
+            "prompt",
+            placeholder="e.g. Add a structural grid and evaluate it...",
+            label_visibility="collapsed",
+            height=80,
+        )
+        submitted = st.form_submit_button("Send to Agent", use_container_width=True)
+
+    prompt = prompt_input if submitted and prompt_input.strip() else None
     if prompt:
         with st.spinner("Agent is reasoning..."):
             try:
@@ -593,11 +629,14 @@ with col_viewer:
 
         st.rerun()
 
-# ══════════════════════════════════════════════════════════════════════════════
-# RIGHT — Evaluation panel
-# ══════════════════════════════════════════════════════════════════════════════
+    # Show last agent response inline
+    if st.session_state.output_log:
+        last = st.session_state.output_log[-1]
+        st.caption(last[:300] + ("..." if len(last) > 300 else ""))
 
-with col_eval:
+    st.markdown("---")
+
+    # ── Evaluation ────────────────────────────────────────────────────────────
     st.markdown('<div class="panel-hdr">Evaluation</div>', unsafe_allow_html=True)
 
     if st.button("Evaluate now", use_container_width=True, key="btn_eval"):
@@ -609,23 +648,22 @@ with col_eval:
 
     er = st.session_state.eval_result
     if er is None:
-        st.caption("Press 'Evaluate now' or run a prompt.")
+        st.caption("Press 'Evaluate now' or send a prompt to the agent.")
     else:
         summary = er.get("summary", {})
         bf = summary.get("beam_failures", 0)
         cf = summary.get("column_failures", 0)
 
-        bf_cls = "eval-big eval-fail" if bf > 0 else "eval-big eval-pass"
-        cf_cls = "eval-big eval-fail" if cf > 0 else "eval-big eval-pass"
-
         c_bf, c_cf = st.columns(2)
         with c_bf:
+            bf_cls = "eval-big eval-fail" if bf > 0 else "eval-big eval-pass"
             st.markdown(
                 f'<div class="{bf_cls}">{bf}</div>'
                 f'<div class="eval-label">Beam failures</div>',
                 unsafe_allow_html=True,
             )
         with c_cf:
+            cf_cls = "eval-big eval-fail" if cf > 0 else "eval-big eval-pass"
             st.markdown(
                 f'<div class="{cf_cls}">{cf}</div>'
                 f'<div class="eval-label">Column failures</div>',
@@ -646,7 +684,7 @@ with col_eval:
         st.metric("Score", score)
 
         st.markdown(
-            '<div class="panel-hdr" style="margin-top:10px;">Critical Checks</div>',
+            '<div class="panel-hdr" style="margin-top:8px;">Critical Checks</div>',
             unsafe_allow_html=True,
         )
 
@@ -673,7 +711,8 @@ with col_eval:
                     checks.append("deflection")
                 st.markdown(
                     f'<div class="crit-item">'
-                    f'<b>{b["id"]}</b> &nbsp; {b.get("span_m", 0):.2f}m &bull; {b.get("section_mm", "?")}'
+                    f'<b>{b["id"]}</b> &nbsp;'
+                    f'{b.get("span_m", 0):.2f}m &bull; {b.get("section_mm", "?")}'
                     f'<br/>Fails: {", ".join(checks)}'
                     f'</div>',
                     unsafe_allow_html=True,

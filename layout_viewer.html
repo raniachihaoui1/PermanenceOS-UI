@@ -178,7 +178,7 @@
       if (!Array.isArray(entity?.geometry)) return [];
       return entity.geometry
         .filter((pt) => Array.isArray(pt) && pt.length >= 2)
-        .map((pt) => new THREE.Vector3(Number(pt[0]), 0, Number(pt[1])));
+        .map((pt) => new THREE.Vector3(Number(pt[0]), 0, -Number(pt[1])));
     }
 
     function extractLine(entity) {
@@ -349,7 +349,7 @@
       if (Array.isArray(layout.outline)) {
         const outlinePoints = layout.outline
           .filter((pt) => Array.isArray(pt) && pt.length >= 2)
-          .map((pt) => new THREE.Vector3(Number(pt[0]), 0, Number(pt[1])));
+          .map((pt) => new THREE.Vector3(Number(pt[0]), 0, -Number(pt[1])));
         if (outlinePoints.length >= 3) {
           addExtrudedPolygon(outlinePoints, 0.02, new THREE.MeshStandardMaterial({ color: 0x11172c, transparent: true, opacity: 0.9 }));
           addOutline(outlinePoints, 0xffffff, 0.03);
@@ -398,11 +398,8 @@
         if (geometryType >= 2) {
           const [start, end] = extractLine(item) || [];
           if (!start || !end) continue;
-          if (type.includes("beam")) {
-            addStructuralBeam(start, end, attrs);
-          } else {
-            addSegment(start, end, 0xf0b35f, 0.10, 0.12, 0.02);
-          }
+          // All 2-point elements in structure[] are structural beams (type may be "perimeter", "primary", etc.)
+          addStructuralBeam(start, end, attrs);
           pushPoints([start, end]);
         }
       }
