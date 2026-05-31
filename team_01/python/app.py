@@ -68,6 +68,7 @@ def _load_working_layout() -> dict:
     return {}
 
 
+@st.cache_data(ttl=5)
 def _viewer_is_reachable() -> bool:
     try:
         with urllib.request.urlopen(VIEWER_BASE_URL, timeout=0.8) as r:
@@ -365,7 +366,7 @@ def _ensure_session() -> None:
         "grid_options":    [],
         "selected_grid":   None,
         "output_log":      [],
-        "theme":           "dark",
+        "theme":           "light",
         "selected_el":     "",
         "compare_mode":    False,
         "labels_on":       False,
@@ -645,7 +646,7 @@ with col_input:
     with c_rec:
         rec_clicked = st.button("↺ Refresh", use_container_width=True, key="btn_rec")
 
-    if gen_clicked or rec_clicked or (not st.session_state.grid_options and layout_obj.get("structure")):
+    if gen_clicked or rec_clicked:
         with st.spinner("Computing structural grid options…"):
             st.session_state.grid_options = _run_grid_options(layout_obj, st.session_state.material)
         # Write each option to disk so the viewer can preview it via optionFile param
@@ -878,6 +879,100 @@ with col_viewer:
                             st.session_state.eval_result = None
                             st.session_state.eval_alts   = []
                         st.rerun()
+
+        # ── Add Beam ──────────────────────────────────────────────────────────
+        with st.expander("➕ Add Beam", expanded=False):
+            if len(col_ids) < 2:
+                st.caption("Need at least 2 columns in the layout to add a beam.")
+            else:
+                _ab_c1, _ab_c2 = st.columns(2)
+                with _ab_c1:
+                    beam_col_a = st.selectbox("From column", col_ids, key="beam_col_a",
+                                              label_visibility="visible")
+                with _ab_c2:
+                    _b_opts = [c for c in col_ids if c != beam_col_a]
+                    beam_col_b = st.selectbox("To column", _b_opts, key="beam_col_b",
+                                              label_visibility="visible")
+                if st.button("Add Beam", use_container_width=True, key="btn_add_beam",
+                             disabled=not beam_col_a or not beam_col_b):
+                    from nodes.modify import add_beam
+                    before_str = json.dumps(layout_obj)
+                    new_str    = add_beam(before_str, beam_col_a, beam_col_b,
+                                          st.session_state.material)
+                    if new_str == before_str:
+                        st.warning("A beam between those two columns already exists.")
+                    else:
+                        new_layout = json.loads(new_str)
+                        BEFORE_LAYOUT_PATH.write_text(before_str, encoding="utf-8")
+                        _write_json(EDITED_LAYOUT_PATH, new_layout)
+                        st.session_state.viewer_nonce    += 1
+                        st.session_state.cost_flexibility = None
+                        if st.session_state.get("auto_eval", True):
+                            _mat = st.session_state.get("material", "RCC")
+                            _sdl = st.session_state.get("sdl_kNm2", 3.5)
+                            _ll  = st.session_state.get("live_load_kNm2", 2.0)
+                            from nodes.modify import apply_material_override
+                            _ev = _run_evaluate(
+                                apply_material_override(new_str, _mat), sdl=_sdl, ll=_ll
+                            )
+                            st.session_state.eval_result = _ev
+                            st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                            _cmp = _run_comparison(before_str, new_str)
+                            if _cmp:
+                                st.session_state.output_log.append(_cmp)
+                        else:
+                            st.session_state.eval_result = None
+                            st.session_state.eval_alts   = []
+                        st.rerun()
+
+        # ── Add Column ────────────────────────────────────────────────────────
+        with st.expander("➕ Add Column", expanded=False):
+            _outline = layout_obj.get("outline", [])
+            _xs = [p[0] for p in _outline if len(p) >= 2] or [0.0]
+            _ys = [p[1] for p in _outline if len(p) >= 2] or [0.0]
+            _cx_default = round((min(_xs) + max(_xs)) / 2, 1)
+            _cy_default = round((min(_ys) + max(_ys)) / 2, 1)
+            _ac_c1, _ac_c2 = st.columns(2)
+            with _ac_c1:
+                col_x = st.number_input("X (m)", value=_cx_default, step=0.5,
+                                         format="%.2f", key="add_col_x")
+            with _ac_c2:
+                col_y = st.number_input("Y (m)", value=_cy_default, step=0.5,
+                                         format="%.2f", key="add_col_y")
+            st.caption(
+                f"Layout bounds: X {round(min(_xs),1)}–{round(max(_xs),1)} m  ·  "
+                f"Y {round(min(_ys),1)}–{round(max(_ys),1)} m"
+            )
+            if st.button("Add Column", use_container_width=True, key="btn_add_col"):
+                from nodes.modify import add_column
+                before_str = json.dumps(layout_obj)
+                new_str    = add_column(before_str, col_x, col_y,
+                                        st.session_state.material)
+                if new_str == before_str:
+                    st.warning("A column already exists at that position (within 0.1 m).")
+                else:
+                    new_layout = json.loads(new_str)
+                    BEFORE_LAYOUT_PATH.write_text(before_str, encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH, new_layout)
+                    st.session_state.viewer_nonce    += 1
+                    st.session_state.cost_flexibility = None
+                    if st.session_state.get("auto_eval", True):
+                        _mat = st.session_state.get("material", "RCC")
+                        _sdl = st.session_state.get("sdl_kNm2", 3.5)
+                        _ll  = st.session_state.get("live_load_kNm2", 2.0)
+                        from nodes.modify import apply_material_override
+                        _ev = _run_evaluate(
+                            apply_material_override(new_str, _mat), sdl=_sdl, ll=_ll
+                        )
+                        st.session_state.eval_result = _ev
+                        st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                        _cmp = _run_comparison(before_str, new_str)
+                        if _cmp:
+                            st.session_state.output_log.append(_cmp)
+                    else:
+                        st.session_state.eval_result = None
+                        st.session_state.eval_alts   = []
+                    st.rerun()
 
         # Viewer toolbar: labels toggle + option preview selector
         _tv_cols = st.columns([1, 3])

@@ -242,15 +242,31 @@
     }
 
     function labelFontSize() {
-      return Math.max(9, Math.min(12, xform.scale * 0.12));
+      return Math.max(11, Math.min(15, xform.scale * 0.16));
     }
 
     function drawLabelWithBg(text, x, y, color) {
-      ctx.font = `bold ${labelFontSize()}px Segoe UI`;
-      const m = ctx.measureText(text);
-      const lw = m.width + 6, lh = labelFontSize() + 4;
-      ctx.fillStyle = "rgba(7,26,26,0.82)";
-      ctx.fillRect(x - lw / 2, y - lh / 2, lw, lh);
+      const fs = labelFontSize();
+      ctx.font = `bold ${fs}px Segoe UI`;
+      const m  = ctx.measureText(text);
+      const pw = 5, ph = 3;
+      const lw = m.width + pw * 2, lh = fs + ph * 2;
+      const r  = 3;
+      const lx = x - lw / 2, ly = y - lh / 2;
+      // Rounded-rect background
+      ctx.beginPath();
+      ctx.moveTo(lx + r, ly);
+      ctx.lineTo(lx + lw - r, ly);
+      ctx.quadraticCurveTo(lx + lw, ly, lx + lw, ly + r);
+      ctx.lineTo(lx + lw, ly + lh - r);
+      ctx.quadraticCurveTo(lx + lw, ly + lh, lx + lw - r, ly + lh);
+      ctx.lineTo(lx + r, ly + lh);
+      ctx.quadraticCurveTo(lx, ly + lh, lx, ly + lh - r);
+      ctx.lineTo(lx, ly + r);
+      ctx.quadraticCurveTo(lx, ly, lx + r, ly);
+      ctx.closePath();
+      ctx.fillStyle = isLight ? "rgba(255,255,255,0.93)" : "rgba(5,18,18,0.88)";
+      ctx.fill();
       ctx.fillStyle    = color;
       ctx.textAlign    = "center";
       ctx.textBaseline = "middle";
@@ -345,7 +361,7 @@
           if (chkLbls.checked) {
             const [cx, cy] = centroid(geo);
             ctx.fillStyle    = C.roomLabel;
-            ctx.font         = `${Math.max(9, Math.min(11, xform.scale * 0.10))}px Segoe UI`;
+            ctx.font         = `${Math.max(11, Math.min(14, xform.scale * 0.13))}px Segoe UI`;
             ctx.textAlign    = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(r.name || r.id || "", wx(cx), wy(cy));
