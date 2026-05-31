@@ -753,25 +753,6 @@
       }
     },
     {
-      "id": "D6",
-      "name": "Col_D6",
-      "geometry": [
-        [
-          5.8,
-          6.25
-        ]
-      ],
-      "attributes": {
-        "type": "perimeter",
-        "dimensions": "100x100",
-        "height": "3.5",
-        "isWallAligned": "true",
-        "structuralRole": "primary",
-        "material": "TIMBER",
-        "conflict": "None"
-      }
-    },
-    {
       "id": "D7",
       "name": "Col_D7",
       "geometry": [
@@ -943,30 +924,6 @@
       }
     },
     {
-      "id": "D6-E6",
-      "name": "Beam_D6-E6",
-      "geometry": [
-        [
-          5.8,
-          6.25
-        ],
-        [
-          9.3,
-          6.25
-        ]
-      ],
-      "attributes": {
-        "type": "perimeter",
-        "length": 3.5,
-        "depth": "240",
-        "width": "100",
-        "isWallAligned": "true",
-        "structuralRole": "primary",
-        "material": "TIMBER",
-        "conflict": "None"
-      }
-    },
-    {
       "id": "B3-D3",
       "name": "Beam_B3-D3",
       "geometry": [
@@ -982,30 +939,6 @@
       "attributes": {
         "type": "internal",
         "length": 2.6,
-        "depth": "240",
-        "width": "100",
-        "isWallAligned": "true",
-        "structuralRole": "primary",
-        "material": "TIMBER",
-        "conflict": "None"
-      }
-    },
-    {
-      "id": "D5-D6",
-      "name": "Beam_D5-D6",
-      "geometry": [
-        [
-          5.8,
-          5.5
-        ],
-        [
-          5.8,
-          6.25
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 0.75,
         "depth": "240",
         "width": "100",
         "isWallAligned": "true",
@@ -1375,30 +1308,6 @@
       }
     },
     {
-      "id": "D6-D7",
-      "name": "Beam_D6-D7",
-      "geometry": [
-        [
-          5.8,
-          6.25
-        ],
-        [
-          5.8,
-          7.3
-        ]
-      ],
-      "attributes": {
-        "type": "perimeter",
-        "length": 1.05,
-        "depth": "240",
-        "width": "100",
-        "isWallAligned": "true",
-        "structuralRole": "primary",
-        "material": "TIMBER",
-        "conflict": "None"
-      }
-    },
-    {
       "id": "A5-C5",
       "name": "Beam_A5-C5",
       "geometry": [
@@ -1558,6 +1467,30 @@
       "attributes": {
         "type": "perimeter",
         "length": 3.2,
+        "depth": "240",
+        "width": "100",
+        "isWallAligned": "true",
+        "structuralRole": "primary",
+        "material": "TIMBER",
+        "conflict": "None"
+      }
+    },
+    {
+      "id": "D5-D6",
+      "name": "Beam_D5-D6",
+      "geometry": [
+        [
+          5.8,
+          5.5
+        ],
+        [
+          5.8,
+          7.3
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 0.75,
         "depth": "240",
         "width": "100",
         "isWallAligned": "true",

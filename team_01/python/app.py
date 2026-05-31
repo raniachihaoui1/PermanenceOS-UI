@@ -69,10 +69,12 @@ def _viewer_is_reachable() -> bool:
 def _viewer_url() -> str:
     layout_stamp = int(EDITED_LAYOUT_PATH.stat().st_mtime_ns) if EDITED_LAYOUT_PATH.exists() else 0
     viewer_stamp = int(VIEWER_FILE_PATH.stat().st_mtime_ns) if VIEWER_FILE_PATH.exists() else 0
+    theme = st.session_state.get("theme", "dark")
     return (
         f"{VIEWER_BASE_URL}"
         f"?v={st.session_state.viewer_nonce}"
         f"&layout={layout_stamp}&viewer={viewer_stamp}"
+        f"&theme={theme}"
     )
 
 
@@ -137,14 +139,20 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
 
 def _run_agent_capture(prompt: str) -> tuple[str, list[dict], dict | None]:
     from _runtime.bootstrap import bootstrap
-    from graph import build_graph, _build_initial_state, _format_evaluation
+    from graph import build_graph, _build_initial_state, _format_evaluation, _write_evaluation_report
 
     ctx = bootstrap()
+
+    # Snapshot current layout before run (mirrors main.py / run_agent behaviour)
+    if ctx.edited_layout_path.exists():
+        before_path = ctx.edited_layout_path.with_stem(ctx.edited_layout_path.stem + "_before")
+        before_path.write_text(ctx.edited_layout_path.read_text(encoding="utf-8"), encoding="utf-8")
+
     app_graph = build_graph(ctx)
     initial_state = _build_initial_state(prompt, ctx)
     final_state = app_graph.invoke(initial_state)
 
-    # Persist material override
+    # Persist material override (identical to graph.run_agent)
     material = final_state.get("material_override")
     if material:
         from nodes.modify import DEFAULT_SECTIONS
@@ -158,15 +166,16 @@ def _run_agent_capture(prompt: str) -> tuple[str, list[dict], dict | None]:
                 is_steel = "STEEL" in material.upper()
                 global_beam_sec = sec.get("beam_section", "") if is_steel else ""
                 global_col_sec  = sec.get("col_section",  "") if is_steel else ""
+                count = 0
                 for el in data.get("structure", []):
                     attrs = el.setdefault("attributes", {})
                     attrs["material"] = material
                     is_beam = len(el.get("geometry", [])) == 2
                     cur_sec = attrs.get("section", "")
                     if is_beam and global_beam_sec and cur_sec and cur_sec != global_beam_sec:
-                        continue
+                        count += 1; continue
                     if not is_beam and global_col_sec and cur_sec and cur_sec != global_col_sec:
-                        continue
+                        count += 1; continue
                     if is_beam:
                         attrs["depth"] = str(sec["beam_depth_mm"])
                         attrs["width"] = str(sec["beam_width_mm"])
@@ -180,11 +189,11 @@ def _run_agent_capture(prompt: str) -> tuple[str, list[dict], dict | None]:
                             attrs["section"] = sec["col_section"]
                         else:
                             attrs.pop("section", None)
+                    count += 1
                 ctx.edited_layout_path.write_text(
                     json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
                 )
 
-    agent_log = final_state.get("agent_log", [])
     eval_result = None
     if final_state.get("evaluation_result"):
         try:
@@ -207,7 +216,15 @@ def _run_agent_capture(prompt: str) -> tuple[str, list[dict], dict | None]:
     if not response and ctx.edited_layout_path.exists():
         response = f"Done. Layout saved to {ctx.edited_layout_path.name}"
 
-    return response, agent_log, eval_result
+    # Write evaluation report to file (same as run_agent in graph.py)
+    _write_evaluation_report(
+        prompt=prompt,
+        eval_json=final_state.get("evaluation_result"),
+        comparison=final_state.get("comparison_result"),
+        report_path=ctx.edited_layout_path.parent / "team_01_evaluation_report.md",
+    )
+
+    return response, [], eval_result
 
 
 # ── Session state ──────────────────────────────────────────────────────────────
@@ -224,6 +241,7 @@ def _ensure_session() -> None:
         "grid_options": [],
         "selected_grid": None,
         "output_log": [],
+        "theme": "dark",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -241,69 +259,62 @@ _ensure_session()
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 
-st.markdown("""
-<style>
+_is_light = st.session_state.get("theme", "dark") == "light"
+
+_dark_css = """
   [data-testid="stAppViewContainer"] { background: #111318; }
-  [data-testid="block-container"] { padding-top: 0.7rem; padding-bottom: 0.4rem; }
-  .os-title {
-    font-size: 1.25rem; font-weight: 700; color: #e0e6f0;
-    letter-spacing: 0.4px; line-height: 2.4rem;
-  }
-  .stat-chip {
-    display: inline-block; background: #1c2030;
-    border: 1px solid #2a3040; border-radius: 4px;
-    padding: 2px 10px; margin-left: 5px;
-    font-size: 0.78rem; color: #9aa8c0;
-  }
+  .os-title { font-size: 1.25rem; font-weight: 700; color: #e0e6f0; letter-spacing: 0.4px; line-height: 2.4rem; }
+  .stat-chip { display: inline-block; background: #1c2030; border: 1px solid #2a3040; border-radius: 4px; padding: 2px 10px; margin-left: 5px; font-size: 0.78rem; color: #9aa8c0; }
   .stat-chip b { color: #c8d8f0; }
   .needs-review { background: #5a2a10; color: #ff9860; border-color: #8b4020; }
-  .panel-hdr {
-    font-size: 0.78rem; font-weight: 700; color: #6a7a9a;
-    letter-spacing: 1px; text-transform: uppercase;
-    margin: 8px 0 4px;
-  }
-  .grid-card {
-    border: 1px solid #2a3040; border-radius: 6px;
-    padding: 7px 10px; margin-bottom: 4px;
-    background: #141820;
-  }
+  .panel-hdr { font-size: 0.78rem; font-weight: 700; color: #6a7a9a; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; }
+  .grid-card { border: 1px solid #2a3040; border-radius: 6px; padding: 7px 10px; margin-bottom: 4px; background: #141820; }
   .grid-card-active { border-color: #4a8adf; background: #1a2840; }
   .grid-label { font-size: 0.86rem; font-weight: 700; color: #c0d0e8; }
   .grid-spacing { font-size: 0.73rem; color: #6a7a90; }
   .grid-stats { font-size: 0.76rem; color: #8898b0; margin-top: 2px; }
-  .fail-ct { color: #ff6060; font-weight: 700; }
-  .pass-ct { color: #40c040; font-weight: 700; }
   .eval-big { font-size: 2.6rem; font-weight: 800; line-height: 1.1; }
-  .eval-label {
-    font-size: 0.70rem; color: #6a7a90;
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .eval-fail { color: #ff5050; }
-  .eval-pass { color: #40c040; }
-  .crit-item {
-    background: #1c2030; border-left: 3px solid #cc3030;
-    padding: 5px 8px; margin-bottom: 4px;
-    border-radius: 2px; font-size: 0.76rem; color: #a0b0c8;
-  }
-  .pass-badge {
-    background: #1a7a3a; color: #fff;
-    padding: 2px 8px; border-radius: 4px;
-    font-weight: 700; font-size: 0.78rem;
-  }
-  .log-entry {
-    background: #1c1f26; border-left: 3px solid #4a90d9;
-    padding: 5px 8px; margin-bottom: 4px;
-    border-radius: 3px; font-size: 0.79rem; color: #a0b4cc;
-  }
-  .state-pill {
-    display: inline-block; background: #1c2030; color: #8090a8;
-    padding: 2px 8px; border-radius: 10px;
-    margin: 2px; font-size: 0.74rem;
-  }
+  .eval-label { font-size: 0.70rem; color: #6a7a90; text-transform: uppercase; letter-spacing: 0.5px; }
+  .eval-fail { color: #ff5050; } .eval-pass { color: #40c040; }
+  .crit-item { background: #1c2030; border-left: 3px solid #cc3030; padding: 5px 8px; margin-bottom: 4px; border-radius: 2px; font-size: 0.76rem; color: #a0b0c8; }
+  .pass-badge { background: #1a7a3a; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.78rem; }
+  .log-entry { background: #1c1f26; border-left: 3px solid #4a90d9; padding: 5px 8px; margin-bottom: 4px; border-radius: 3px; font-size: 0.79rem; color: #a0b4cc; }
+  .state-pill { display: inline-block; background: #1c2030; color: #8090a8; padding: 2px 8px; border-radius: 10px; margin: 2px; font-size: 0.74rem; }
   .state-pill-active { background: #1e3a60; color: #8abcf0; }
-  div[data-testid="stTabs"] button { font-size: 0.82rem; }
-</style>
-""", unsafe_allow_html=True)
+  .agent-response { background: #1a1f2e; border-left: 3px solid #4a90d9; padding: 6px 10px; border-radius: 3px; font-size: 0.80rem; color: #c0d0e8; margin-top: 6px; }
+"""
+
+_light_css = """
+  [data-testid="stAppViewContainer"] { background: #f5f7fa; }
+  [data-testid="stSidebar"] { background: #ffffff; }
+  .os-title { font-size: 1.25rem; font-weight: 700; color: #1a2540; letter-spacing: 0.4px; line-height: 2.4rem; }
+  .stat-chip { display: inline-block; background: #ffffff; border: 1px solid #d0d8e8; border-radius: 4px; padding: 2px 10px; margin-left: 5px; font-size: 0.78rem; color: #4a5a70; }
+  .stat-chip b { color: #1a2a40; }
+  .needs-review { background: #fff0e8; color: #c04010; border-color: #e08060; }
+  .panel-hdr { font-size: 0.78rem; font-weight: 700; color: #4a6080; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; }
+  .grid-card { border: 1px solid #d0d8e8; border-radius: 6px; padding: 7px 10px; margin-bottom: 4px; background: #ffffff; }
+  .grid-card-active { border-color: #3a7adf; background: #eaf2ff; }
+  .grid-label { font-size: 0.86rem; font-weight: 700; color: #1a2a40; }
+  .grid-spacing { font-size: 0.73rem; color: #6a7a90; }
+  .grid-stats { font-size: 0.76rem; color: #5a6a80; margin-top: 2px; }
+  .eval-big { font-size: 2.6rem; font-weight: 800; line-height: 1.1; }
+  .eval-label { font-size: 0.70rem; color: #6a7a90; text-transform: uppercase; letter-spacing: 0.5px; }
+  .eval-fail { color: #cc2020; } .eval-pass { color: #208020; }
+  .crit-item { background: #fff4f4; border-left: 3px solid #cc3030; padding: 5px 8px; margin-bottom: 4px; border-radius: 2px; font-size: 0.76rem; color: #3a4050; }
+  .pass-badge { background: #d4f0da; color: #1a5a2a; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.78rem; }
+  .log-entry { background: #f0f5ff; border-left: 3px solid #3a80d9; padding: 5px 8px; margin-bottom: 4px; border-radius: 3px; font-size: 0.79rem; color: #2a3a50; }
+  .state-pill { display: inline-block; background: #e8edf5; color: #4a5a70; padding: 2px 8px; border-radius: 10px; margin: 2px; font-size: 0.74rem; }
+  .state-pill-active { background: #d0e4ff; color: #1a4a90; }
+  .agent-response { background: #f0f5ff; border-left: 3px solid #3a80d9; padding: 6px 10px; border-radius: 3px; font-size: 0.80rem; color: #1a2a40; margin-top: 6px; }
+  [data-testid="stMarkdown"] p, [data-testid="stText"] { color: #1a2a40; }
+"""
+
+_fail_ct_css = ".fail-ct { color: #cc2020; font-weight: 700; } .pass-ct { color: #208020; font-weight: 700; }" if _is_light else ".fail-ct { color: #ff6060; font-weight: 700; } .pass-ct { color: #40c040; font-weight: 700; }"
+
+st.markdown(
+    f"<style>[data-testid='block-container'] {{ padding-top: 0.7rem; padding-bottom: 0.4rem; }} div[data-testid='stTabs'] button {{ font-size: 0.82rem; }} {_fail_ct_css} {''.join((_light_css if _is_light else _dark_css).splitlines())}</style>",
+    unsafe_allow_html=True,
+)
 
 # ── Load working layout ────────────────────────────────────────────────────────
 
@@ -321,7 +332,7 @@ has_failures = (
 
 # ── Header row ────────────────────────────────────────────────────────────────
 
-hdr_title, hdr_stats, hdr_export = st.columns([2, 6, 1])
+hdr_title, hdr_stats, hdr_theme, hdr_export = st.columns([2, 5, 1, 1])
 
 with hdr_title:
     st.markdown('<span class="os-title">PermanenceOS</span>', unsafe_allow_html=True)
@@ -338,6 +349,12 @@ with hdr_stats:
         f'{review_badge}',
         unsafe_allow_html=True,
     )
+
+with hdr_theme:
+    _theme_label = "Dark" if _is_light else "Light"
+    if st.button(_theme_label, use_container_width=True, key="btn_theme"):
+        st.session_state.theme = "dark" if _is_light else "light"
+        st.rerun()
 
 with hdr_export:
     st.download_button(

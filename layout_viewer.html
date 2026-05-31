@@ -18,6 +18,19 @@
       --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
     }
 
+    :root.light {
+      --bg: #f5f7fa;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: rgba(245, 247, 252, 0.98);
+      --line: rgba(0, 0, 0, 0.10);
+      --text: #1a2540;
+      --muted: #4a6080;
+      --accent: #2a6ad9;
+      --accent-2: #1a9a70;
+      --warn: #b07010;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
+    }
+
     html, body {
       margin: 0;
       height: 100%;
@@ -28,6 +41,10 @@
         linear-gradient(180deg, #0b1020 0%, #10192f 100%);
       color: var(--text);
       font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+
+    html.light body {
+      background: linear-gradient(180deg, #f5f7fa 0%, #eaf0fa 100%);
     }
 
     #app {
@@ -119,9 +136,20 @@
     const DEFAULT_LAYOUT_URL = "./team_01_edited_layout.json";
     const viewport = document.getElementById("viewport");
 
+    // Apply light theme if URL param says so
+    const _urlParams = new URLSearchParams(window.location.search);
+    const _isLight = _urlParams.get("theme") === "light";
+    if (_isLight) document.documentElement.classList.add("light");
+
+    const _bgColor    = _isLight ? 0xf5f7fa : 0x0b1020;
+    const _fogColor   = _isLight ? 0xeaf0fa : 0x0b1020;
+    const _gridMain   = _isLight ? 0xc0cce0 : 0x2f3e66;
+    const _gridSub    = _isLight ? 0xd8e2f0 : 0x1f2843;
+    const _sun2Color  = _isLight ? 0xffffff : 0x7cb2ff;
+
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b1020);
-    scene.fog = new THREE.Fog(0x0b1020, 40, 180);
+    scene.background = new THREE.Color(_bgColor);
+    scene.fog = new THREE.Fog(_fogColor, 40, 180);
 
     const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(24, 22, 24);
@@ -135,18 +163,18 @@
     controls.enableDamping = true;
     controls.target.set(4.5, 0, 2.5);
 
-    const ambient = new THREE.AmbientLight(0xffffff, 1.25);
+    const ambient = new THREE.AmbientLight(0xffffff, _isLight ? 2.0 : 1.25);
     scene.add(ambient);
 
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+    const sun = new THREE.DirectionalLight(0xffffff, _isLight ? 1.8 : 2.2);
     sun.position.set(10, 20, 8);
     scene.add(sun);
 
-    const sun2 = new THREE.DirectionalLight(0x7cb2ff, 0.75);
+    const sun2 = new THREE.DirectionalLight(_sun2Color, _isLight ? 0.4 : 0.75);
     sun2.position.set(-10, 10, -8);
     scene.add(sun2);
 
-    const grid = new THREE.GridHelper(80, 80, 0x2f3e66, 0x1f2843);
+    const grid = new THREE.GridHelper(80, 80, _gridMain, _gridSub);
     grid.position.y = -0.02;
     scene.add(grid);
 
@@ -165,7 +193,7 @@
       wall: new THREE.MeshStandardMaterial({ color: 0xf0b35f, roughness: 0.65, metalness: 0.0 }),
       door: new THREE.MeshStandardMaterial({ color: 0xff8a7a, roughness: 0.7 }),
       window: new THREE.MeshStandardMaterial({ color: 0x8ad4ff, roughness: 0.65 }),
-      outline: new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }),
+      outline: new THREE.LineBasicMaterial({ color: _isLight ? 0x1a2540 : 0xffffff, transparent: true, opacity: 0.8 }),
     };
 
     function clearContent() {
@@ -287,7 +315,7 @@
       const points = extractPoints(room);
       if (points.length < 3) return;
       addExtrudedPolygon(points, 0.08, materials.room, 0.0);
-      addOutline(points, 0xdbe8ff, 0.041);
+      addOutline(points, _isLight ? 0x3a6adf : 0xdbe8ff, 0.041);
 
       const area = room?.attributes?.area ?? polygonArea(closedPolygon(points));
       const centroid = points.slice(0, -1).reduce((acc, p) => acc.add(p.clone()), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, points.length - 1));
@@ -301,8 +329,8 @@
       canvas.height = 176;
       const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "rgba(11, 16, 32, 0.78)";
-      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.fillStyle = _isLight ? "rgba(255,255,255,0.88)" : "rgba(11, 16, 32, 0.78)";
+      ctx.strokeStyle = _isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.10)";
       ctx.lineWidth = 4;
       roundRect(ctx, 14, 18, 356, 140, 20);
       ctx.fill();
@@ -313,7 +341,7 @@
       ctx.textBaseline = "middle";
       const lines = String(text).split("\n");
       ctx.fillText(lines[0] ?? "", 192, 70);
-      ctx.fillStyle = "#e9eefc";
+      ctx.fillStyle = _isLight ? "#2a3a50" : "#e9eefc";
       ctx.font = "18px Segoe UI";
       ctx.fillText(lines[1] ?? "", 192, 112);
 
@@ -351,8 +379,8 @@
           .filter((pt) => Array.isArray(pt) && pt.length >= 2)
           .map((pt) => new THREE.Vector3(Number(pt[0]), 0, -Number(pt[1])));
         if (outlinePoints.length >= 3) {
-          addExtrudedPolygon(outlinePoints, 0.02, new THREE.MeshStandardMaterial({ color: 0x11172c, transparent: true, opacity: 0.9 }));
-          addOutline(outlinePoints, 0xffffff, 0.03);
+          addExtrudedPolygon(outlinePoints, 0.02, new THREE.MeshStandardMaterial({ color: _isLight ? 0xe8edf5 : 0x11172c, transparent: true, opacity: 0.9 }));
+          addOutline(outlinePoints, _isLight ? 0x1a2540 : 0xffffff, 0.03);
           pushPoints(outlinePoints);
         }
       }
