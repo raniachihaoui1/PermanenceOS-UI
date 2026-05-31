@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Structural Plan</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #071a1a;
+      color: #c8eeed;
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #toolbar {
+      padding: 7px 12px;
+      background: rgba(13, 48, 48, 0.97);
+      border-bottom: 1px solid #1a5555;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    #toolbar-title { font-weight: 700; color: #2ac0c0; font-size: 13px; letter-spacing: .3px; }
+    #toolbar-status { color: #6ab8b8; font-size: 11px; }
+    .spacer { flex: 1; }
+    .tb-btn {
+      background: #0d3030;
+      border: 1px solid #1a5555;
+      color: #2ac0c0;
+      padding: 4px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .2px;
+      transition: background .15s;
+    }
+    .tb-btn:hover { background: #1a5555; }
+    .tb-label {
+      display: flex; align-items: center; gap: 5px;
+      cursor: pointer; color: #6ab8b8; font-size: 11px; user-select: none;
+    }
+    .tb-label input[type=checkbox] { accent-color: #2ac0c0; cursor: pointer; }
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    #el-info {
+      position: absolute;
+      display: none;
+      background: rgba(7, 40, 40, 0.97);
+      border: 1px solid #1a5555;
+      border-radius: 9px;
+      padding: 9px 13px;
+      font-size: 12px;
+      color: #c8eeed;
+      max-width: 200px;
+      pointer-events: none;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+      backdrop-filter: blur(10px);
+      line-height: 1.7;
+    }
+    #el-info-id { color: #2ac0c0; font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+    #el-info-type { color: #6ab8b8; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span id="toolbar-title">Structural Plan</span>
+    <span id="toolbar-status">Loading…</span>
+    <div class="spacer"></div>
+    <label class="tb-label">
+      <input type="checkbox" id="chk-labels" checked> Labels
+    </label>
+    <label class="tb-label">
+      <input type="checkbox" id="chk-grid" checked> Grid
+    </label>
+    <button class="tb-btn" id="btn-export">Export PNG</button>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="el-info">
+      <div id="el-info-id"></div>
+      <div id="el-info-type"></div>
+      <div id="el-info-props"></div>
+    </div>
+  </div>
+
+  <script>
+    const params      = new URLSearchParams(window.location.search);
+    const optionFile  = params.get("optionFile") || "";
+    const highlightId = params.get("highlight")  || "";
+    const isLight     = params.get("theme") === "light";
+    const DEFAULT_URL = "./team_01_edited_layout.json";
+
+    // Apply body/toolbar styles for light mode
+    if (isLight) {
+      document.body.style.background = "#ffffff";
+      document.getElementById("toolbar").style.background = "rgba(255,255,255,0.97)";
+      document.getElementById("toolbar").style.borderBottom = "1px solid #c0d8d8";
+      document.getElementById("toolbar-title").style.color = "#088a87";
+      document.getElementById("toolbar-status").style.color = "#4a7070";
+      document.querySelectorAll(".tb-btn").forEach(b => {
+        b.style.background = "#e6f0f0"; b.style.borderColor = "#a0c8c8"; b.style.color = "#065f5d";
+      });
+      document.querySelectorAll(".tb-label").forEach(l => { l.style.color = "#2a5050"; });
+    }
+
+    const canvas   = document.getElementById("canvas");
+    const ctx      = canvas.getContext("2d");
+    const wrap     = document.getElementById("canvas-wrap");
+    const statusEl = document.getElementById("toolbar-status");
+    const elInfo   = document.getElementById("el-info");
+    const chkLbls  = document.getElementById("chk-labels");
+    const chkGrid  = document.getElementById("chk-grid");
+
+    let layout    = null;
+    let xform     = { scale: 1, ox: 0, oy: 0, minX: 0, minY: 0, maxX: 10, maxY: 10 };
+    let hitList   = []; // { id, type, info, bounds|line }
+
+    const C = isLight ? {
+      bg:          "#ffffff",
+      grid:        "rgba(0, 120, 120, 0.12)",
+      gridLabel:   "#a0c0c0",
+      outline:     "#088a87",
+      outlineFill: "rgba(230, 247, 247, 0.9)",
+      roomFill:    "rgba(8, 138, 135, 0.06)",
+      roomStroke:  "#a0c8c8",
+      roomLabel:   "#4a7070",
+      col:         "#088a87",
+      colFill:     "rgba(8, 138, 135, 0.55)",
+      colLabel:    "#1a2a30",
+      beam:        "#0a6a68",
+      beamLabel:   "#1a2a30",
+      door:        "#cc4444",
+      win:         "#4488cc",
+      hi:          "#e07700",
+    } : {
+      bg:          "#071a1a",
+      grid:        "rgba(26, 85, 85, 0.35)",
+      gridLabel:   "#1a5555",
+      outline:     "#1ae8b0",
+      outlineFill: "rgba(7, 40, 40, 0.85)",
+      roomFill:    "rgba(42, 192, 192, 0.07)",
+      roomStroke:  "#1a5555",
+      roomLabel:   "#5a9090",
+      col:         "#2ac0c0",
+      colFill:     "rgba(42, 192, 192, 0.65)",
+      colLabel:    "#c8eeed",
+      beam:        "#1ae8b0",
+      beamLabel:   "#c8eeed",
+      door:        "#ff8a7a",
+      win:         "#8ad4ff",
+      hi:          "#ff9900",
+    };
+
+    // ── coordinate helpers ──────────────────────────────────────────────────────
+
+    function wx(x) { return x * xform.scale + xform.ox; }
+    function wy(y) { return -y * xform.scale + xform.oy; }
+
+    function computeTransform() {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      function scan(pts) {
+        for (const pt of (pts || [])) {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            const [x, y] = pt;
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+          }
+        }
+      }
+      scan(layout.outline);
+      for (const r of layout.rooms   || []) scan(r.geometry);
+      for (const s of layout.structure || []) scan(s.geometry);
+      if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 10; maxY = 10; }
+      const W = canvas.width  - 80;
+      const H = canvas.height - 60;
+      const dX = maxX - minX || 1;
+      const dY = maxY - minY || 1;
+      const sc = Math.min(W / dX, H / dY) * 0.88;
+      xform = {
+        scale: sc,
+        ox: canvas.width  / 2 - ((minX + maxX) / 2) * sc,
+        oy: canvas.height / 2 + ((minY + maxY) / 2) * sc,
+        minX, minY, maxX, maxY,
+      };
+    }
+
+    // ── drawing helpers ─────────────────────────────────────────────────────────
+
+    function drawGrid() {
+      if (!chkGrid.checked) return;
+      const { minX, minY, maxX, maxY } = xform;
+      ctx.strokeStyle = C.grid;
+      ctx.lineWidth   = 0.5;
+      for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+        ctx.beginPath(); ctx.moveTo(wx(x), wy(minY - 0.5)); ctx.lineTo(wx(x), wy(maxY + 0.5)); ctx.stroke();
+      }
+      for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+        ctx.beginPath(); ctx.moveTo(wx(minX - 0.5), wy(y)); ctx.lineTo(wx(maxX + 0.5), wy(y)); ctx.stroke();
+      }
+      // Axis labels
+      ctx.fillStyle  = C.gridLabel;
+      ctx.font       = "9px Segoe UI";
+      ctx.textAlign  = "center";
+      ctx.textBaseline = "top";
+      for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 2) {
+        ctx.fillText(`${x}`, wx(x), wy(minY) + 4);
+      }
+      ctx.textAlign    = "right";
+      ctx.textBaseline = "middle";
+      for (let y = Math.ceil(minY); y <= Math.floor(maxY); y += 2) {
+        ctx.fillText(`${y}`, wx(minX) - 4, wy(y));
+      }
+    }
+
+    function drawPoly(geo, fill, stroke, lw = 1) {
+      if (!geo || geo.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(wx(geo[0][0]), wy(geo[0][1]));
+      for (let i = 1; i < geo.length; i++) ctx.lineTo(wx(geo[i][0]), wy(geo[i][1]));
+      ctx.closePath();
+      if (fill)   { ctx.fillStyle   = fill;   ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+    }
+
+    function centroid(geo) {
+      let cx = 0, cy = 0, n = geo.length;
+      for (const [x, y] of geo) { cx += x; cy += y; }
+      return [cx / n, cy / n];
+    }
+
+    function labelFontSize() {
+      return Math.max(9, Math.min(12, xform.scale * 0.12));
+    }
+
+    function drawLabelWithBg(text, x, y, color) {
+      ctx.font = `bold ${labelFontSize()}px Segoe UI`;
+      const m = ctx.measureText(text);
+      const lw = m.width + 6, lh = labelFontSize() + 4;
+      ctx.fillStyle = "rgba(7,26,26,0.82)";
+      ctx.fillRect(x - lw / 2, y - lh / 2, lw, lh);
+      ctx.fillStyle    = color;
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x, y);
+    }
+
+    function drawColumn(el) {
+      const geo  = el.geometry || [];
+      if (!geo[0] || !Array.isArray(geo[0])) return null;
+      const [gx, gy] = geo[0];
+      const attrs    = el.attributes || {};
+      const dimStr   = String(attrs.dimensions || "200x200");
+      const parts    = dimStr.split("x").map(Number);
+      const hw       = ((parts[0] || 200) / 1000) * xform.scale / 2;
+      const hd       = ((parts[1] || parts[0] || 200) / 1000) * xform.scale / 2;
+      const cx = wx(gx), cy = wy(gy);
+      const isHi = (el.id === highlightId || el.name === highlightId);
+      const fill   = isHi ? C.hi : C.colFill;
+      const stroke = isHi ? C.hi : C.col;
+      ctx.fillStyle   = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth   = isHi ? 2 : 1;
+      ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
+      if (chkLbls.checked) {
+        drawLabelWithBg(el.id || el.name || "", cx, cy - hd - labelFontSize() / 2 - 3, isHi ? C.hi : C.colLabel);
+      }
+      return { type: "rect", x: cx - hw, y: cy - hd, w: hw * 2, h: hd * 2 };
+    }
+
+    function drawBeam(el) {
+      const geo = el.geometry || [];
+      if (!geo[0] || !geo[1]) return null;
+      const [x1, y1] = geo[0], [x2, y2] = geo[1];
+      const cx1 = wx(x1), cy1 = wy(y1), cx2 = wx(x2), cy2 = wy(y2);
+      const isHi = (el.id === highlightId || el.name === highlightId);
+      const col = isHi ? C.hi : C.beam;
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = isHi ? 3 : 2;
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(cx1, cy1); ctx.lineTo(cx2, cy2); ctx.stroke();
+      [[cx1, cy1], [cx2, cy2]].forEach(([ex, ey]) => {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fill();
+      });
+      if (chkLbls.checked) {
+        const mx = (cx1 + cx2) / 2, my = (cy1 + cy2) / 2;
+        drawLabelWithBg(el.id || el.name || "", mx, my, isHi ? C.hi : C.beamLabel);
+      }
+      return { type: "line", x1: cx1, y1: cy1, x2: cx2, y2: cy2 };
+    }
+
+    function drawDoor(el) {
+      const geo = el.geometry || [];
+      if (!geo[0] || !geo[1]) return;
+      ctx.strokeStyle = C.door; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(wx(geo[0][0]), wy(geo[0][1])); ctx.lineTo(wx(geo[1][0]), wy(geo[1][1])); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawWindow(el) {
+      const geo = el.geometry || [];
+      if (!geo[0] || !geo[1]) return;
+      ctx.strokeStyle = C.win; ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(wx(geo[0][0]), wy(geo[0][1])); ctx.lineTo(wx(geo[1][0]), wy(geo[1][1])); ctx.stroke();
+    }
+
+    // ── main render ─────────────────────────────────────────────────────────────
+
+    function render() {
+      if (!layout) return;
+      canvas.width  = wrap.clientWidth;
+      canvas.height = wrap.clientHeight;
+      computeTransform();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = C.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawGrid();
+
+      // Outline
+      if ((layout.outline || []).length >= 3) {
+        drawPoly(layout.outline, C.outlineFill, C.outline, 2);
+      }
+
+      // Rooms
+      for (const r of layout.rooms || []) {
+        const geo = r.geometry || [];
+        if (geo.length >= 3) {
+          drawPoly(geo, C.roomFill, C.roomStroke, 1);
+          if (chkLbls.checked) {
+            const [cx, cy] = centroid(geo);
+            ctx.fillStyle    = C.roomLabel;
+            ctx.font         = `${Math.max(9, Math.min(11, xform.scale * 0.10))}px Segoe UI`;
+            ctx.textAlign    = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(r.name || r.id || "", wx(cx), wy(cy));
+          }
+        }
+      }
+
+      // Doors & windows first (under structure)
+      for (const d of layout.doors   || []) drawDoor(d);
+      for (const w of layout.windows || []) drawWindow(w);
+
+      // Structure (columns + beams)
+      hitList = [];
+      for (const el of layout.structure || []) {
+        const geo  = el.geometry || [];
+        const info = el.attributes || {};
+        if (geo.length === 1) {
+          const bounds = drawColumn(el);
+          if (bounds) hitList.push({ id: el.id || el.name, type: "column", info, bounds });
+        } else if (geo.length >= 2) {
+          const line = drawBeam(el);
+          if (line) hitList.push({ id: el.id || el.name, type: "beam", info, line });
+        }
+      }
+    }
+
+    // ── hit testing ─────────────────────────────────────────────────────────────
+
+    function hitTest(mx, my) {
+      for (const el of [...hitList].reverse()) {
+        if (el.bounds) {
+          const b = el.bounds;
+          if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) return el;
+        } else if (el.line) {
+          const { x1, y1, x2, y2 } = el.line;
+          const dx = x2 - x1, dy = y2 - y1;
+          const len2 = dx * dx + dy * dy;
+          if (len2 === 0) continue;
+          const t  = Math.max(0, Math.min(1, ((mx - x1) * dx + (my - y1) * dy) / len2));
+          const px = x1 + t * dx, py = y1 + t * dy;
+          if (Math.sqrt((mx - px) ** 2 + (my - py) ** 2) < 9) return el;
+        }
+      }
+      return null;
+    }
+
+    canvas.addEventListener("click", function (e) {
+      const rect = canvas.getBoundingClientRect();
+      const mx   = e.clientX - rect.left;
+      const my   = e.clientY - rect.top;
+      const hit  = hitTest(mx, my);
+      if (hit) {
+        const px = Math.min(mx + 12, canvas.width  - 215);
+        const py = Math.max(my - 10, 4);
+        elInfo.style.left       = `${px}px`;
+        elInfo.style.top        = `${py}px`;
+        elInfo.style.display    = "block";
+        elInfo.style.background = isLight ? "rgba(255,255,255,0.97)" : "rgba(7,40,40,0.97)";
+        elInfo.style.border     = isLight ? "1px solid #a0c8c8" : "1px solid #1a5555";
+        elInfo.style.color      = isLight ? "#1a2a30" : "#c8eeed";
+        const _keyCol           = isLight ? "#088a87" : "#6ab8b8";
+        document.getElementById("el-info-id").style.color   = isLight ? "#088a87" : "#2ac0c0";
+        document.getElementById("el-info-type").style.color = isLight ? "#4a7070"  : "#6ab8b8";
+        document.getElementById("el-info-id").textContent   = hit.id || "—";
+        document.getElementById("el-info-type").textContent = hit.type;
+        document.getElementById("el-info-props").innerHTML  = Object.entries(hit.info)
+          .map(([k, v]) => `<span style="color:${_keyCol}">${k}:</span> ${v}`)
+          .join("<br>") || "—";
+        window.parent.postMessage({ type: "selectElement", elementId: hit.id }, "*");
+      } else {
+        elInfo.style.display = "none";
+      }
+    });
+
+    // ── controls ────────────────────────────────────────────────────────────────
+
+    document.getElementById("btn-export").addEventListener("click", function () {
+      const link    = document.createElement("a");
+      link.download = "structural_plan.png";
+      link.href     = canvas.toDataURL("image/png");
+      link.click();
+    });
+
+    chkLbls.addEventListener("change", render);
+    chkGrid.addEventListener("change", render);
+
+    // ── data loading & auto-refresh ─────────────────────────────────────────────
+
+    let _lastJson = "";
+
+    async function loadLayout() {
+      const src = optionFile ? `./${optionFile}` : DEFAULT_URL;
+      const url = `${src}?t=${Date.now()}`;
+      try {
+        const res  = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (text === _lastJson) return; // no change
+        _lastJson = text;
+        let data  = JSON.parse(text);
+        if (data.layout) data = data.layout;
+        layout = data;
+        render();
+        statusEl.textContent = layout.layoutId || "Loaded";
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+      }
+    }
+
+    window.addEventListener("resize", function () {
+      if (layout) render();
+    });
+
+    loadLayout();
+    setInterval(loadLayout, 2500);
+  </script>
+</body>
+</html>

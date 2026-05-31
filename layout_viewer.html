@@ -6,16 +6,16 @@
   <title>Layout Viewer</title>
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: rgba(16, 22, 43, 0.86);
-      --panel-strong: rgba(8, 12, 24, 0.96);
-      --line: rgba(255, 255, 255, 0.10);
-      --text: #e9eefc;
-      --muted: #9fb0d0;
-      --accent: #78b7ff;
-      --accent-2: #7af0c8;
+      --bg: #071a1a;
+      --panel: rgba(7, 40, 40, 0.92);
+      --panel-strong: rgba(4, 20, 20, 0.97);
+      --line: rgba(42, 192, 192, 0.18);
+      --text: #c8eeed;
+      --muted: #6ab8b8;
+      --accent: #2ac0c0;
+      --accent-2: #1ae8b0;
       --warn: #ffcc66;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
     }
 
     :root.light {
@@ -36,9 +36,9 @@
       height: 100%;
       overflow: hidden;
       background:
-        radial-gradient(circle at top left, rgba(120, 183, 255, 0.20), transparent 30%),
-        radial-gradient(circle at top right, rgba(122, 240, 200, 0.14), transparent 25%),
-        linear-gradient(180deg, #0b1020 0%, #10192f 100%);
+        radial-gradient(circle at top left, rgba(42, 192, 192, 0.12), transparent 30%),
+        radial-gradient(circle at top right, rgba(26, 232, 176, 0.07), transparent 25%),
+        linear-gradient(180deg, #071a1a 0%, #0a2424 100%);
       color: var(--text);
       font-family: "Segoe UI", "Trebuchet MS", sans-serif;
     }
@@ -127,6 +127,29 @@
         <div><span class="dot" style="background:#8ad4ff"></span>Windows</div>
       </div>
     </div>
+    <!-- Element click popup -->
+    <div id="el-popup" style="
+      display:none;position:absolute;z-index:30;
+      background:rgba(7,40,40,0.97);
+      border:1px solid #1a5555;border-radius:12px;
+      padding:14px 16px;min-width:190px;max-width:250px;
+      color:#c8eeed;font-family:'Segoe UI',sans-serif;font-size:13px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.6);backdrop-filter:blur(16px);
+    ">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span id="el-popup-id" style="font-size:15px;font-weight:700;color:#2ac0c0"></span>
+        <button id="el-popup-close" style="background:none;border:none;color:#6ab8b8;font-size:18px;cursor:pointer;padding:0 4px;line-height:1">×</button>
+      </div>
+      <div id="el-popup-type" style="color:#6ab8b8;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px"></div>
+      <div id="el-popup-props" style="font-size:12px;color:#a0d8d8;line-height:1.8"></div>
+      <button id="el-popup-select" style="
+        margin-top:10px;width:100%;padding:6px 0;
+        background:#0d3030;border:1px solid #2ac0c0;border-radius:6px;
+        color:#2ac0c0;font-size:12px;cursor:pointer;font-weight:600;
+        letter-spacing:.3px;
+      ">Select in App ↗</button>
+    </div>
+
     <script>
       // Inject compare legend items if needed (runs before module script)
       (function () {
@@ -159,12 +182,14 @@
     const _isLight     = _urlParams.get("theme")     === "light";
     const _highlightId = _urlParams.get("highlight") || "";
     const _compareMode = _urlParams.get("mode")      === "compare";
+    const _showLabels  = _urlParams.get("labels")    !== "0";
+    const _optionFile  = _urlParams.get("optionFile") || "";
     if (_isLight) document.documentElement.classList.add("light");
 
-    const _bgColor    = _isLight ? 0xf5f7fa : 0x0b1020;
-    const _fogColor   = _isLight ? 0xeaf0fa : 0x0b1020;
-    const _gridMain   = _isLight ? 0xc0cce0 : 0x2f3e66;
-    const _gridSub    = _isLight ? 0xd8e2f0 : 0x1f2843;
+    const _bgColor    = _isLight ? 0xf5f7fa : 0x071a1a;
+    const _fogColor   = _isLight ? 0xeaf0fa : 0x071a1a;
+    const _gridMain   = _isLight ? 0xc0cce0 : 0x1a5555;
+    const _gridSub    = _isLight ? 0xd8e2f0 : 0x0d3030;
     const _sun2Color  = _isLight ? 0xffffff : 0x7cb2ff;
 
     const scene = new THREE.Scene();
@@ -329,6 +354,13 @@
       const height = 2.8;
       const geometry = new THREE.BoxGeometry(width, height, depth);
       const mesh = new THREE.Mesh(geometry, matOverride || materials.column);
+      mesh.userData.elementId = id || "";
+      mesh.userData.elInfo = {
+        type: "column",
+        dimensions: attrs.dimensions || `${Math.round(width*1000)}×${Math.round(depth*1000)} mm`,
+        material: attrs.material || "—",
+        height: attrs.height ? `${attrs.height} m` : "2.8 m",
+      };
       mesh.position.set(point.x, height / 2, point.z);
       contentGroup.add(mesh);
       _trackMesh(id, mesh);
@@ -352,6 +384,14 @@
       const y = beamCenterY - beamDepth / 2;
       const geometry = new THREE.BoxGeometry(length, beamDepth, beamThickness);
       const mesh = new THREE.Mesh(geometry, mat);
+      mesh.userData.elementId = id || "";
+      mesh.userData.elInfo = {
+        type: "beam",
+        section: attrs.section || `${attrs.width || "?"}×${attrs.depth || "?"} mm`,
+        material: attrs.material || "—",
+        span: `${length.toFixed(2)} m`,
+        orientation: attrs.orientation || "—",
+      };
       mesh.rotation.y = -angle;
       mesh.position.set((start.x + end.x) / 2, y + beamDepth / 2, (start.z + end.z) / 2);
       contentGroup.add(mesh);
@@ -467,7 +507,7 @@
         if (type.includes("column") || points.length === 1) {
           if (points[0]) {
             addColumn(points[0], attrs, elId, matOvr);
-            if (!matOvr) addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x6be1b6);
+            if (_showLabels && !matOvr) addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x6be1b6);
             allPoints.push(points[0].clone());
           }
           continue;
@@ -478,7 +518,7 @@
           if (!start || !end) continue;
           addStructuralBeam(start, end, attrs, elId, matOvr);
           const mid = new THREE.Vector3((start.x + end.x) / 2, 0, (start.z + end.z) / 2);
-          if (!matOvr) addLabel(item.name || item.id, mid.x, 3.8, mid.z, 0xffd36a);
+          if (_showLabels && !matOvr) addLabel(item.name || item.id, mid.x, 3.8, mid.z, 0xffd36a);
           pushPoints([start, end]);
         }
       }
@@ -553,7 +593,8 @@
     }
 
     async function initScene() {
-      const afterLayout = await fetchJson(DEFAULT_LAYOUT_URL);
+      const layoutUrl   = _optionFile ? `./${_optionFile}` : DEFAULT_LAYOUT_URL;
+      const afterLayout = await fetchJson(layoutUrl);
 
       if (_compareMode) {
         let beforeLayout = null;
@@ -579,6 +620,54 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Click-to-select: show popup with element info, relay ID to parent frame
+    const _raycaster = new THREE.Raycaster();
+    const _mouse     = new THREE.Vector2();
+    const _popup     = document.getElementById("el-popup");
+
+    renderer.domElement.addEventListener("click", function (e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      _mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      _mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+      _raycaster.setFromCamera(_mouse, camera);
+      const allMeshes = [];
+      Object.entries(elementMeshes).forEach(([, meshes]) => meshes.forEach(m => allMeshes.push(m)));
+      const hits = _raycaster.intersectObjects(allMeshes, false);
+
+      if (hits.length) {
+        const mesh = hits[0].object;
+        const eid  = mesh.userData.elementId || "";
+        const info = mesh.userData.elInfo   || {};
+        if (eid) {
+          // Position popup near cursor, clamp to viewport
+          const px = Math.min(e.clientX + 14, window.innerWidth  - 270);
+          const py = Math.max(e.clientY - 16, 8);
+          _popup.style.left    = `${px}px`;
+          _popup.style.top     = `${py}px`;
+          _popup.style.display = "block";
+          document.getElementById("el-popup-id").textContent   = eid;
+          document.getElementById("el-popup-type").textContent = info.type || "element";
+          const propsHtml = Object.entries(info)
+            .filter(([k]) => k !== "type")
+            .map(([k, v]) => `<span style="color:#6ab8b8">${k}:</span> ${v}`)
+            .join("<br>");
+          document.getElementById("el-popup-props").innerHTML = propsHtml || "—";
+          window.parent.postMessage({ type: "selectElement", elementId: eid }, "*");
+        }
+      } else {
+        _popup.style.display = "none";
+      }
+    });
+
+    document.getElementById("el-popup-close").addEventListener("click", function () {
+      _popup.style.display = "none";
+    });
+    document.getElementById("el-popup-select").addEventListener("click", function () {
+      const eid = document.getElementById("el-popup-id").textContent;
+      if (eid) window.parent.postMessage({ type: "selectElement", elementId: eid }, "*");
+      _popup.style.display = "none";
     });
 
     function animate() {
