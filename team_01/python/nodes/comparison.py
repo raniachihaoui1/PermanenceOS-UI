@@ -94,8 +94,7 @@ def _slim_diff_for_llm(original_json: str, modified_json: str) -> str:
             if sec_b != sec_a:
                 patterns[f"{sec_b}→{sec_a}"] += 1
             else:
-                mat_b = orig[k].get("attributes", {}).get("material", "")
-                mat_a = mod[k].get("attributes", {}).get("material", "")
+                mat_b, mat_a = b.get("material", ""), a.get("material", "")
                 if mat_b != mat_a:
                     patterns[f"material {mat_b}→{mat_a}"] += 1
                 else:
