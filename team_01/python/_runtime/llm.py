@@ -269,7 +269,7 @@ def call_llm(
 # ---------------------------------------------------------------------------
 
 def write_tool_result(tool_output: str, path: Path) -> None:
-    """Write the MCP tool output to a file, pretty-printing JSON if possible."""
+    """Write a tool output to a file, pretty-printing JSON if possible."""
     stripped = tool_output.strip()
     try:
         parsed = json.loads(stripped)

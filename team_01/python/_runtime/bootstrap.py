@@ -12,14 +12,13 @@ from nodes.tools import get_action_tools
 
 @dataclass
 class Context:
-    """Everything the graph needs for MCP-free local execution."""
+    """Everything the graph needs for local execution."""
 
     llm: Any
     tools: list[dict[str, Any]]
     layout_data: dict[str, Any]
     max_iterations: int
     edited_layout_path: Path
-    mcp_client: Any | None = None
 
 
 def bootstrap() -> Context:
@@ -48,5 +47,4 @@ def bootstrap() -> Context:
         layout_data=layout_data,
         max_iterations=settings.max_iterations,
         edited_layout_path=edited_layout_path,
-        mcp_client=None,
     )

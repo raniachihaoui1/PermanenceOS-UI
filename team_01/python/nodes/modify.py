@@ -24,11 +24,11 @@ STEEL_COL_PROPS: dict[str, dict] = {
 
 DEFAULT_SECTIONS: dict[str, dict] = {
     "RCC_XS":    {"beam_depth_mm": 200, "beam_width_mm": 150, "col_dims": "150x150"},
-    "RCC":       {"beam_depth_mm": 300, "beam_width_mm": 200, "col_dims": "200x200"},
-    "RCC_M":     {"beam_depth_mm": 450, "beam_width_mm": 250, "col_dims": "250x250"},
-    "RCC_L":     {"beam_depth_mm": 600, "beam_width_mm": 300, "col_dims": "300x300"},
-    "RCC_XL":    {"beam_depth_mm": 700, "beam_width_mm": 350, "col_dims": "350x350"},
-    "RCC_XXL":   {"beam_depth_mm": 800, "beam_width_mm": 400, "col_dims": "400x400"},
+    "RCC":       {"beam_depth_mm": 250, "beam_width_mm": 175, "col_dims": "175x175"},
+    "RCC_M":     {"beam_depth_mm": 300, "beam_width_mm": 200, "col_dims": "200x200"},
+    "RCC_L":     {"beam_depth_mm": 350, "beam_width_mm": 225, "col_dims": "225x225"},
+    "RCC_XL":    {"beam_depth_mm": 400, "beam_width_mm": 250, "col_dims": "250x250"},
+    "RCC_XXL":   {"beam_depth_mm": 450, "beam_width_mm": 275, "col_dims": "275x275"},
     "STEEL_XS":  {"beam_depth_mm": 120, "beam_width_mm": 64,  "col_dims": "80x80",   "beam_section": "IPE120", "col_section": "HSS80x80x5"},
     "STEEL":     {"beam_depth_mm": 160, "beam_width_mm": 82,  "col_dims": "100x100", "beam_section": "IPE160", "col_section": "HSS100x100x6"},
     "STEEL_M":   {"beam_depth_mm": 200, "beam_width_mm": 100, "col_dims": "120x120", "beam_section": "IPE200", "col_section": "HSS120x120x6"},
@@ -66,11 +66,13 @@ COL_SECTION_UPGRADE: dict[str, tuple] = {
 }
 
 BEAM_DIM_UPGRADE: dict[str, tuple] = {
-    "150x200": ("200x300", 300, 200),
-    "200x300": ("250x450", 450, 250),
-    "250x450": ("300x600", 600, 300),
-    "300x600": ("350x700", 700, 350),
-    "350x700": ("400x800", 800, 400),
+    # RCC chain — 25mm width / 50mm depth increments
+    "150x200": ("175x250", 250, 175),
+    "175x250": ("200x300", 300, 200),
+    "200x300": ("225x350", 350, 225),
+    "225x350": ("250x400", 400, 250),
+    "250x400": ("275x450", 450, 275),
+    # Timber chain
     "75x150":  ("100x240", 240, 100),
     "100x240": ("120x300", 300, 120),
     "120x300": ("150x360", 360, 150),
@@ -79,14 +81,15 @@ BEAM_DIM_UPGRADE: dict[str, tuple] = {
 }
 
 COL_DIM_UPGRADE: dict[str, str] = {
-    "75x75":   "100x100",
+    "75x75":   "90x90",
+    "90x90":   "100x100",
     "100x100": "120x120",
     "120x120": "150x150",
-    "150x150": "200x200",
-    "200x200": "250x250",
-    "250x250": "300x300",
-    "300x300": "350x350",
-    "350x350": "400x400",
+    "150x150": "175x175",
+    "175x175": "200x200",
+    "200x200": "225x225",
+    "225x225": "250x250",
+    "250x250": "275x275",
 }
 
 BASE_MATERIALS = ["RCC", "STEEL", "TIMBER"]
@@ -404,7 +407,7 @@ def remove_element(layout_json_string: str, element_id: str) -> str:
 
 # ── Modify node ───────────────────────────────────────────────────────────────
 
-def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_fn=None):
+def build_modify_node(allowed_tools, edited_layout_path, evaluate_fn=None):
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
 
@@ -415,6 +418,10 @@ def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_f
 
         if not state.get("original_layout_json_string"):
             state["original_layout_json_string"] = state["layout_json_string"]
+
+        # Save before-snapshot of current layout before applying any change
+        before_path = edited_layout_path.with_stem(edited_layout_path.stem + "_before")
+        before_path.write_text(state["layout_json_string"], encoding="utf-8")
 
         # ── Structural change from evaluate failure menu ───────────────────────
         change = state.get("pending_structural_change")
@@ -546,13 +553,18 @@ def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_f
             elif t == "remove_element":
                 layout_str = remove_element(layout_str, change["element_id"])
 
+            elif t == "remove_elements":
+                for eid in change.get("element_ids", []):
+                    layout_str = remove_element(layout_str, eid)
+                print(f"  Removed {len(change.get('element_ids', []))} elements.")
+
             state["layout_json_string"] = layout_str
             state["pending_structural_change"] = None
             state["came_from"] = "structural_change"
             write_tool_result(layout_str, edited_layout_path)
             return state
 
-        # ── GH MCP tool calls from reason node ───────────────────────────────
+        # ── Local tool calls from reason node ─────────────────────────────────
         last_tool = None
         for call in state["pending_tool_calls"]:
             state["iteration"] += 1
@@ -564,89 +576,20 @@ def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_f
             if tool_name not in allowed_names:
                 raise RuntimeError(f"Tool '{tool_name}' is not in the allowed tools list")
 
-            print(f"Calling tool: {tool_name} with arguments: {call['arguments']}")
+            print(f"Running: {tool_name}")
             tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
             if "layout_json" in tool_args:
                 tool_args["layout_json"] = state["layout_json_string"]
 
-            current_layout = json.loads(state["layout_json_string"])
+            try:
+                print(f"[modify] Unsupported local tool '{tool_name}' — layout unchanged.")
+                tool_output = ""
+            except Exception as e:
+                print(f"[modify] Local tool failed ({type(e).__name__}) — treating as empty output.")
+                tool_output = ""
 
-            if tool_name == "tag_and_audit":
-                if len(current_layout.get("structure", [])) == 0:
-                    from nodes.tools import build_structural_grid_with_options, _extract_user_prompt
-                    prompt_text = _extract_user_prompt(state)
-                    mat = str(tool_args.get("material") or state.get("material_override") or "RCC").upper()
-                    tool_output = None
-                    try:
-                        from nodes.intelligent_grid import generate_layout_aware_grid
-                        raw = generate_layout_aware_grid(current_layout, max_options=3)
-                        if raw:
-                            raw.sort(key=lambda s: sum(1 for el in s if len(el.get("geometry", [])) == 1))
-                            chosen = raw[len(raw) // 2]
-                            chosen_layout = json.loads(apply_material_override(
-                                json.dumps({**current_layout, "structure": chosen}), mat
-                            ))
-                            tool_output = json.dumps(chosen_layout)
-                            print(f"[modify] Generated intelligent grid (material={mat}, {len(chosen)} elements)")
-                    except Exception:
-                        pass
-                    if not tool_output:
-                        bundle = build_structural_grid_with_options(current_layout, prompt_text, material=mat)
-                        tool_output = json.dumps(bundle["recommended"]["layout"])
-                        print(f"[modify] Generated rectangular grid fallback (material={mat})")
-                else:
-                    tool_output = json.dumps(current_layout)
-                    print(f"[modify] Audit mode — {len(current_layout['structure'])} elements, no overwrite")
-
-            elif tool_name == "modify_structure":
-                operation = str(tool_args.get("operation", "")).strip().lower()
-                if operation == "remove":
-                    tool_output = remove_element(state["layout_json_string"], str(tool_args.get("element_id", "")))
-                elif operation == "add_column":
-                    x, y = float(tool_args.get("x", 0.0)), float(tool_args.get("y", 0.0))
-                    structure = list(current_layout.get("structure", []))
-                    new_id = str(tool_args.get("element_id") or f"C_LOCAL_{len(structure) + 1}")
-                    attrs = dict(tool_args.get("attributes") or {})
-                    attrs.setdefault("type", "structural_column")
-                    attrs.setdefault("material", "RCC")
-                    attrs.setdefault("dimensions", "200x200")
-                    structure.append({"id": new_id, "name": f"Column_{new_id}",
-                                      "geometry": [[round(x, 3), round(y, 3)]], "attributes": attrs})
-                    updated = json.loads(json.dumps(current_layout))
-                    updated["structure"] = structure
-                    tool_output = json.dumps(updated)
-                elif operation == "set_attribute":
-                    element_id = str(tool_args.get("element_id", "")).strip()
-                    patch = dict(tool_args.get("attributes") or {})
-                    structure = json.loads(json.dumps(current_layout.get("structure", [])))
-                    for item in structure:
-                        if item.get("id") == element_id:
-                            item.setdefault("attributes", {}).update(patch)
-                    updated = json.loads(json.dumps(current_layout))
-                    updated["structure"] = structure
-                    tool_output = json.dumps(updated)
-                else:
-                    tool_output = json.dumps(current_layout)
-
-            elif tool_name == "evaluate_structure":
-                from nodes.evaluate import evaluate_structure
-                evaluation = evaluate_structure(state["layout_json_string"])
-                state["evaluation_result"] = json.dumps(evaluation)
-                tool_output = json.dumps({"evaluation": evaluation})
-
-            elif tool_name == "compare_structure":
-                from nodes.comparison import _slim_diff_for_llm
-                before = (tool_args.get("before_layout_json") or
-                          state.get("original_layout_json_string") or
-                          state["layout_json_string"])
-                after = tool_args.get("after_layout_json") or state["layout_json_string"]
-                comparison = _slim_diff_for_llm(before, after)
-                state["comparison_result"] = comparison
-                tool_output = json.dumps({"comparison": comparison})
-
-            else:
-                print(f"[modify] WARNING: Unknown tool '{tool_name}' — layout unchanged.")
-                tool_output = json.dumps(current_layout)
+            if not tool_output or not tool_output.strip():
+                print(f"[modify] WARNING: {tool_name} returned empty output — layout unchanged.")
 
             try:
                 _parsed = json.loads(tool_output.strip())
@@ -676,7 +619,7 @@ def build_modify_node(_mcp_client, allowed_tools, edited_layout_path, evaluate_f
             print(f"Tool result: {tool_output[:200]}..." if len(tool_output) > 200 else f"Tool result: {tool_output}")
 
         state["pending_tool_calls"] = None
-        state["came_from"] = "tag_and_audit" if last_tool == "tag_and_audit" else "modify"
+        state["came_from"] = "modify"
         return state
 
     return modify_node

@@ -1,412 +1,127 @@
 from __future__ import annotations
+
 import json
 import math
 from typing import Any
-from _runtime.llm import write_tool_result
-from nodes.modify import (
-    _generate_column_grid, apply_material_override,
-    apply_minimum_sections, upgrade_element_section,
-    add_midspan_column, remove_element,
-    BEAM_SECTION_UPGRADE, COL_SECTION_UPGRADE,
-    BEAM_DIM_UPGRADE, COL_DIM_UPGRADE,
-)
-from nodes.evaluate import evaluate_structure
-from nodes.comparison import _slim_diff_for_llm
 
 
-# ── Tool catalog (schema exposed to the LLM in the system prompt) ──────────────
-
-LOCAL_ACTION_TOOLS: list[dict[str, Any]] = [
-    {
-        "name": "tag_and_audit",
-        "description": "Create structural grid when none exists, or audit existing structure without overwriting.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "layout_json":   {"type": "string"},
-                "typology":      {"type": "string"},
-                "grid_spacing":  {"type": "number"},
-                "material":      {"type": "string"},
-            },
-            "required": [],
-            "additionalProperties": True,
-        },
-    },
-    {
-        "name": "modify_structure",
-        "description": "Apply a local structural edit (remove, add_column, or set_attribute).",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "layout_json": {"type": "string"},
-                "operation":   {"type": "string"},
-                "element_id":  {"type": "string"},
-                "x":           {"type": "number"},
-                "y":           {"type": "number"},
-                "attributes":  {"type": "object"},
-            },
-            "required": ["operation"],
-            "additionalProperties": True,
-        },
-    },
-    {
-        "name": "evaluate_structure",
-        "description": "Evaluate current structure from first principles (EC2/EC3/EN338).",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "layout_json": {"type": "string"},
-            },
-            "required": [],
-            "additionalProperties": True,
-        },
-    },
-    {
-        "name": "compare_structure",
-        "description": "Compare original and current structure arrays and summarize changes.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "before_layout_json": {"type": "string"},
-                "after_layout_json":  {"type": "string"},
-            },
-            "required": [],
-            "additionalProperties": True,
-        },
-    },
-]
+def _element_material(el: dict[str, Any], fallback: str) -> str:
+    return str(el.get("attributes", {}).get("material") or fallback).upper()
 
 
-def get_action_tools() -> list[dict[str, Any]]:
-    return [dict(tool) for tool in LOCAL_ACTION_TOOLS]
-
-
-# ── Structural grid generator (3 spacing variants) ─────────────────────────────
-
-def _quick_cost(layout: dict) -> float:
-    """Rough material cost estimate (volume × unit price)."""
-    structure = layout.get("structure", [])
+def _rough_option_cost(layout: dict[str, Any], fallback_material: str) -> float:
+    """Compute a fast material-cost proxy so options can be ranked in UI."""
+    unit_cost = {"RCC": 350.0, "STEEL": 12000.0, "TIMBER": 800.0}
     total = 0.0
-    for el in structure:
+    for el in layout.get("structure", []):
         attrs = el.get("attributes", {})
-        mat = attrs.get("material", "RCC").upper()
-        geom = el.get("geometry", [])
-        if len(geom) == 2:
-            length_m = math.dist(geom[0], geom[1])
-            w = float(attrs.get("width", 200)) / 1000
-            d = float(attrs.get("depth", 300)) / 1000
-            vol = w * d * length_m
+        geo = el.get("geometry", [])
+        mat = _element_material(el, fallback_material)
+        key = next((k for k in unit_cost if k in mat), "RCC")
+
+        if len(geo) == 2:
+            span = math.dist(geo[0], geo[1])
+            depth_m = float(attrs.get("depth", 300)) / 1000.0
+            width_m = float(attrs.get("width", 200)) / 1000.0
+            vol = span * width_m * depth_m
         else:
             h = float(attrs.get("height", 3.5))
-            dims = attrs.get("dimensions", "200x200")
-            try:
-                wx, dy = (float(p) for p in dims.split("x", 1))
-            except Exception:
-                wx, dy = 200.0, 200.0
-            vol = (wx / 1000) * (dy / 1000) * h
-        if "STEEL" in mat:
-            total += vol * 7850 * 2.0
-        elif "TIMBER" in mat:
-            total += vol * 700.0
-        else:
-            total += vol * 200.0
+            dims = str(attrs.get("dimensions", "200x200")).lower().split("x")
+            if len(dims) == 2:
+                b = float(dims[0]) / 1000.0
+                d = float(dims[1]) / 1000.0
+            else:
+                b = d = 0.2
+            vol = h * b * d
+
+        total += vol * unit_cost[key]
     return round(total, 2)
 
 
 def build_structural_grid_with_options(
-    layout: dict,
-    prompt: str,
+    layout: dict[str, Any],
+    user_prompt: str = "",
     material: str = "RCC",
-) -> dict:
-    """
-    Generate Conservative / Balanced / Open column-grid variants.
-    Returns {options: [...], recommended: {...}} where each option has
-    {label, spacing, layout, score, rationale, failures, cost}.
-    Tries layout-aware intelligent grid first; falls back to rectangular grid.
-    """
-    # 1. Try intelligent grid (room-corner topology)
+) -> dict[str, Any]:
+    """Return structural options payload expected by the Streamlit UI."""
+    from nodes.evaluate import evaluate_structure
+    from nodes.modify import apply_material_override
+
+    base_layout = layout if isinstance(layout, dict) else {}
+
     try:
-        from nodes.intelligent_grid import generate_layout_aware_grid
-        raw_options = generate_layout_aware_grid(layout, max_options=6)
+        from nodes.tag_and_audit import generate_structure
+        options_raw = generate_structure(base_layout)
     except Exception:
-        raw_options = []
+        # Fallback keeps UI operational if tag_and_audit import/execution fails.
+        options_raw = [base_layout]
 
-    # 2. Fallback: rectangular grid at 3 spacings
-    if not raw_options:
-        base_json = json.dumps(layout)
-        raw_options = [
-            json.loads(_generate_column_grid(base_json, s)).get("structure", [])
-            for s in [4.25, 5.0, 5.75]
+    if not isinstance(options_raw, list) or not options_raw:
+        options_raw = [base_layout]
+
+    options: list[dict[str, Any]] = []
+    for i, option_layout in enumerate(options_raw, start=1):
+        working = option_layout if isinstance(option_layout, dict) else base_layout
+        layout_with_material = json.loads(apply_material_override(json.dumps(working), material))
+
+        eval_result = evaluate_structure(json.dumps(layout_with_material))
+        summary = eval_result.get("summary", {}) if isinstance(eval_result, dict) else {}
+        failures = int(summary.get("beam_failures", 0)) + int(summary.get("column_failures", 0))
+
+        structure = layout_with_material.get("structure", [])
+        spans = [
+            float(el.get("attributes", {}).get("length", 0.0))
+            for el in structure
+            if len(el.get("geometry", [])) == 2
         ]
+        max_span = max(spans) if spans else 0.0
 
-    # 3. Sort by column count descending (most = Conservative, fewest = Open)
-    raw_options.sort(key=lambda s: -sum(1 for el in s if len(el.get("geometry", [])) == 1))
-
-    # 4. Pick 3 representative options
-    n = len(raw_options)
-    if n >= 3:
-        picks = [raw_options[0], raw_options[n // 2], raw_options[-1]]
-    else:
-        picks = (raw_options + [raw_options[-1]] * 3)[:3]
-
-    variant_labels = ["Conservative", "Balanced", "Open"]
-    options = []
-    for label, structure in zip(variant_labels, picks):
-        grid_layout = json.loads(apply_material_override(
-            json.dumps({**layout, "structure": structure}), material
-        ))
-        try:
-            ev = evaluate_structure(json.dumps(grid_layout))
-            summary = ev.get("summary", {})
-            failures = summary.get("beam_failures", 0) + summary.get("column_failures", 0)
-        except Exception:
-            failures = 0
-
-        n_cols = sum(1 for el in structure if len(el.get("geometry", [])) == 1)
-        cost = _quick_cost(grid_layout)
-        score = round(failures * 100 + cost * 0.001, 2)
-
-        options.append({
-            "label":     label,
-            "spacing":   None,
-            "layout":    grid_layout,
-            "score":     score,
-            "rationale": f"{n_cols} columns, {failures} failures, cost ~€{cost:,.0f}",
-            "failures":  failures,
-            "cost":      cost,
-        })
-
-    # 5. Bias recommendation by prompt keywords
-    lower = (prompt or "").lower()
-    if any(k in lower for k in ("conservative", "tight", "dense", "small spacing")):
-        recommended = next((o for o in options if o["label"] == "Conservative"), None)
-    elif any(k in lower for k in ("open", "wide", "large spacing", "minimal column")):
-        recommended = next((o for o in options if o["label"] == "Open"), None)
-    else:
-        recommended = None
-    if recommended is None:
-        recommended = min(options, key=lambda o: o["score"])
-    return {"options": options, "recommended": recommended}
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _extract_user_prompt(state: dict[str, Any]) -> str:
-    for msg in state.get("messages", []):
-        if msg.get("role") != "user":
-            continue
-        content = msg.get("content", "")
-        if "User request:" in content:
-            return content.split("User request:", 1)[-1].split("\n", 1)[0].strip()
-        return content.strip()
-    return ""
-
-
-def _apply_local_modify(layout: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
-    operation = str(args.get("operation", "")).strip().lower()
-    structure = list(layout.get("structure") or [])
-    updated   = json.loads(json.dumps(layout))
-
-    if operation == "remove":
-        element_id  = str(args.get("element_id", "")).strip()
-        updated_str = remove_element(json.dumps(layout), element_id)
-        return json.loads(updated_str)
-
-    if operation == "add_column":
-        x      = float(args.get("x", 0.0))
-        y      = float(args.get("y", 0.0))
-        new_id = str(args.get("element_id") or f"C_LOCAL_{len(structure) + 1}")
-        attrs  = dict(args.get("attributes") or {})
-        attrs.setdefault("type", "structural_column")
-        attrs.setdefault("material", "RCC")
-        attrs.setdefault("dimensions", "200x200")
-        structure.append({
-            "id":       new_id,
-            "name":     f"Column_{new_id}",
-            "geometry": [[round(x, 3), round(y, 3)]],
-            "attributes": attrs,
-        })
-        updated["structure"] = structure
-        return updated
-
-    if operation == "set_attribute":
-        element_id = str(args.get("element_id", "")).strip()
-        patch      = dict(args.get("attributes") or {})
-        for item in structure:
-            if item.get("id") == element_id:
-                item.setdefault("attributes", {}).update(patch)
-        updated["structure"] = structure
-        return updated
-
-    return updated
-
-
-# ── Combined action node (LLM tool calls + structural changes from evaluate) ───
-
-def build_tool_node(edited_layout_path, allowed_tools=None):
-    tools         = allowed_tools or LOCAL_ACTION_TOOLS
-    allowed_names = {t["name"] for t in tools if t.get("name")}
-
-    def tool_node(state):
-        print(f"\n{'='*50}")
-        print("  NODE: ACTION")
-        print(f"{'='*50}")
-
-        # Snapshot layout before any modification (for comparison node diff)
-        if not state.get("original_layout_json_string"):
-            state["original_layout_json_string"] = state["layout_json_string"]
-
-        # ── Structural change dispatched by the evaluate menu ─────────────────
-        change = state.get("pending_structural_change")
-        if change:
-            layout_str = state["layout_json_string"]
-            t          = change["type"]
-            print(f"  Applying structural change: {t}")
-
-            if t == "tier_upgrade":
-                layout_str = apply_material_override(layout_str, change["tier"])
-                state["material_override"] = change["tier"]
-
-            elif t == "material_switch":
-                layout_str = apply_material_override(layout_str, change["material"])
-                state["material_override"] = change["material"]
-
-            elif t == "upgrade_element":
-                layout_str = upgrade_element_section(
-                    layout_str, change["element_id"], change["new_section"]
-                )
-
-            elif t == "midspan_column":
-                layout_str = add_midspan_column(
-                    layout_str, change["beam_id"], change["material"]
-                )
-
-            elif t in ("auto_upgrade_beams", "auto_upgrade_columns"):
-                result = json.loads(state.get("evaluation_result", "{}"))
-                if t == "auto_upgrade_beams":
-                    for b in result.get("beams", []):
-                        if b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"]:
-                            continue
-                        cur = b.get("section_mm", "")
-                        if cur in BEAM_SECTION_UPGRADE:
-                            nxt, _, _ = BEAM_SECTION_UPGRADE[cur]
-                            layout_str = upgrade_element_section(layout_str, b["id"], nxt)
-                        elif cur in BEAM_DIM_UPGRADE:
-                            nxt, _, _ = BEAM_DIM_UPGRADE[cur]
-                            layout_str = upgrade_element_section(layout_str, b["id"], nxt)
-                else:
-                    for c in result.get("columns", []):
-                        if c["stress_PASS"] and c["buckling_PASS"]:
-                            continue
-                        cur = c.get("section_mm", "")
-                        if cur in COL_SECTION_UPGRADE:
-                            nxt, _ = COL_SECTION_UPGRADE[cur]
-                            layout_str = upgrade_element_section(layout_str, c["id"], nxt)
-                        elif cur in COL_DIM_UPGRADE:
-                            nxt = COL_DIM_UPGRADE[cur]
-                            layout_str = upgrade_element_section(layout_str, c["id"], nxt)
-
-            elif t == "find_minimum":
-                layout_str = apply_minimum_sections(layout_str, change["material"])
-                state["material_override"] = change["material"]
-                state["find_minimum_done"] = True
-
-            elif t == "remove_element":
-                layout_str = remove_element(layout_str, change["element_id"])
-
-            state["layout_json_string"]    = layout_str
-            state["pending_structural_change"] = None
-            state["came_from"]             = "structural_change"
-            write_tool_result(layout_str, edited_layout_path)
-            return state
-
-        # ── LLM-directed tool calls ───────────────────────────────────────────
-        last_tool_name = None
-
-        for call in state["pending_tool_calls"]:
-            state["iteration"] += 1
-            if state["iteration"] > state["max_iterations"]:
-                raise RuntimeError("Max iterations exceeded")
-
-            tool_name      = call["name"]
-            last_tool_name = tool_name
-            if tool_name not in allowed_names:
-                raise RuntimeError(f"Tool '{tool_name}' is not in the allowed tools list")
-
-            print(f"Calling tool: {tool_name} with arguments: {call['arguments']}")
-
-            tool_args = {k: v for k, v in call["arguments"].items() if v is not None}
-            if "layout_json" in tool_args:
-                tool_args["layout_json"] = state["layout_json_string"]
-
-            current_layout = json.loads(state["layout_json_string"])
-
-            if tool_name == "tag_and_audit":
-                structure_count = len(current_layout.get("structure", []))
-                if structure_count == 0:
-                    prompt_text = _extract_user_prompt(state)
-                    material    = str(
-                        tool_args.get("material") or state.get("material_override") or "RCC"
-                    ).upper()
-                    bundle         = build_structural_grid_with_options(
-                        current_layout, prompt_text, material=material
-                    )
-                    tool_output_obj = bundle["recommended"]["layout"]
-                else:
-                    tool_output_obj = current_layout
-
-            elif tool_name == "modify_structure":
-                tool_output_obj = _apply_local_modify(current_layout, tool_args)
-
-            elif tool_name == "evaluate_structure":
-                evaluation = evaluate_structure(state["layout_json_string"])
-                state["evaluation_result"] = json.dumps(evaluation)
-                tool_output_obj = {"evaluation": evaluation}
-
-            elif tool_name == "compare_structure":
-                before = (
-                    tool_args.get("before_layout_json")
-                    or state.get("original_layout_json_string")
-                    or state["layout_json_string"]
-                )
-                after      = tool_args.get("after_layout_json") or state["layout_json_string"]
-                comparison = _slim_diff_for_llm(before, after)
-                state["comparison_result"] = comparison
-                tool_output_obj = {"comparison": comparison}
-
-            else:
-                raise RuntimeError(f"Unsupported local action: {tool_name}")
-
-            tool_output = json.dumps(tool_output_obj, ensure_ascii=False)
-
-            if isinstance(tool_output_obj, dict) and (
-                "layoutId" in tool_output_obj or "rooms" in tool_output_obj
-            ):
-                state["layout_json_string"] = json.dumps(tool_output_obj)
-                write_tool_result(tool_output, edited_layout_path)
-
-            state["messages"].append({
-                "role": "assistant",
-                "content": json.dumps({
-                    "action": "tool",
-                    "final_response": "",
-                    "tool_calls": [{"name": tool_name, "arguments": tool_args}],
-                }),
-            })
-            state["messages"].append({
-                "role": "user",
-                "content": f"Tool result: {tool_output}",
-            })
-            print(
-                f"Tool result: {tool_output[:200]}..."
-                if len(tool_output) > 200 else
-                f"Tool result: {tool_output}"
-            )
-
-        state["pending_tool_calls"] = None
-        state["came_from"] = (
-            "tag_and_audit" if last_tool_name == "tag_and_audit" else "modify"
+        options.append(
+            {
+                "label": f"Option {i}",
+                "spacing": round(max_span, 2),
+                "failures": failures,
+                "cost": _rough_option_cost(layout_with_material, material),
+                "layout": layout_with_material,
+                "evaluation": eval_result,
+            }
         )
-        return state
 
-    return tool_node
+    return {
+        "material": material,
+        "prompt": user_prompt,
+        "options": options,
+    }
+
+
+def get_action_tools() -> list[dict]:
+    """Return the local tool catalog exposed to the reason node."""
+    return [
+        {
+            "name": "tag_and_audit",
+            "description": (
+                "Generate a structural column/beam grid from layout JSON and "
+                "return the updated layout JSON."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "layout_json": {
+                        "type": "string",
+                        "description": "Full layout JSON string.",
+                    },
+                    "typology": {
+                        "type": "string",
+                        "description": "Grid strategy. Defaults to column_grid.",
+                        "enum": ["column_grid", "perimeter_load_bearing", "shear_wall"],
+                    },
+                    "grid_spacing": {
+                        "type": "number",
+                        "description": "Preferred grid spacing in meters.",
+                    },
+                },
+                "required": ["layout_json"],
+                "additionalProperties": False,
+            },
+        }
+    ]

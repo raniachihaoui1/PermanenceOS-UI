@@ -9,7 +9,6 @@ from nodes.modify import build_modify_node, DEFAULT_SECTIONS, BEAM_SECTION_UPGRA
 from nodes.evaluate import build_evaluate_node, evaluate_structure, SETTINGS_PATH, _get_user_request
 from nodes.comparison import build_comparison_node
 from nodes.cost_flexibility import build_cost_flexibility_node
-from nodes.tag_and_audit import generate_structure as _generate_structure
 
 EXAMPLE_LAYOUTS_DIR = Path(__file__).parent / "example_layouts"
 OTHER_LAYOUTS_DIR   = Path(__file__).parent.parent / "gh" / "other layouts"
@@ -102,6 +101,13 @@ def _route_from_cost_flexibility(state: AgentState) -> str:
 
 def build_generate_grid_node(edited_layout_path):
     from _runtime.llm import write_tool_result
+    try:
+        from nodes.tag_and_audit import generate_structure as _generate_structure
+    except Exception as e:
+        _generate_structure = None
+        _generate_structure_error = e
+    else:
+        _generate_structure_error = None
 
     def generate_grid_node(state: dict) -> dict:
         print(f"\n{'='*50}")
@@ -119,6 +125,12 @@ def build_generate_grid_node(edited_layout_path):
         before_path.write_text(state["layout_json_string"], encoding="utf-8")
 
         layout_data = json.loads(state["layout_json_string"])
+        if _generate_structure is None:
+            print(f"[generate_grid] tag_and_audit unavailable ({type(_generate_structure_error).__name__})")
+            state["came_from"] = "generate_grid"
+            state["pending_tool_calls"] = None
+            return state
+
         options = _generate_structure(layout_data)
 
         if not options:
@@ -167,7 +179,7 @@ def build_generate_grid_node(edited_layout_path):
 def build_graph(ctx: Any) -> Any:
     reason       = build_reason_node(ctx.llm)
     generate_grid = build_generate_grid_node(ctx.edited_layout_path)
-    modify       = build_modify_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path, evaluate_fn=evaluate_structure)
+    modify       = build_modify_node(ctx.tools, ctx.edited_layout_path, evaluate_fn=evaluate_structure)
     evaluate     = build_evaluate_node(ctx.llm)
     cost_flex    = build_cost_flexibility_node()
     comparison   = build_comparison_node(ctx.llm)

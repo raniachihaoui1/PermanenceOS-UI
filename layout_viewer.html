@@ -116,9 +116,9 @@
   <div id="app">
     <div id="viewport"></div>
 
-    <div class="hud legend">
+    <div class="hud legend" id="legend">
       <h2>Legend</h2>
-      <div class="legend-grid">
+      <div class="legend-grid" id="legend-grid">
         <div><span class="dot" style="background:#7cb2ff"></span>Rooms</div>
         <div><span class="dot" style="background:#9b7cff"></span>Furniture / MEP</div>
         <div><span class="dot" style="background:#6be1b6"></span>Columns</div>
@@ -127,6 +127,23 @@
         <div><span class="dot" style="background:#8ad4ff"></span>Windows</div>
       </div>
     </div>
+    <script>
+      // Inject compare legend items if needed (runs before module script)
+      (function () {
+        const p = new URLSearchParams(window.location.search);
+        if (p.get("mode") === "compare") {
+          const g = document.getElementById("legend-grid");
+          g.innerHTML +=
+            '<div><span class="dot" style="background:#22dd88"></span>Added</div>' +
+            '<div><span class="dot" style="background:#ff3344"></span>Removed</div>';
+          document.getElementById("legend").querySelector("h2").textContent = "Legend — Compare Mode";
+        }
+        if (p.get("highlight")) {
+          const g = document.getElementById("legend-grid");
+          g.innerHTML += '<div><span class="dot" style="background:#ff9900"></span>Selected</div>';
+        }
+      })();
+    </script>
   </div>
 
   <script type="module">
@@ -134,11 +151,14 @@
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
     const DEFAULT_LAYOUT_URL = "./team_01_edited_layout.json";
+    const BEFORE_LAYOUT_URL  = "./team_01_edited_layout_before.json";
     const viewport = document.getElementById("viewport");
 
-    // Apply light theme if URL param says so
-    const _urlParams = new URLSearchParams(window.location.search);
-    const _isLight = _urlParams.get("theme") === "light";
+    // URL params
+    const _urlParams   = new URLSearchParams(window.location.search);
+    const _isLight     = _urlParams.get("theme")     === "light";
+    const _highlightId = _urlParams.get("highlight") || "";
+    const _compareMode = _urlParams.get("mode")      === "compare";
     if (_isLight) document.documentElement.classList.add("light");
 
     const _bgColor    = _isLight ? 0xf5f7fa : 0x0b1020;
@@ -185,21 +205,35 @@
     scene.add(contentGroup);
 
     const materials = {
-      room: new THREE.MeshStandardMaterial({ color: 0x7cb2ff, transparent: true, opacity: 0.26, roughness: 0.85, metalness: 0.05 }),
+      room:      new THREE.MeshStandardMaterial({ color: 0x7cb2ff, transparent: true, opacity: 0.26, roughness: 0.85, metalness: 0.05 }),
       furniture: new THREE.MeshStandardMaterial({ color: 0x9b7cff, transparent: true, opacity: 0.40, roughness: 0.75 }),
-      mep: new THREE.MeshStandardMaterial({ color: 0x8be7d3, transparent: true, opacity: 0.42, roughness: 0.75 }),
-      column: new THREE.MeshStandardMaterial({ color: 0x6be1b6, roughness: 0.6, metalness: 0.05 }),
-      beam: new THREE.MeshStandardMaterial({ color: 0xffd36a, roughness: 0.55, metalness: 0.1 }),
-      wall: new THREE.MeshStandardMaterial({ color: 0xf0b35f, roughness: 0.65, metalness: 0.0 }),
-      door: new THREE.MeshStandardMaterial({ color: 0xff8a7a, roughness: 0.7 }),
-      window: new THREE.MeshStandardMaterial({ color: 0x8ad4ff, roughness: 0.65 }),
-      outline: new THREE.LineBasicMaterial({ color: _isLight ? 0x1a2540 : 0xffffff, transparent: true, opacity: 0.8 }),
+      mep:       new THREE.MeshStandardMaterial({ color: 0x8be7d3, transparent: true, opacity: 0.42, roughness: 0.75 }),
+      column:    new THREE.MeshStandardMaterial({ color: 0x6be1b6, roughness: 0.6,  metalness: 0.05 }),
+      beam:      new THREE.MeshStandardMaterial({ color: 0xffd36a, roughness: 0.55, metalness: 0.1  }),
+      wall:      new THREE.MeshStandardMaterial({ color: 0xf0b35f, roughness: 0.65, metalness: 0.0  }),
+      door:      new THREE.MeshStandardMaterial({ color: 0xff8a7a, roughness: 0.7 }),
+      window:    new THREE.MeshStandardMaterial({ color: 0x8ad4ff, roughness: 0.65 }),
+      outline:   new THREE.LineBasicMaterial({ color: _isLight ? 0x1a2540 : 0xffffff, transparent: true, opacity: 0.8 }),
+      // Compare-mode overlay materials
+      added:     new THREE.MeshStandardMaterial({ color: 0x22dd88, transparent: true, opacity: 0.85, roughness: 0.5, metalness: 0.1, emissive: 0x11aa55, emissiveIntensity: 0.3 }),
+      removed:   new THREE.MeshStandardMaterial({ color: 0xff3344, transparent: true, opacity: 0.75, roughness: 0.5, metalness: 0.1, emissive: 0xcc1122, emissiveIntensity: 0.3 }),
+      highlight: new THREE.MeshStandardMaterial({ color: 0xff9900, roughness: 0.4, metalness: 0.2, emissive: 0xff6600, emissiveIntensity: 0.45 }),
     };
+
+    // Tracks meshes per element ID for highlight / compare
+    const elementMeshes = {};
 
     function clearContent() {
       scene.remove(contentGroup);
       contentGroup = new THREE.Group();
       scene.add(contentGroup);
+      Object.keys(elementMeshes).forEach((k) => delete elementMeshes[k]);
+    }
+
+    function _trackMesh(id, mesh) {
+      if (!id) return;
+      if (!elementMeshes[id]) elementMeshes[id] = [];
+      elementMeshes[id].push(mesh);
     }
 
     function extractPoints(entity) {
@@ -290,25 +324,39 @@
       return [a, b];
     }
 
-    function addColumn(point, attrs = {}) {
+    function addColumn(point, attrs = {}, id = null, matOverride = null) {
       const [width, depth] = parseDimensionPair(attrs.dimensions, 200, 200);
       const height = 2.8;
       const geometry = new THREE.BoxGeometry(width, height, depth);
-      const mesh = new THREE.Mesh(geometry, materials.column);
+      const mesh = new THREE.Mesh(geometry, matOverride || materials.column);
       mesh.position.set(point.x, height / 2, point.z);
       contentGroup.add(mesh);
+      _trackMesh(id, mesh);
       return mesh;
     }
 
-    function addStructuralBeam(start, end, attrs = {}) {
+    function addStructuralBeam(start, end, attrs = {}, id = null, matOverride = null) {
       const orientation = String(attrs.orientation || "").toLowerCase();
-      const [columnWidth, columnDepth] = parseDimensionPair(attrs.columnDimensions, 200, 200);
-      const beamWidth = Math.max(0.05, (Number(attrs.width) || 250) / 1000);
+      const [, columnWidth] = parseDimensionPair(attrs.columnDimensions, 200, 200);
       const beamDepth = Math.max(0.08, (Number(attrs.depth) || 450) / 1000);
       const columnHeight = 2.8;
       const beamThickness = orientation === "vertical" ? columnWidth : beamDepth;
       const beamCenterY = columnHeight + beamDepth / 2;
-      return addSegment(start, end, 0xffd36a, beamThickness, beamDepth, beamCenterY - beamDepth / 2);
+      const color = matOverride ? matOverride.color.getHex() : 0xffd36a;
+      const mat = matOverride
+        ? matOverride
+        : new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+      const dir = new THREE.Vector3().subVectors(end, start);
+      const length = dir.length();
+      const angle = Math.atan2(dir.z, dir.x);
+      const y = beamCenterY - beamDepth / 2;
+      const geometry = new THREE.BoxGeometry(length, beamDepth, beamThickness);
+      const mesh = new THREE.Mesh(geometry, mat);
+      mesh.rotation.y = -angle;
+      mesh.position.set((start.x + end.x) / 2, y + beamDepth / 2, (start.z + end.z) / 2);
+      contentGroup.add(mesh);
+      _trackMesh(id, mesh);
+      return mesh;
     }
 
     function addRoom(room, index) {
@@ -368,7 +416,8 @@
       ctx.closePath();
     }
 
-    function renderLayout(layout) {
+    // matOverrides: { [elementId]: THREE.Material } — overrides the default material per element
+    function renderLayout(layout, matOverrides = null) {
       clearContent();
 
       const allPoints = [];
@@ -410,26 +459,26 @@
 
       for (const item of layout.structure ?? []) {
         const points = extractPoints(item);
-        const attrs = item.attributes ?? {};
-        const type = String(attrs.type || "").toLowerCase();
-        const geometryType = points.length;
+        const attrs  = item.attributes ?? {};
+        const type   = String(attrs.type || "").toLowerCase();
+        const elId   = item.id || item.name || null;
+        const matOvr = matOverrides ? (matOverrides[elId] || null) : null;
 
-        if (type.includes("column") || geometryType === 1) {
+        if (type.includes("column") || points.length === 1) {
           if (points[0]) {
-            addColumn(points[0], attrs);
-            addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x6be1b6);
+            addColumn(points[0], attrs, elId, matOvr);
+            if (!matOvr) addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x6be1b6);
             allPoints.push(points[0].clone());
           }
           continue;
         }
 
-        if (geometryType >= 2) {
+        if (points.length >= 2) {
           const [start, end] = extractLine(item) || [];
           if (!start || !end) continue;
-          // All 2-point elements in structure[] are structural beams (type may be "perimeter", "primary", etc.)
-          addStructuralBeam(start, end, attrs);
+          addStructuralBeam(start, end, attrs, elId, matOvr);
           const mid = new THREE.Vector3((start.x + end.x) / 2, 0, (start.z + end.z) / 2);
-          addLabel(item.name || item.id, mid.x, 3.8, mid.z, 0xffd36a);
+          if (!matOvr) addLabel(item.name || item.id, mid.x, 3.8, mid.z, 0xffd36a);
           pushPoints([start, end]);
         }
       }
@@ -461,11 +510,69 @@
       }
     }
 
-    async function loadLayoutFromUrl(url) {
+    async function fetchJson(url) {
       const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Unable to load layout: ${res.status} ${res.statusText}`);
-      const layout = await res.json();
-      renderLayout(layout);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+      return res.json();
+    }
+
+    function applyHighlight(id) {
+      if (!id || !elementMeshes[id]) return;
+      for (const mesh of elementMeshes[id]) {
+        mesh.material = materials.highlight;
+      }
+    }
+
+    // Build a per-element material override map from before/after diff
+    function buildCompareOverrides(beforeLayout, afterLayout) {
+      const beforeIds = new Set((beforeLayout.structure ?? []).map((el) => el.id || el.name));
+      const afterIds  = new Set((afterLayout.structure ?? []).map((el) => el.id || el.name));
+      const overrides = {};
+      for (const id of beforeIds) {
+        if (!afterIds.has(id)) overrides[id] = materials.removed;
+      }
+      for (const id of afterIds) {
+        if (!beforeIds.has(id)) overrides[id] = materials.added;
+      }
+      return overrides;
+    }
+
+    // Render removed elements (those only in beforeLayout) on top of the current scene
+    function renderRemovedElements(beforeLayout, afterIds) {
+      for (const item of beforeLayout.structure ?? []) {
+        const elId = item.id || item.name || null;
+        if (!elId || afterIds.has(elId)) continue; // skip unchanged; only render removed
+        const points = extractPoints(item);
+        if (points.length === 1 && points[0]) {
+          addColumn(points[0], item.attributes ?? {}, elId, materials.removed);
+        } else if (points.length >= 2) {
+          const [start, end] = extractLine(item) || [];
+          if (start && end) addStructuralBeam(start, end, item.attributes ?? {}, elId, materials.removed);
+        }
+      }
+    }
+
+    async function initScene() {
+      const afterLayout = await fetchJson(DEFAULT_LAYOUT_URL);
+
+      if (_compareMode) {
+        let beforeLayout = null;
+        try { beforeLayout = await fetchJson(BEFORE_LAYOUT_URL); } catch (_) {}
+
+        if (beforeLayout) {
+          const afterIds  = new Set((afterLayout.structure ?? []).map((el) => el.id || el.name));
+          const overrides = buildCompareOverrides(beforeLayout, afterLayout);
+          renderLayout(afterLayout, overrides);
+          renderRemovedElements(beforeLayout, afterIds);
+        } else {
+          renderLayout(afterLayout);
+        }
+      } else {
+        renderLayout(afterLayout);
+      }
+
+      // Apply highlight after all elements are in the scene
+      if (_highlightId) applyHighlight(_highlightId);
     }
 
     window.addEventListener("resize", () => {
@@ -480,9 +587,7 @@
       requestAnimationFrame(animate);
     }
 
-    loadLayoutFromUrl(DEFAULT_LAYOUT_URL).catch((err) => {
-      console.error(err);
-    });
+    initScene().catch((err) => console.error(err));
     animate();
   </script>
 </body>
