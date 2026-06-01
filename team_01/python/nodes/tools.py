@@ -102,6 +102,32 @@ def get_action_tools() -> list[dict]:
     ]
 
 
+def format_load_path_for_llm(load_path_result: dict | None) -> str:
+    """Format load-path analysis as a compact text block for LLM context injection."""
+    if not load_path_result:
+        return ""
+    elements       = load_path_result.get("elements", [])
+    narrative      = load_path_result.get("narrative", "")
+    critical_path  = load_path_result.get("critical_path", [])
+    anchor_columns = load_path_result.get("anchor_columns", [])
+
+    lines = ["LOAD PATH ANALYSIS:", narrative]
+    if anchor_columns:
+        lines.append(f"Anchor columns (primary load points): {', '.join(anchor_columns)}")
+    if critical_path:
+        lines.append(f"Critical path: {' → '.join(critical_path)}")
+    lines.append("Stress Hierarchy (highest utilisation first):")
+    for e in elements[:10]:
+        util_pct = f"{e['utilization'] * 100:.0f}%"
+        trib = f"  trib={e['tributary_area_m2']}m²" if e.get("tributary_area_m2") else ""
+        pkn  = f"  P={e['P_kN']}kN" if e.get("P_kN") else ""
+        lines.append(
+            f"  {e['id']:8s} {e['role']:20s} {util_pct:5s} "
+            f"[{e['load_responsibility']}]{trib}{pkn}  {e['details']}"
+        )
+    return "\n".join(lines)
+
+
 def build_structural_grid_with_options(
     layout: dict,
     _unused: str = "",

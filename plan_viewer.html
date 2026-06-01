@@ -128,18 +128,44 @@
     let xform     = { scale: 1, ox: 0, oy: 0, minX: 0, minY: 0, maxX: 10, maxY: 10 };
     let hitList   = []; // { id, type, info, bounds|line }
 
+    const ROOM_COLORS = isLight ? {
+      bedroom:     "rgba(180, 208, 235, 0.38)",
+      living:      "rgba(235, 210, 180, 0.38)",
+      kitchen:     "rgba(180, 235, 185, 0.38)",
+      washroom:    "rgba(180, 228, 218, 0.38)",
+      utility:     "rgba(218, 218, 208, 0.38)",
+      circulation: "rgba(235, 228, 180, 0.38)",
+      foyer:       "rgba(235, 180, 208, 0.38)",
+      default:     "rgba(200, 225, 225, 0.25)",
+    } : {
+      bedroom:     "rgba(55, 90, 150, 0.30)",
+      living:      "rgba(150, 90, 45, 0.30)",
+      kitchen:     "rgba(45, 150, 65, 0.30)",
+      washroom:    "rgba(35, 140, 120, 0.30)",
+      utility:     "rgba(100, 100, 90, 0.30)",
+      circulation: "rgba(140, 130, 45, 0.30)",
+      foyer:       "rgba(140, 45, 100, 0.30)",
+      default:     "rgba(42, 192, 192, 0.12)",
+    };
+    function getRoomFill(name) {
+      const lc = (name || "").toLowerCase();
+      for (const key of Object.keys(ROOM_COLORS)) {
+        if (key !== "default" && lc.includes(key)) return ROOM_COLORS[key];
+      }
+      return ROOM_COLORS.default;
+    }
+
     const C = isLight ? {
       bg:          "#ffffff",
       grid:        "rgba(0, 120, 120, 0.12)",
       gridLabel:   "#a0c0c0",
       outline:     "#088a87",
-      outlineFill: "rgba(230, 247, 247, 0.9)",
-      roomFill:    "rgba(8, 138, 135, 0.06)",
-      roomStroke:  "#a0c8c8",
-      roomLabel:   "#4a7070",
-      col:         "#088a87",
-      colFill:     "rgba(8, 138, 135, 0.55)",
-      colLabel:    "#1a2a30",
+      outlineFill: "rgba(230, 247, 247, 0.30)",
+      roomStroke:  "#b0c8c8",
+      roomLabel:   "#2a5050",
+      col:         "#1a3a8a",
+      colFill:     "rgba(26, 58, 138, 0.72)",
+      colLabel:    "#ffffff",
       beam:        "#0a6a68",
       beamLabel:   "#1a2a30",
       door:        "#cc4444",
@@ -150,13 +176,12 @@
       grid:        "rgba(26, 85, 85, 0.35)",
       gridLabel:   "#1a5555",
       outline:     "#1ae8b0",
-      outlineFill: "rgba(7, 40, 40, 0.85)",
-      roomFill:    "rgba(42, 192, 192, 0.07)",
+      outlineFill: "rgba(7, 40, 40, 0.70)",
       roomStroke:  "#1a5555",
-      roomLabel:   "#5a9090",
-      col:         "#2ac0c0",
-      colFill:     "rgba(42, 192, 192, 0.65)",
-      colLabel:    "#c8eeed",
+      roomLabel:   "#8abfbf",
+      col:         "#3a68d0",
+      colFill:     "rgba(45, 90, 200, 0.78)",
+      colLabel:    "#ffffff",
       beam:        "#1ae8b0",
       beamLabel:   "#c8eeed",
       door:        "#ff8a7a",
@@ -242,18 +267,17 @@
     }
 
     function labelFontSize() {
-      return Math.max(11, Math.min(15, xform.scale * 0.16));
+      return Math.max(9, Math.min(11, xform.scale * 0.12));
     }
 
     function drawLabelWithBg(text, x, y, color) {
       const fs = labelFontSize();
       ctx.font = `bold ${fs}px Segoe UI`;
       const m  = ctx.measureText(text);
-      const pw = 5, ph = 3;
+      const pw = 4, ph = 2;
       const lw = m.width + pw * 2, lh = fs + ph * 2;
       const r  = 3;
       const lx = x - lw / 2, ly = y - lh / 2;
-      // Rounded-rect background
       ctx.beginPath();
       ctx.moveTo(lx + r, ly);
       ctx.lineTo(lx + lw - r, ly);
@@ -268,6 +292,21 @@
       ctx.fillStyle = isLight ? "rgba(255,255,255,0.93)" : "rgba(5,18,18,0.88)";
       ctx.fill();
       ctx.fillStyle    = color;
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x, y);
+    }
+
+    function drawColLabel(text, x, y) {
+      const fs = labelFontSize();
+      ctx.font = `bold ${fs}px Segoe UI`;
+      const m  = ctx.measureText(text);
+      const r  = Math.max(m.width / 2 + 4, fs / 2 + 4);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = isLight ? "rgba(20,50,140,0.90)" : "rgba(40,80,210,0.90)";
+      ctx.fill();
+      ctx.fillStyle    = "#ffffff";
       ctx.textAlign    = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(text, x, y);
@@ -292,7 +331,7 @@
       ctx.fillRect(cx - hw, cy - hd, hw * 2, hd * 2);
       ctx.strokeRect(cx - hw, cy - hd, hw * 2, hd * 2);
       if (chkLbls.checked) {
-        drawLabelWithBg(el.id || el.name || "", cx, cy - hd - labelFontSize() / 2 - 3, isHi ? C.hi : C.colLabel);
+        drawColLabel(el.id || el.name || "", cx, cy - hd - labelFontSize() / 2 - 3);
       }
       return { type: "rect", x: cx - hw, y: cy - hd, w: hw * 2, h: hd * 2 };
     }
@@ -357,11 +396,12 @@
       for (const r of layout.rooms || []) {
         const geo = r.geometry || [];
         if (geo.length >= 3) {
-          drawPoly(geo, C.roomFill, C.roomStroke, 1);
+          drawPoly(geo, getRoomFill(r.name || r.id), C.roomStroke, 1);
           if (chkLbls.checked) {
             const [cx, cy] = centroid(geo);
+            const rfs = Math.max(10, Math.min(13, xform.scale * 0.12));
             ctx.fillStyle    = C.roomLabel;
-            ctx.font         = `${Math.max(11, Math.min(14, xform.scale * 0.13))}px Segoe UI`;
+            ctx.font         = `${rfs}px Segoe UI`;
             ctx.textAlign    = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(r.name || r.id || "", wx(cx), wy(cy));

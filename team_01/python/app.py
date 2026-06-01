@@ -130,6 +130,22 @@ def _run_evaluate(layout_json_str: str, sdl: float = 3.5, ll: float = 2.0) -> di
         return None
 
 
+def _run_load_path(eval_result: dict | None, layout: dict) -> dict | None:
+    if not eval_result:
+        return None
+    try:
+        from nodes.load_path import build_load_path_node
+        node = build_load_path_node()
+        out = node({
+            "evaluation_result":  json.dumps(eval_result),
+            "layout_json_string": json.dumps(layout),
+            "load_path_result":   None,
+        })
+        return out.get("load_path_result")
+    except Exception:
+        return None
+
+
 def _run_grid_options(layout: dict, material: str) -> list[dict]:
     try:
         from nodes.tools import build_structural_grid_with_options
@@ -182,6 +198,27 @@ def _run_comparison(before_str: str, after_str: str) -> str:
         return out.get("comparison_result", "")
     except Exception:
         return ""
+
+
+def _element_cost(el: dict) -> float:
+    """Rough USD cost estimate for one structural element (volume × cost/m³)."""
+    import math
+    _C = {"RCC": 350.0, "STEEL": 12_000.0, "TIMBER": 800.0}
+    attrs = el.get("attributes", {})
+    mat   = (attrs.get("material") or "RCC").upper()
+    key   = "STEEL" if "STEEL" in mat else ("TIMBER" if "TIMBER" in mat else "RCC")
+    c_m3  = _C[key]
+    if len(el.get("geometry", [])) == 2:
+        span = math.dist(el["geometry"][0], el["geometry"][1])
+        d = float(attrs.get("depth")  or 250) / 1000.0
+        w = float(attrs.get("width")  or 175) / 1000.0
+        return round(span * d * w * c_m3)
+    else:
+        dims = str(attrs.get("dimensions", "175x175"))
+        parts = dims.split("x")
+        cw = float(parts[0]) / 1000.0 if parts else 0.175
+        cd = float(parts[1]) / 1000.0 if len(parts) > 1 else cw
+        return round(cw * cd * 3.0 * c_m3)
 
 
 def _apply_alternative(alt: str, layout_str: str, material: str,
@@ -358,6 +395,7 @@ def _ensure_session() -> None:
         "agent_log":       [],
         "eval_result":     None,
         "eval_alts":       [],
+        "load_path_result": None,
         "state_history":   [],
         "cost_flexibility": None,
         "material":        "RCC",
@@ -386,12 +424,9 @@ _ensure_session()
 
 # Pick up element selection relayed from the viewer via URL query param
 _pending_sel = st.query_params.get("_sel", "")
-if _pending_sel:
+if _pending_sel and _pending_sel != st.session_state.get("_last_sel_applied", ""):
     st.session_state.selected_el = _pending_sel
-    try:
-        del st.query_params["_sel"]
-    except Exception:
-        pass
+    st.session_state["_last_sel_applied"] = _pending_sel
 
 _is_light = st.session_state.get("theme", "dark") == "light"
 
@@ -700,6 +735,23 @@ with col_input:
 # ══════════════════════════════════════════════════════════════════════════════
 
 with col_viewer:
+    # JS bridge — lives at col_viewer level so it's always active regardless of tab
+    components.html("""
+<script>
+  (function() {
+    if (window._selBridgeReady) return;
+    window._selBridgeReady = true;
+    window.parent.addEventListener('message', function(ev) {
+      if (!ev.data || ev.data.type !== 'selectElement' || !ev.data.elementId) return;
+      var eid = ev.data.elementId;
+      var url = new URL(window.parent.location.href);
+      url.searchParams.set('_sel', eid);
+      window.parent.history.replaceState(null, '', url.toString());
+      window.parent.dispatchEvent(new PopStateEvent('popstate', {state: null}));
+    });
+  })();
+</script>""", height=1)
+
     tab_model, tab_costs, tab_compare, tab_history, tab_output = st.tabs(
         ["Model", "Costs", "Compare", "History", "Output"]
     )
@@ -739,6 +791,7 @@ with col_viewer:
                 st.rerun()
 
         # Element selector + actions
+        st.markdown('<div class="panel-hdr">➖ Modify or Delete</div>', unsafe_allow_html=True)
         row_sel, row_action = st.columns([3, 1]), st.columns([1, 1, 1])
         with row_sel[0]:
             selected_el = st.selectbox(
@@ -774,6 +827,7 @@ with col_viewer:
                     )
                     st.session_state.eval_result = _ev
                     st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                    st.session_state.load_path_result = _run_load_path(_ev, json.loads(new_str))
                     _cmp = _run_comparison(before_str, new_str)
                     if _cmp:
                         st.session_state.output_log.append(_cmp)
@@ -842,6 +896,7 @@ with col_viewer:
                             )
                             st.session_state.eval_result = _ev
                             st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                            st.session_state.load_path_result = _run_load_path(_ev, json.loads(new_str))
                             _cmp = _run_comparison(before_str, new_str)
                             if _cmp:
                                 st.session_state.output_log.append(_cmp)
@@ -872,6 +927,7 @@ with col_viewer:
                             )
                             st.session_state.eval_result = _ev
                             st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                            st.session_state.load_path_result = _run_load_path(_ev, json.loads(new_str))
                             _cmp = _run_comparison(before_str, new_str)
                             if _cmp:
                                 st.session_state.output_log.append(_cmp)
@@ -917,6 +973,7 @@ with col_viewer:
                             )
                             st.session_state.eval_result = _ev
                             st.session_state.eval_alts = _get_failure_alternatives(_ev or {}, _mat)
+                            st.session_state.load_path_result = _run_load_path(_ev, json.loads(new_str))
                             _cmp = _run_comparison(before_str, new_str)
                             if _cmp:
                                 st.session_state.output_log.append(_cmp)
@@ -1006,24 +1063,6 @@ with col_viewer:
                     _prev_idx = _opt_names.index(_prev_sel) - 1
                     _preview_opt_file = f"team_01_option_{_prev_idx + 1}.json"
 
-        # JS bridge: receive postMessage from viewer iframe → navigate parent URL
-        # with ?_sel=<id> to trigger a Streamlit rerun and update selected_el.
-        components.html("""
-<script>
-  (function() {
-    try {
-      window.parent.addEventListener('message', function(ev) {
-        if (ev.data && ev.data.type === 'selectElement' && ev.data.elementId) {
-          var eid = ev.data.elementId;
-          var url = new URL(window.parent.location.href);
-          url.searchParams.set('_sel', eid);
-          window.parent.location.href = url.toString();
-        }
-      }, { once: false });
-    } catch(e) {}
-  })();
-</script>""", height=0)
-
         # Three.js 3D viewer
         if _viewer_is_reachable():
             components.iframe(
@@ -1045,7 +1084,7 @@ with col_viewer:
                     highlight=st.session_state.selected_el,
                     option_file=_preview_opt_file,
                 ),
-                height=280, scrolling=False,
+                height=400, scrolling=False,
             )
         else:
             st.warning(
@@ -1164,6 +1203,18 @@ with col_viewer:
                              for k in set(list(ba) + list(aa)) if ba.get(k) != aa.get(k)]
                     if diffs:
                         st.caption(f"**{eid}**: {' | '.join(diffs)}")
+
+                # Cost delta for this comparison step
+                _cost_added   = sum(_element_cost(_am[eid]) for eid in _added   if eid in _am)
+                _cost_removed = sum(_element_cost(_bm[eid]) for eid in _removed if eid in _bm)
+                _cost_net     = _cost_added - _cost_removed
+                if _added or _removed:
+                    st.markdown('<div class="panel-hdr" style="margin-top:6px">Cost Impact</div>',
+                                unsafe_allow_html=True)
+                    _cc1, _cc2, _cc3 = st.columns(3)
+                    _cc1.metric("Material added",   f"+${_cost_added:,.0f}")
+                    _cc2.metric("Material saved",   f"-${_cost_removed:,.0f}")
+                    _cc3.metric("Net cost change",  f"${_cost_net:+,.0f}")
             st.markdown("---")
 
         # ── Before/after 3D overlay ──────────────────────────────────────────
@@ -1296,6 +1347,7 @@ with col_eval:
             if _ev:
                 st.session_state.eval_result = _ev
                 st.session_state.eval_alts = _get_failure_alternatives(_ev, _mat_now)
+                st.session_state.load_path_result = _run_load_path(_ev, json.loads(_ls))
             _s = (_ev or {}).get("summary", {})
             response = (
                 f"Structural evaluation: **{'PASS' if _s.get('overall_PASS') else 'FAIL'}** — "
@@ -1349,6 +1401,7 @@ with col_eval:
         if ev:
             st.session_state.eval_result = ev
             st.session_state.eval_alts   = _get_failure_alternatives(ev, _mat_now)
+            st.session_state.load_path_result = _run_load_path(ev, applied_layout)
         st.rerun()
 
     er = st.session_state.eval_result
@@ -1490,6 +1543,9 @@ with col_eval:
                             st.session_state.eval_alts   = _get_failure_alternatives(
                                 new_ev, _mat_now
                             )
+                            st.session_state.load_path_result = _run_load_path(
+                                new_ev, json.loads(new_str)
+                            )
                         st.rerun()
 
     # Cost/flex summary if available
@@ -1507,3 +1563,65 @@ with col_eval:
         st.caption(f"Disruption: {disrupt}/10 · {_cf.get('disruption_label','')}")
         if _cf.get("summary"):
             st.caption(_cf["summary"])
+
+    # ── Load-Path Visualizer ──────────────────────────────────────────────────
+    _lp = st.session_state.get("load_path_result")
+    if _lp:
+        st.markdown("---")
+        st.markdown('<div class="panel-hdr">Load-Path Visualizer</div>', unsafe_allow_html=True)
+
+        _lp_narrative = _lp.get("narrative", "")
+        if _lp_narrative:
+            st.markdown(
+                f'<div class="agent-response">{_lp_narrative}</div>',
+                unsafe_allow_html=True,
+            )
+
+        _anchors = _lp.get("anchor_columns", [])
+        _crit_path = _lp.get("critical_path", [])
+        if _anchors:
+            st.caption(f"**Anchor column{'s' if len(_anchors) > 1 else ''}:** {', '.join(_anchors)}")
+        if _crit_path:
+            st.caption(f"**Critical path:** {' → '.join(_crit_path[:6])}")
+
+        _lp_elements = _lp.get("elements", [])
+        if _lp_elements:
+            st.markdown(
+                '<div class="panel-hdr" style="margin-top:6px">Stress Hierarchy</div>',
+                unsafe_allow_html=True,
+            )
+            for _le in _lp_elements[:14]:
+                _util_pct = int(_le["utilization"] * 100)
+                _lbl      = _le["load_responsibility"]
+                _color    = _le["color"]
+                _bar_w    = min(_util_pct, 100)
+                _txt_cls  = (
+                    "eval-fail" if _lbl in ("Critical", "High")
+                    else ("" if _lbl == "Moderate" else "eval-pass")
+                )
+                _trib_tag = (
+                    f'<span style="font-size:.70rem;color:#8aacac;margin-left:4px">'
+                    f'{_le["tributary_area_m2"]}m²</span>'
+                    if _le.get("tributary_area_m2") else ""
+                )
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:6px;'
+                    f'margin-bottom:4px;padding:3px 0">'
+                    f'<div style="width:9px;height:9px;border-radius:50%;'
+                    f'background:{_color};flex-shrink:0"></div>'
+                    f'<span style="font-weight:700;font-size:.78rem;'
+                    f'min-width:56px;font-family:monospace">{_le["id"]}</span>'
+                    f'<span style="font-size:.72rem;color:#5a8080;'
+                    f'min-width:88px;flex-shrink:0">{_le["role"]}</span>'
+                    f'<div style="flex:1;height:5px;background:#dde8e8;'
+                    f'border-radius:3px;min-width:40px">'
+                    f'<div style="width:{_bar_w}%;height:5px;'
+                    f'background:{_color};border-radius:3px"></div>'
+                    f'</div>'
+                    f'<span class="{_txt_cls}" style="font-size:.76rem;'
+                    f'min-width:36px;text-align:right;font-weight:700">'
+                    f'{_util_pct}%</span>'
+                    f'{_trib_tag}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )

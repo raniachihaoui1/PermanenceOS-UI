@@ -121,7 +121,7 @@
       <div class="legend-grid" id="legend-grid">
         <div><span class="dot" style="background:#7cb2ff"></span>Rooms</div>
         <div><span class="dot" style="background:#9b7cff"></span>Furniture / MEP</div>
-        <div><span class="dot" style="background:#6be1b6"></span>Columns</div>
+        <div><span class="dot" style="background:#3a70e0"></span>Columns</div>
         <div><span class="dot" style="background:#ffd36a"></span>Beams / Walls</div>
         <div><span class="dot" style="background:#ff8a7a"></span>Doors</div>
         <div><span class="dot" style="background:#8ad4ff"></span>Windows</div>
@@ -230,10 +230,10 @@
     scene.add(contentGroup);
 
     const materials = {
-      room:      new THREE.MeshStandardMaterial({ color: 0x7cb2ff, transparent: true, opacity: 0.26, roughness: 0.85, metalness: 0.05 }),
+      room:      new THREE.MeshStandardMaterial({ color: 0x7cb2ff, transparent: true, opacity: 0.40, roughness: 0.85, metalness: 0.05 }),
       furniture: new THREE.MeshStandardMaterial({ color: 0x9b7cff, transparent: true, opacity: 0.40, roughness: 0.75 }),
       mep:       new THREE.MeshStandardMaterial({ color: 0x8be7d3, transparent: true, opacity: 0.42, roughness: 0.75 }),
-      column:    new THREE.MeshStandardMaterial({ color: 0x6be1b6, roughness: 0.6,  metalness: 0.05 }),
+      column:    new THREE.MeshStandardMaterial({ color: 0x2255b8, roughness: 0.6,  metalness: 0.05 }),
       beam:      new THREE.MeshStandardMaterial({ color: 0xffd36a, roughness: 0.55, metalness: 0.1  }),
       wall:      new THREE.MeshStandardMaterial({ color: 0xf0b35f, roughness: 0.65, metalness: 0.0  }),
       door:      new THREE.MeshStandardMaterial({ color: 0xff8a7a, roughness: 0.7 }),
@@ -402,7 +402,7 @@
     function addRoom(room, index) {
       const points = extractPoints(room);
       if (points.length < 3) return;
-      addExtrudedPolygon(points, 0.08, materials.room, 0.0);
+      addExtrudedPolygon(points, 0.07, materials.room, 0.025);
       addOutline(points, _isLight ? 0x3a6adf : 0xdbe8ff, 0.041);
 
       const area = room?.attributes?.area ?? polygonArea(closedPolygon(points));
@@ -507,7 +507,7 @@
         if (type.includes("column") || points.length === 1) {
           if (points[0]) {
             addColumn(points[0], attrs, elId, matOvr);
-            if (_showLabels && !matOvr) addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x6be1b6);
+            if (_showLabels && !matOvr) addLabel(item.name || item.id, points[0].x, 3.4, points[0].z, 0x7aabff);
             allPoints.push(points[0].clone());
           }
           continue;
