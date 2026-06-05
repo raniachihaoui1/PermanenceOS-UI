@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Any
 from _runtime.llm import call_llm
-from nodes.tools import format_load_path_for_llm
 import time
 
 
@@ -56,15 +55,6 @@ For SHEAR failures (SHEAR): propose (1) increasing section width, (2) adding a c
 For COLUMN stress/buckling failures: propose (1) upgrading column section, (2) reducing floor area tributary to that column.
 
 Never guess element IDs. If a beam is named "CD_1" in the evaluation, use "CD_1" exactly.
-
-LOAD PATH CONTEXT (injected automatically when evaluation has run):
-You will receive a "LOAD PATH ANALYSIS" block listing every structural element ranked by
-utilisation ratio (actual / allowable, highest first).
-- Use element IDs and numbers from this block directly — never invent or round them.
-- Anchor columns are the most critical load points in the structure; always name them when
-  explaining failures, proposing removals, or recommending changes.
-- Primary Girders are the long-span beams; Secondary Beams serve them.
-- A utilisation of 100% means the element is exactly at its limit; >100% means failure.
 
 GENERAL QUESTIONS (what rooms exist, what conflicts exist, what is permanent):
 Answer directly from the layout JSON. Set action="final". Do not call any tool.
@@ -123,11 +113,6 @@ def build_reason_node(llm):
             _cap(m, 2500) if i == 0 else _cap(m, 400)
             for i, m in enumerate(kept)
         ]
-
-        # Inject load-path context when available so the LLM reasons about real utilisation numbers
-        lp_block = format_load_path_for_llm(state.get("load_path_result"))
-        if lp_block:
-            trimmed_messages = trimmed_messages + [{"role": "user", "content": lp_block}]
 
         result = None
         last_error = None

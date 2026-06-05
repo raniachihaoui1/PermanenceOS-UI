@@ -710,6 +710,38 @@
       }
     },
     {
+      "id": "D2",
+      "name": "Col_D2",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "material": "RCC",
+        "conflict": null,
+        "dimensions": "175x175"
+      }
+    },
+    {
+      "id": "D3",
+      "name": "Col_D3",
+      "geometry": [
+        [
+          5.8,
+          1.75
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "material": "RCC",
+        "conflict": null,
+        "dimensions": "175x175"
+      }
+    },
+    {
       "id": "D5",
       "name": "Col_D5",
       "geometry": [
@@ -1070,6 +1102,30 @@
       }
     },
     {
+      "id": "C3-D3",
+      "name": "Beam_C3-D3",
+      "geometry": [
+        [
+          3.5,
+          1.75
+        ],
+        [
+          5.8,
+          1.75
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 2.3,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
       "id": "C5-C7",
       "name": "Beam_C5-C7",
       "geometry": [
@@ -1142,6 +1198,30 @@
       }
     },
     {
+      "id": "D1-D2",
+      "name": "Beam_D1-D2",
+      "geometry": [
+        [
+          5.8,
+          0
+        ],
+        [
+          5.8,
+          1.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 1.5,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
       "id": "D1-E1",
       "name": "Beam_D1-E1",
       "geometry": [
@@ -1157,6 +1237,78 @@
       "attributes": {
         "type": "perimeter",
         "length": 3.5,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
+      "id": "D2-D3",
+      "name": "Beam_D2-D3",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ],
+        [
+          5.8,
+          1.75
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 0.25,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
+      "id": "D2-E2",
+      "name": "Beam_D2-E2",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ],
+        [
+          9.3,
+          1.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 3.5,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
+      "id": "D3-D5",
+      "name": "Beam_D3-D5",
+      "geometry": [
+        [
+          5.8,
+          1.75
+        ],
+        [
+          5.8,
+          5.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 3.75,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",
@@ -1253,6 +1405,30 @@
       "attributes": {
         "type": "perimeter",
         "length": 1.5,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
+      "id": "E2-E4",
+      "name": "Beam_E2-E4",
+      "geometry": [
+        [
+          9.3,
+          1.5
+        ],
+        [
+          9.3,
+          3.2
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 1.7,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",
@@ -1445,54 +1621,6 @@
       "attributes": {
         "type": "perimeter",
         "length": 1.7,
-        "isWallAligned": null,
-        "structuralRole": null,
-        "material": "RCC",
-        "conflict": null,
-        "depth": "250",
-        "width": "175"
-      }
-    },
-    {
-      "id": "D1-D3",
-      "name": "Beam_D1-D3",
-      "geometry": [
-        [
-          5.8,
-          0
-        ],
-        [
-          5.8,
-          5.5
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 1.75,
-        "isWallAligned": null,
-        "structuralRole": null,
-        "material": "RCC",
-        "conflict": null,
-        "depth": "300",
-        "width": "200"
-      }
-    },
-    {
-      "id": "E2-E3",
-      "name": "Beam_E2-E3",
-      "geometry": [
-        [
-          9.3,
-          1.5
-        ],
-        [
-          9.3,
-          3.2
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 0.25,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",

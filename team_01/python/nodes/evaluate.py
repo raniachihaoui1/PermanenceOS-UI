@@ -688,31 +688,34 @@ def _ask_sdl_ll(state: dict) -> None:
         pass
 
 
-_INTERPRET_SYSTEM = """You are a structural advisor helping an architect during early design. Given structural evaluation results with utilisation percentages (100% = at the structural limit), write a concise advisory note.
+_INTERPRET_SYSTEM = """You are a structural advisor helping an architect during early design. You are given structural evaluation results: each element with its ID, type (beam or column), section, and utilisation % (100% = at the structural limit), plus a "May be removable" list. Write a concise advisory note.
 
-UTILISATION THRESHOLDS — use these consistently:
-- Below 50%: over-engineered. Suggest a specific LAYOUT change — remove the element, open up space, merge spans. Do not suggest downsizing sections here; that is a separate operation.
-- 50–75%: working range. Healthy design — note it positively.
-- Above 75%: approaching limit. Flag clearly so the architect is aware before it becomes a problem.
+CRITICAL: If overall_PASS is false, your FIRST sentence MUST identify the structure as failing and name the specific failing element IDs from the data. Do not discuss optimisation or underutilised elements until all failures are addressed.
+
+USE ONLY THE DATA YOU ARE GIVEN:
+- Mention only element IDs that appear in the evaluation data. Never invent, guess, or complete an ID. The example IDs below are illustrative format only — never repeat them as if they were real.
+- Keep element types exactly as given — never call a beam a column or a column a beam.
+- Quote utilisation figures and spans exactly as given. Never invent a number.
+- Do NOT name rooms or locations ("living room", "kitchen", "staircase", "corridor") — the geometry does not tell you the room. Describe position only by what the data supports: element IDs, spans, and which elements are adjacent or clustered by their coordinates.
+
+UTILISATION THRESHOLDS — use consistently:
+- Below 50%: over-engineered. Suggest a specific LAYOUT change — remove the element (only if it is on the "May be removable" list) or open up the span. (Over-engineered means LOW utilisation only — never call a failing or near-limit element over-engineered.)
+- 50–75%: working range — note it positively.
+- Above 75%: approaching limit — flag it clearly.
 - Failures (100%+): must fix. Give 2 concrete options using exact element IDs.
 
-For UNDERUTILISED columns (<70%): use the removal_hints to say specifically what happens if removed — "Column B1 is only at 7% utilisation. You could remove it — the connected beams stay within limits and it would open up the living room." If removal needs a beam upgrade, say so: "Removing D4 extends beam D4-E4 from 3.5m to 7m — a larger section would be needed."
+For UNDERUTILISED columns (<70%): use the "May be removable" list to say what happens if removed, e.g. "Column <ID> is at <N>% — removing it keeps the connected beams within limits" or, if it needs an upgrade, "removing <ID> extends beam <ID> to <span> — a larger section would be needed." The "May be removable" list is exhaustive — only name columns that appear on it; never suggest removing any element not on that list, and never suggest removing a perimeter column. Columns marked KEEP must never be suggested for removal, even at low utilisation.
 
-For UNDERUTILISED beams (<70%): suggest the architect could remove or relocate a wall, or ask whether that span is actually needed.
+For UNDERUTILISED beams (<70%): ask whether that span is actually needed.
 
-Structure your response as a conversation, not a report:
-- Line 1: one sentence — overall verdict in plain language
-- 2-3 bullets: most important observations (use element IDs and numbers but explain what they mean spatially — "column B2 sits in the middle of the living room" not just "column B2")
-- 1 closing question: ask the architect ONE specific spatial question based on what you see in the layout — something that moves the design forward. Examples:
-  "The bedroom corridor has three columns within 3m of each other — do you need all of them, or is there a wall that could be removed?"
-  "Column E5 is carrying almost no load — is the corner it sits in important to keep, or could that space open up?"
-  "The longest span is beam C1-E1 at 6m — is that an open-plan space, and if so, would you want to keep it column-free?"
+Structure as a conversation, not a report:
+- Line 1: one-sentence overall verdict in plain language.
+- 2-3 bullets: the most important observations, each tied to a real element ID and its number.
+- 1 closing question: ONE specific question that moves the design forward, referencing real element IDs and their utilisation or proximity from the data — never a generic question, never a named room. (Format example only, do not reuse the IDs: "Columns <ID> and <ID> are both under 25% and sit close together — do you need both?")
 
-CRITICAL: The closing question must reference actual element IDs and room names from the evaluation data. Never ask a generic question. Make it specific to this layout.
+If everything passes and some elements are over-engineered: end with "Type 'right-size sections' or pick option 1 in the menu to find the minimum that still works." then still ask the question.
 
-If everything passes and some elements are over-engineered: end with "Type 'right-size sections' or pick option 1 in the menu to find the minimum that still works." then still ask the spatial question.
-
-Reply with JSON only: {"action":"final","final_response":"<your advisory>","tool_calls":[]}"""
+Reply with JSON only: {"action":"final","final_response":"your advisory here","tool_calls":[]}"""
 
 
 def _beam_utilisation(b: dict) -> float:
@@ -747,11 +750,23 @@ def _precompute_removal_hints(
     if layout_str:
         try:
             _layout_tmp = json.loads(layout_str)
-            _perimeter_ids = {
-                el["id"] for el in _layout_tmp.get("structure", [])
+            _all_cols = [
+                el for el in _layout_tmp.get("structure", [])
                 if len(el.get("geometry", [])) == 1
-                and el.get("attributes", {}).get("type") == "perimeter"
-            }
+            ]
+            if _all_cols:
+                _xs = [el["geometry"][0][0] for el in _all_cols]
+                _ys = [el["geometry"][0][1] for el in _all_cols]
+                _min_x, _max_x = min(_xs), max(_xs)
+                _min_y, _max_y = min(_ys), max(_ys)
+                for _el in _all_cols:
+                    _x, _y = _el["geometry"][0][0], _el["geometry"][0][1]
+                    if (
+                        _x == _min_x or _x == _max_x
+                        or _y == _min_y or _y == _max_y
+                        or _el.get("attributes", {}).get("type") == "perimeter"
+                    ):
+                        _perimeter_ids.add(_el["id"])
         except Exception:
             pass
 
@@ -773,7 +788,7 @@ def _precompute_removal_hints(
         except Exception:
             b_trib = {}
 
-        for c in col_candidates[:3]:
+        for c in col_candidates[:5]:
             col_id = c["id"]
             try:
                 whatif = simulate_what_if_removal(layout_str, [col_id], b_trib, ll_kNm2, sdl_kNm2)
@@ -816,6 +831,37 @@ def _precompute_removal_hints(
         })
 
     return {"columns": col_hints, "beams": beam_hints}
+
+
+def _format_summary_for_llm(summary: dict) -> str:
+    """Flat plain-text table — easier for small models than nested JSON."""
+    thresh = summary.get("thresholds", {})
+    lines = [
+        f"Overall: {'PASS' if summary['overall_PASS'] else 'FAIL'}",
+        f"Beams: {summary['n_beams']}  Columns: {summary['n_columns']}",
+        f"Thresholds: over-engineered <{thresh.get('over_engineered_pct', 50)}%  "
+        f"approaching >{thresh.get('approaching_limit_pct', 75)}%",
+        "",
+        f"{'ID':<10} {'Type':<8} {'Util%':>6}  {'Fails'}",
+        f"{'-'*10} {'-'*8} {'-'*6}  {'-'*20}",
+    ]
+    for b in summary.get("critical_beams", []):
+        fails = ", ".join(b.get("fails", [])) or "ok"
+        lines.append(f"{b['id']:<10} {'beam':<8} {b['utilisation_pct']:>6.1f}  {fails}")
+    hint_ids = {h["element_id"] for h in summary.get("removal_hints", [])}
+    for c in summary.get("critical_columns", []):
+        fails = ", ".join(c.get("fails", [])) or "ok"
+        keep = "" if c["id"] in hint_ids else "  KEEP — not removable"
+        lines.append(f"{c['id']:<10} {'column':<8} {c['utilisation_pct']:>6.1f}  {fails}{keep}")
+    for b in summary.get("underutilised_beams", []):
+        lines.append(f"{b['id']:<10} {'beam':<8} {b['utilisation_pct']:>6.1f}  (underutilised)")
+    hints = summary.get("removal_hints", [])
+    if hints:
+        lines.append("")
+        lines.append("May be removable (do not suggest removing any element not on this list):")
+        for h in hints:
+            lines.append(f"  {h['element_id']} ({h['type']}): {h.get('note', '')}")
+    return "\n".join(lines)
 
 
 def _interpret_evaluation(
@@ -870,10 +916,13 @@ def _interpret_evaluation(
     try:
         raw = llm.invoke([
             {"role": "system", "content": _INTERPRET_SYSTEM},
-            {"role": "user",   "content": f"Structural evaluation:\n{json.dumps(summary, indent=2)}"},
+            {"role": "user",   "content": f"Structural evaluation:\n{_format_summary_for_llm(summary)}"},
         ])
         data = json.loads(raw.content)
-        return data.get("final_response", "")
+        response = data.get("final_response", "")
+        # Strip any XML/HTML tags that small models sometimes echo back
+        import re as _re
+        return _re.sub(r"<[^>]+>", "", response).strip()
     except Exception as e:
         print(f"[interpret] LLM unavailable ({e})")
         return ""

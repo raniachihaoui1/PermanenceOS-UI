@@ -9,7 +9,7 @@ from nodes.modify import build_modify_node, DEFAULT_SECTIONS, BEAM_SECTION_UPGRA
 from nodes.evaluate import build_evaluate_node, evaluate_structure, SETTINGS_PATH, _get_user_request
 from nodes.comparison import build_comparison_node
 from nodes.cost_flexibility import build_cost_flexibility_node
-from nodes.load_path import build_load_path_node
+from nodes.tag_and_audit import generate_structure as _generate_structure
 
 EXAMPLE_LAYOUTS_DIR = Path(__file__).parent / "example_layouts"
 OTHER_LAYOUTS_DIR   = Path(__file__).parent.parent / "gh" / "other layouts"
@@ -46,7 +46,6 @@ class AgentState(TypedDict):
     sdl_kNm2: float | None
     find_minimum_done: bool | None
     cost_flexibility: dict | None
-    load_path_result: dict | None
 
 
 _EVAL_KEYWORDS = frozenset({
@@ -91,7 +90,7 @@ def _route_from_evaluate(state: AgentState) -> str:
     if state.get("pending_structural_change"):
         return "modify"
     if state.get("evaluation_result") is not None:
-        return "load_path"
+        return "cost_flexibility"
     return "reason"
 
 
@@ -103,13 +102,6 @@ def _route_from_cost_flexibility(state: AgentState) -> str:
 
 def build_generate_grid_node(edited_layout_path):
     from _runtime.llm import write_tool_result
-    try:
-        from nodes.tag_and_audit import generate_structure as _generate_structure
-    except Exception as e:
-        _generate_structure = None
-        _generate_structure_error = e
-    else:
-        _generate_structure_error = None
 
     def generate_grid_node(state: dict) -> dict:
         print(f"\n{'='*50}")
@@ -127,12 +119,6 @@ def build_generate_grid_node(edited_layout_path):
         before_path.write_text(state["layout_json_string"], encoding="utf-8")
 
         layout_data = json.loads(state["layout_json_string"])
-        if _generate_structure is None:
-            print(f"[generate_grid] tag_and_audit unavailable ({type(_generate_structure_error).__name__})")
-            state["came_from"] = "generate_grid"
-            state["pending_tool_calls"] = None
-            return state
-
         options = _generate_structure(layout_data)
 
         if not options:
@@ -179,22 +165,20 @@ def build_generate_grid_node(edited_layout_path):
 
 
 def build_graph(ctx: Any) -> Any:
-    reason        = build_reason_node(ctx.llm)
+    reason       = build_reason_node(ctx.llm)
     generate_grid = build_generate_grid_node(ctx.edited_layout_path)
-    modify        = build_modify_node(ctx.tools, ctx.edited_layout_path, evaluate_fn=evaluate_structure)
-    evaluate      = build_evaluate_node(ctx.llm)
-    load_path     = build_load_path_node()
-    cost_flex     = build_cost_flexibility_node()
-    comparison    = build_comparison_node(ctx.llm)
+    modify       = build_modify_node(ctx.mcp_client, ctx.tools, ctx.edited_layout_path, evaluate_fn=evaluate_structure)
+    evaluate     = build_evaluate_node(ctx.llm)
+    cost_flex    = build_cost_flexibility_node()
+    comparison   = build_comparison_node(ctx.llm)
 
     graph = StateGraph(AgentState)
-    graph.add_node("reason",           reason)
-    graph.add_node("generate_grid",    generate_grid)
-    graph.add_node("modify",           modify)
-    graph.add_node("evaluate",         evaluate)
-    graph.add_node("load_path",        load_path)
+    graph.add_node("reason",        reason)
+    graph.add_node("generate_grid", generate_grid)
+    graph.add_node("modify",        modify)
+    graph.add_node("evaluate",      evaluate)
     graph.add_node("cost_flexibility", cost_flex)
-    graph.add_node("comparison",       comparison)
+    graph.add_node("comparison",    comparison)
 
     graph.add_edge(START, "reason")
     graph.add_conditional_edges("reason", _route_from_reason,
@@ -202,8 +186,7 @@ def build_graph(ctx: Any) -> Any:
     graph.add_edge("generate_grid", "evaluate")
     graph.add_edge("modify",        "evaluate")
     graph.add_conditional_edges("evaluate", _route_from_evaluate,
-        {"modify": "modify", "load_path": "load_path", "reason": "reason"})
-    graph.add_edge("load_path", "cost_flexibility")
+        {"modify": "modify", "cost_flexibility": "cost_flexibility", "reason": "reason"})
     graph.add_conditional_edges("cost_flexibility", _route_from_cost_flexibility,
         {"comparison": "comparison", END: END})
     graph.add_edge("comparison", END)
@@ -287,17 +270,6 @@ def run_agent(prompt: str, ctx: Any) -> str:
 
     if not final_response and ctx.edited_layout_path.exists():
         final_response = f"Done. Layout saved to {ctx.edited_layout_path.name}"
-
-    # Write load-path JSON (for viewer integration and future use)
-    lp = final_state.get("load_path_result")
-    if lp:
-        lp_path = ctx.edited_layout_path.parent / "team_01_load_path.json"
-        lp_path.write_text(json.dumps(lp, indent=2, ensure_ascii=False), encoding="utf-8")
-        lp_narrative = lp.get("narrative", "")
-        if lp_narrative and final_response:
-            final_response = lp_narrative + "\n\n" + final_response
-        elif lp_narrative:
-            final_response = lp_narrative
 
     # Write evaluation report to file
     _write_evaluation_report(
@@ -557,7 +529,6 @@ def _build_initial_state(prompt: str, ctx: Any) -> AgentState:
         "sdl_kNm2": _settings_load(SETTINGS_PATH, "sdl_kNm2"),
         "find_minimum_done": False,
         "cost_flexibility": None,
-        "load_path_result": None,
     }
 
 
