@@ -255,6 +255,10 @@ def call_llm(
     content = result.content
     if not isinstance(content, str):
         raise RuntimeError("LLM response content must be a string")
+    if not content.strip():
+        raise RuntimeError(
+            "LLM returned an empty response — the model may be unavailable or rate-limited"
+        )
 
     try:
         return _normalize_llm_decision(_parse_llm_json(content))

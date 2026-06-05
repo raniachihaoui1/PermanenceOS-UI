@@ -768,7 +768,18 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             ),
         }
 
-        result = call_llm(ctx.llm, SYSTEM_PROMPT, [context_msg], tool_catalog)
+        last_err: Exception | None = None
+        result = None
+        for _attempt in range(2):
+            try:
+                result = call_llm(ctx.llm, SYSTEM_PROMPT, [context_msg], tool_catalog)
+                break
+            except Exception as _e:
+                last_err = _e
+                if _attempt == 0:
+                    import time as _time; _time.sleep(1)
+        if result is None:
+            raise last_err  # type: ignore[misc]
 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
@@ -786,7 +797,10 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             return "EVALUATE"
         return resp
     except Exception as e:
-        return f"Agent error: {e}"
+        msg = str(e)
+        if "empty response" in msg.lower() or "unavailable" in msg.lower() or "rate-limited" in msg.lower():
+            return "The AI model is not responding right now — please try again in a moment."
+        return f"Agent error: {msg}"
 
 
 # ── Session state ──────────────────────────────────────────────────────────────
@@ -813,6 +827,7 @@ def _ensure_session() -> None:
         "labels_on":       False,
         "auto_eval":       True,
         "snapshots":       [],
+        "theme":           "dark",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -829,10 +844,7 @@ if _pending_sel != st.session_state.get("_last_sel_applied", "\x00"):
     st.session_state.selected_el = _pending_sel
     st.session_state["_last_sel_applied"] = _pending_sel
 
-try:
-    _is_light = (st.get_option("theme.base") or "dark") == "light"
-except Exception:
-    _is_light = False
+_is_light = st.session_state.get("theme", "dark") == "light"
 
 _DARK = """
   html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#071a1a!important}
@@ -855,64 +867,90 @@ _DARK = """
   [data-testid="stSelectSlider"] [data-testid="stMarkdown"]{color:#c8eeed!important}
   p,label{color:#c8eeed}
   [data-testid="stWidgetLabel"] p{color:#a0d8d8!important}
-  [data-testid="stMetricLabel"] p{color:#6ab8b8!important;font-size:.72rem}
+  [data-testid="stMetricLabel"] p{color:#6ab8b8!important;font-size:.65rem}
   [data-testid="stMetricValue"]{color:#c8eeed!important}
   [data-testid="stCaption"] p,[data-testid="stCaptionContainer"] p{color:#6ab8b8!important}
   small{color:#6ab8b8!important}
   [data-testid="stMarkdown"] p{color:#c8eeed}
-  .stat-chip{display:inline-block;background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:2px 10px;margin-left:5px;font-size:.78rem;color:#a0d8d8}
+  .stat-chip{display:inline-block;background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:2px 8px;margin-left:4px;font-size:.68rem;color:#a0d8d8}
   .stat-chip b{color:#c8eeed}
   .needs-review{background:#3a1a08;color:#ff9860;border-color:#7a4020}
-  .panel-hdr{font-size:.70rem;font-weight:700;color:#2ac0c0;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 4px;padding-bottom:0}
-  .chat-q{background:#0a3030;border-left:3px solid #2ac0c0;border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.73rem;color:#a0c8c8;line-height:1.4}
-  .chat-a{background:#071a1a;border-left:3px solid #40d090;border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.73rem;color:#c8eeed;line-height:1.4}
-  .grid-card{border:1px solid #1a5555;border-radius:6px;padding:7px 10px;margin-bottom:4px;background:#0d2828}
+  .panel-hdr{font-size:.62rem;font-weight:700;color:#2ac0c0;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 4px;padding-bottom:0}
+  .chat-q{background:#0a3030;border-left:3px solid #2ac0c0;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#a0c8c8;line-height:1.4}
+  .chat-a{background:#071a1a;border-left:3px solid #40d090;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#c8eeed;line-height:1.4}
+  .grid-card{border:1px solid #1a5555;border-radius:6px;padding:6px 9px;margin-bottom:4px;background:#0d2828}
   .grid-card-active{border-color:#2ac0c0;background:#0d3030}
-  .grid-label{font-size:.86rem;font-weight:700;color:#c8eeed}
-  .grid-spacing{font-size:.73rem;color:#6ab8b8}
-  .grid-stats{font-size:.76rem;color:#5a9090;margin-top:2px}
-  .eval-big{font-size:2.6rem;font-weight:800;line-height:1.1}
-  .eval-label{font-size:.68rem;color:#5a9090;text-transform:uppercase;letter-spacing:.5px}
+  .grid-label{font-size:.78rem;font-weight:700;color:#c8eeed}
+  .grid-spacing{font-size:.67rem;color:#6ab8b8}
+  .grid-stats{font-size:.68rem;color:#5a9090;margin-top:2px}
+  .eval-big{font-size:2.2rem;font-weight:800;line-height:1.1}
+  .eval-label{font-size:.61rem;color:#5a9090;text-transform:uppercase;letter-spacing:.5px}
   .eval-fail{color:#ff5050}.eval-pass{color:#40d090}
-  .crit-item{background:#0d2828;border-left:3px solid #cc3030;padding:5px 8px;margin-bottom:4px;border-radius:2px;font-size:.76rem;color:#a0d8d8}
-  .pass-badge{background:#0a4040;color:#2ac0c0;padding:2px 10px;border-radius:4px;font-weight:700;font-size:.78rem;display:inline-block;margin:4px 0}
-  .agent-response{background:#0d2828;border-left:3px solid #2ac0c0;padding:8px 12px;border-radius:3px;font-size:.80rem;color:#c8eeed;margin-top:6px;line-height:1.5}
-  .cost-box{background:#0d2828;border:1px solid #1a5555;border-radius:6px;padding:10px 12px;margin-top:6px}
-  .alt-btn{background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:4px 8px;margin-bottom:4px;font-size:.76rem;color:#6ab8b8;cursor:pointer}
-  .snap-pill{display:inline-block;background:#0d3030;border:1px solid #1a5555;color:#6ab8b8;padding:3px 10px;border-radius:10px;margin:2px;font-size:.74rem}
+  .crit-item{background:#0d2828;border-left:3px solid #cc3030;padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.68rem;color:#a0d8d8}
+  .pass-badge{background:#0a4040;color:#2ac0c0;padding:2px 9px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:4px 0}
+  .agent-response{background:#0d2828;border-left:3px solid #2ac0c0;padding:7px 11px;border-radius:3px;font-size:.72rem;color:#c8eeed;margin-top:6px;line-height:1.5}
+  .cost-box{background:#0d2828;border:1px solid #1a5555;border-radius:6px;padding:9px 11px;margin-top:6px}
+  .alt-btn{background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:3px 7px;margin-bottom:3px;font-size:.68rem;color:#6ab8b8;cursor:pointer}
+  .snap-pill{display:inline-block;background:#0d3030;border:1px solid #1a5555;color:#6ab8b8;padding:2px 8px;border-radius:10px;margin:2px;font-size:.66rem}
   .snap-pill-active{background:#1a5555;border-color:#2ac0c0;color:#2ac0c0;font-weight:700}
-  .viewer-label{font-size:.70rem;color:#5a9090;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-  .state-pill{display:inline-block;background:#0d3030;color:#6ab8b8;padding:2px 8px;border-radius:10px;margin:2px;font-size:.74rem}
-  .log-entry{background:#0d2828;border-left:3px solid #2ac0c0;padding:5px 8px;margin-bottom:4px;border-radius:3px;font-size:.79rem;color:#8abfbf}
+  .viewer-label{font-size:.62rem;color:#5a9090;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+  .state-pill{display:inline-block;background:#0d3030;color:#6ab8b8;padding:2px 7px;border-radius:10px;margin:2px;font-size:.66rem}
+  .log-entry{background:#0d2828;border-left:3px solid #2ac0c0;padding:4px 7px;margin-bottom:3px;border-radius:3px;font-size:.70rem;color:#8abfbf}
   [data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
   [data-testid="stFileUploaderDropzone"]{min-height:auto!important;padding:3px 8px!important;background:#0d2828!important;border-color:#1a5555!important}
 """
 _LIGHT = """
-  [data-testid="stAppViewContainer"]{background:#f5f7fa}
-  .stat-chip{display:inline-block;background:#fff;border:1px solid #c0d8d8;border-radius:4px;padding:2px 10px;margin-left:5px;font-size:.78rem;color:#2a5050}
+  html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#f0f8f8!important}
+  [data-testid="stHeader"]{background:#e6f2f2!important;border-bottom:1px solid #b0d8d8!important}
+  [role="tabpanel"]{background:#f0f8f8!important}
+  [data-testid="stTabPanel"]{background:#f0f8f8!important}
+  [data-testid="stVerticalBlock"]{background:transparent}
+  [data-testid="stForm"]{background:#ffffff!important;border:1px solid #b0d8d8!important;border-radius:8px!important}
+  [data-testid="stTextArea"] textarea{background:#ffffff!important;color:#1a3535!important;border-color:#b0d8d8!important}
+  [data-testid="stTextInput"] input{background:#ffffff!important;color:#1a3535!important;border-color:#b0d8d8!important}
+  [data-baseweb="select"] > div{background:#ffffff!important;border-color:#b0d8d8!important;color:#1a3535!important}
+  [data-baseweb="popover"] [role="listbox"]{background:#ffffff!important}
+  [data-baseweb="popover"] [role="option"]{color:#1a3535!important}
+  [data-testid="stExpander"] details{background:#ffffff!important;border:1px solid #b0d8d8!important}
+  [data-testid="stExpander"] summary{color:#088a87!important}
+  [data-testid="stFileUploader"] section{background:#ffffff!important;border-color:#b0d8d8!important}
+  [data-testid="stSlider"] [data-baseweb="slider"] [role="slider"]{background:#088a87!important}
+  [data-testid="stRadio"] label p{color:#2a5050!important}
+  [data-testid="stCheckbox"] label p{color:#2a5050!important}
+  [data-testid="stSelectSlider"] [data-testid="stMarkdown"]{color:#1a3535!important}
+  p,label{color:#1a3535}
+  [data-testid="stWidgetLabel"] p{color:#2a5050!important}
+  [data-testid="stMetricLabel"] p{color:#4a7070!important;font-size:.65rem}
+  [data-testid="stMetricValue"]{color:#1a3535!important}
+  [data-testid="stCaption"] p,[data-testid="stCaptionContainer"] p{color:#4a7070!important}
+  small{color:#4a7070!important}
+  [data-testid="stMarkdown"] p{color:#1a3535}
+  .stat-chip{display:inline-block;background:#fff;border:1px solid #c0d8d8;border-radius:4px;padding:2px 8px;margin-left:4px;font-size:.68rem;color:#2a5050}
   .stat-chip b{color:#088a87}
   .needs-review{background:#fff0e8;color:#c04010;border-color:#e08060}
-  .panel-hdr{font-size:.72rem;font-weight:700;color:#088a87;letter-spacing:1.5px;text-transform:uppercase;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid #b0d8d8}
-  .grid-card{border:1px solid #c8dede;border-radius:6px;padding:7px 10px;margin-bottom:4px;background:#fff}
+  .panel-hdr{font-size:.62rem;font-weight:700;color:#088a87;letter-spacing:1.5px;text-transform:uppercase;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid #b0d8d8}
+  .chat-q{background:#ddeef0;border-left:3px solid #088a87;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#1a4040;line-height:1.4}
+  .chat-a{background:#f0f9f9;border-left:3px solid #40a080;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#1a3535;line-height:1.4}
+  .grid-card{border:1px solid #c8dede;border-radius:6px;padding:6px 9px;margin-bottom:4px;background:#fff}
   .grid-card-active{border-color:#088a87;background:#e6f7f7}
-  .grid-label{font-size:.86rem;font-weight:700;color:#1a2a30}
-  .grid-spacing{font-size:.73rem;color:#4a7070}
-  .grid-stats{font-size:.76rem;color:#5a7070;margin-top:2px}
-  .eval-big{font-size:2.6rem;font-weight:800;line-height:1.1}
-  .eval-label{font-size:.68rem;color:#4a7070;text-transform:uppercase;letter-spacing:.5px}
+  .grid-label{font-size:.78rem;font-weight:700;color:#1a2a30}
+  .grid-spacing{font-size:.67rem;color:#4a7070}
+  .grid-stats{font-size:.68rem;color:#5a7070;margin-top:2px}
+  .eval-big{font-size:2.2rem;font-weight:800;line-height:1.1}
+  .eval-label{font-size:.61rem;color:#4a7070;text-transform:uppercase;letter-spacing:.5px}
   .eval-fail{color:#cc2020}.eval-pass{color:#088a87}
-  .crit-item{background:#fff4f4;border-left:3px solid #cc3030;padding:5px 8px;margin-bottom:4px;border-radius:2px;font-size:.76rem;color:#2a3040}
-  .pass-badge{background:#d4f0ee;color:#065f5d;padding:2px 10px;border-radius:4px;font-weight:700;font-size:.78rem;display:inline-block;margin:4px 0}
-  .agent-response{background:#e8f7f7;border-left:3px solid #088a87;padding:8px 12px;border-radius:3px;font-size:.80rem;color:#1a2a30;margin-top:6px;line-height:1.5}
-  .cost-box{background:#f0f9f9;border:1px solid #b0d8d8;border-radius:6px;padding:10px 12px;margin-top:6px}
-  .alt-btn{background:#e6f0f0;border:1px solid #a0c8c8;border-radius:4px;padding:4px 8px;margin-bottom:4px;font-size:.76rem;color:#1a4040;cursor:pointer}
-  .snap-pill{display:inline-block;background:#e6f0f0;border:1px solid #a0c8c8;color:#1a4040;padding:3px 10px;border-radius:10px;margin:2px;font-size:.74rem}
+  .crit-item{background:#fff4f4;border-left:3px solid #cc3030;padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.68rem;color:#2a3040}
+  .pass-badge{background:#d4f0ee;color:#065f5d;padding:2px 9px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:4px 0}
+  .agent-response{background:#e8f7f7;border-left:3px solid #088a87;padding:7px 11px;border-radius:3px;font-size:.72rem;color:#1a2a30;margin-top:6px;line-height:1.5}
+  .cost-box{background:#f0f9f9;border:1px solid #b0d8d8;border-radius:6px;padding:9px 11px;margin-top:6px}
+  .alt-btn{background:#e6f0f0;border:1px solid #a0c8c8;border-radius:4px;padding:3px 7px;margin-bottom:3px;font-size:.68rem;color:#1a4040;cursor:pointer}
+  .snap-pill{display:inline-block;background:#e6f0f0;border:1px solid #a0c8c8;color:#1a4040;padding:2px 8px;border-radius:10px;margin:2px;font-size:.66rem}
   .snap-pill-active{background:#c0e4e4;border-color:#088a87;color:#065f5d;font-weight:700}
-  .viewer-label{font-size:.70rem;color:#5a7070;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-  .state-pill{display:inline-block;background:#e6f0f0;color:#2a5050;padding:2px 8px;border-radius:10px;margin:2px;font-size:.74rem}
-  .log-entry{background:#e8f7f7;border-left:3px solid #088a87;padding:5px 8px;margin-bottom:4px;border-radius:3px;font-size:.79rem;color:#1a3030}
+  .viewer-label{font-size:.62rem;color:#5a7070;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+  .state-pill{display:inline-block;background:#e6f0f0;color:#2a5050;padding:2px 7px;border-radius:10px;margin:2px;font-size:.66rem}
+  .log-entry{background:#e8f7f7;border-left:3px solid #088a87;padding:4px 7px;margin-bottom:3px;border-radius:3px;font-size:.70rem;color:#1a3030}
   [data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
-  [data-testid="stFileUploaderDropzone"]{min-height:auto!important;padding:3px 8px!important}
+  [data-testid="stFileUploaderDropzone"]{min-height:auto!important;padding:3px 8px!important;background:#ffffff!important;border-color:#b0d8d8!important}
 """
 _fail_ct = ".fail-ct{color:#ff6060;font-weight:700}.pass-ct{color:#40c040;font-weight:700}"
 if _is_light:
@@ -920,8 +958,14 @@ if _is_light:
 
 st.markdown(
     f"<style>"
+    f"html{{font-size:13px!important}}"
+    f"html,body,[data-testid='stApp'],[data-testid='stAppViewContainer'],[data-testid='stMain']"
+    f"{{font-family:'Aptos','Segoe UI',system-ui,-apple-system,sans-serif!important}}"
+    f"input,textarea,select,button,[data-testid='stMarkdown'],[data-testid='stWidgetLabel'] p"
+    f"{{font-family:'Aptos','Segoe UI',system-ui,-apple-system,sans-serif!important}}"
     f"[data-testid='block-container']{{padding-top:.6rem;padding-bottom:.3rem}}"
-    f"div[data-testid='stTabs'] button{{font-size:.82rem}}"
+    f"div[data-testid='stTabs'] button{{font-size:.74rem}}"
+    f"button[kind='secondary'],button[kind='primary']{{font-size:.72rem!important}}"
     f"{_fail_ct}"
     f"{''.join((_LIGHT if _is_light else _DARK).splitlines())}"
     f"</style>",
@@ -953,12 +997,15 @@ _cost_chip = (
     f'<span class="stat-chip">net <b>${_cf_hdr["net_cost_usd"]:+,.0f}</b></span>'
     if _cf_hdr else ""
 )
+_hdr_bg     = "#eaf4f4" if _is_light else "#071a1a"
+_hdr_border = "#b0d8d8" if _is_light else "#1a4040"
+_lid_color  = "#4a7070" if _is_light else "#5a9090"
 _lid = layout_obj.get("layoutId", "")
-_lid_chip = f'<span style="font-size:.7rem;color:#5a9090;margin-right:8px">{_lid}</span>' if _lid else ""
+_lid_chip = f'<span style="font-size:.65rem;color:{_lid_color};margin-right:8px">{_lid}</span>' if _lid else ""
 st.markdown(
-    f'<div style="background:#071a1a;margin:-0.6rem -2rem 0.2rem;padding:5px 2rem;'
+    f'<div style="background:{_hdr_bg};margin:-0.6rem -2rem 0.2rem;padding:5px 2rem;'
     f'display:flex;align-items:center;justify-content:space-between;'
-    f'border-bottom:1px solid #1a4040;min-height:38px">'
+    f'border-bottom:1px solid {_hdr_border};min-height:38px">'
     f'<div style="display:flex;align-items:center;gap:0">'
     f'{_logo_part}{_lid_chip}'
     f'<span class="stat-chip"><b>{n_cols}</b> col</span>'
@@ -1000,7 +1047,13 @@ with _hc2:
         st.session_state.last_comparison  = None
         st.rerun()
 with _hc_tm:
-    st.write("")  # vertical spacer to align
+    _cur_theme = st.session_state.get("theme", "dark")
+    if st.button("Light" if _cur_theme == "dark" else "Dark",
+                 use_container_width=True, key="btn_theme",
+                 help="Toggle light / dark mode"):
+        st.session_state.theme = "light" if _cur_theme == "dark" else "dark"
+        st.session_state.viewer_nonce += 1
+        st.rerun()
 with _hc4:
     st.download_button(
         "Export",
@@ -1011,7 +1064,7 @@ with _hc4:
     )
 
 # ── Three-column body ──────────────────────────────────────────────────────────
-col_ctrl, col_plan, col_analysis = st.columns([1.2, 3.8, 1.5], gap="small")
+col_ctrl, col_plan, col_analysis = st.columns([2.0, 3.2, 1.5], gap="small")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
