@@ -1,25 +1,40 @@
-from __future__ import annotations
-
 import argparse
-
+import json
+import sys
 from _runtime.bootstrap import bootstrap
 from graph import run_agent
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="PermanenceOS structural design agent (LM Studio + local Python)"
-    )
-    parser.add_argument("prompt", help="Your instruction, e.g. 'add a structural grid'")
+def main():
+    parser = argparse.ArgumentParser(description="Run the Permanence_OS structural agent.")
+    parser.add_argument("--prompt", required=True, help="Instruction for the agent")
+    parser.add_argument("--layout_json", default=None, help="Floor plan as a JSON string (optional)")
     args = parser.parse_args()
 
-    ctx = bootstrap()
-    print(f"LLM endpoint : {ctx.llm.openai_api_base}")
-    print(f"Model        : {ctx.llm.model_name}")
-    print(f"Output file  : {ctx.edited_layout_path}\n")
+    layout_data = None
+    if args.layout_json:
+        try:
+            layout_data = json.loads(args.layout_json)
+        except json.JSONDecodeError as e:
+            print(f"Error: --layout_json is not valid JSON: {e}", file=sys.stderr)
+            sys.exit(1)
 
-    response = run_agent(args.prompt, ctx)
-    print("\n" + response)
+    ctx = bootstrap()
+    response, edited_layout = run_agent(args.prompt, ctx, layout_data=layout_data)
+
+    safe_response = response.encode("ascii", errors="replace").decode("ascii")
+    print("\nFinal Response:")
+    print(safe_response)
+    print("\nEdited Layout JSON:")
+    if edited_layout:
+        print(edited_layout)
+    else:
+        print("No layout changes")
+
+    try:
+        ctx.mcp_client.close()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
