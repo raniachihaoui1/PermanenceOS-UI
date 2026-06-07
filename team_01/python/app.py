@@ -17,15 +17,24 @@ EDITED_LAYOUT_PATH  = REPO_ROOT / "team_01_edited_layout.json"
 BEFORE_LAYOUT_PATH  = REPO_ROOT / "team_01_edited_layout_before.json"
 VIEWER_BASE_URL     = "http://127.0.0.1:8000/layout_viewer.html"
 PLAN_VIEWER_URL     = "http://127.0.0.1:8000/plan_viewer.html"
-PYTHON_DIR          = Path(__file__).resolve().parent
-LOGO_PATH           = PYTHON_DIR / "Assets" / "Logo.png"
+PYTHON_DIR           = Path(__file__).resolve().parent
+LOGO_PATH_LIGHT      = PYTHON_DIR / "Assets" / "Logo.png"
+LOGO_PATH_DARK       = PYTHON_DIR / "Assets" / "Logo_dark.png"
 
-_logo_b64 = ""
-if LOGO_PATH.exists():
+def _load_logo(path: Path) -> str:
     try:
-        _logo_b64 = base64.b64encode(LOGO_PATH.read_bytes()).decode()
+        return base64.b64encode(path.read_bytes()).decode() if path.exists() else ""
     except Exception:
-        pass
+        return ""
+
+_logo_b64_light = _load_logo(LOGO_PATH_LIGHT)
+_logo_b64_dark  = _load_logo(LOGO_PATH_DARK)
+
+st.set_page_config(
+    page_title="PermanenceOS",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
@@ -129,6 +138,9 @@ def _render_floor_plan_html(
     labels: bool = False,
     height_px: int = 380,
     is_light: bool = False,
+    view_mode: str = "2D",
+    diff_on: bool = False,
+    auto_on: bool = True,
 ) -> str:
     if is_light:
         BG     = "#f0f8f8"
@@ -199,16 +211,27 @@ def _render_floor_plan_html(
         cx, cy  = _svg_centroid(geo)
         w       = _svg_dims(geo)[0]
         label   = room.get("name", "")
+        rid     = room.get("id", "")
+        # Tooltip text for hover
+        _area   = abs(sum(
+            (geo[i][0]*geo[(i+1)%len(geo)][1] - geo[(i+1)%len(geo)][0]*geo[i][1])
+            for i in range(len(geo))
+        )) / 2
+        _tip    = f"{label}&#10;Area: {_area:.1f} m²" if label else ""
         parts.append(
-            f'<polygon points="{pts_str}" fill="{ROOM}" fill-opacity="0.88" '
+            f'<polygon data-room="{rid}" data-name="{label}" '
+            f'points="{pts_str}" fill="{ROOM}" fill-opacity="0.88" '
             f'stroke="{FG}" stroke-opacity="0.22" stroke-width="0.8" '
-            f'vector-effect="non-scaling-stroke"/>'
+            f'vector-effect="non-scaling-stroke" style="cursor:pointer">'
+            + (f'<title>{_tip}</title>' if _tip else "")
+            + f'</polygon>'
         )
         if label and w > u * 3:
             parts.append(
                 f'<text x="{cx}" y="{fy(cy)}" text-anchor="middle" '
                 f'dominant-baseline="central" font-family="monospace" '
-                f'font-size="{u*1.05}" fill="{FG}" fill-opacity="0.50">{label}</text>'
+                f'font-size="{u*1.05}" fill="{FG}" fill-opacity="0.55" '
+                f'pointer-events="none">{label}</text>'
             )
         if el_status:
             _rxs = [p[0] for p in geo]; _rys = [p[1] for p in geo]
@@ -368,6 +391,21 @@ def _render_floor_plan_html(
     svg_inner = "".join(parts)
     hl_json   = json.dumps(highlight)
 
+    _tt_bg  = "rgba(20,50,50,0.92)" if not is_light else "rgba(230,245,245,0.96)"
+    _tt_clr = "#c8eeed" if not is_light else "#1a2a30"
+    _tt_brd = "#2ac0c0" if not is_light else "#088a87"
+
+    # Toolbar overlay state
+    _tb_vm_txt   = view_mode
+    _tb_lab_js   = "true"  if labels   else "false"
+    _tb_diff_js  = "true"  if diff_on  else "false"
+    _tb_auto_js  = "true"  if auto_on  else "false"
+    _tb_bg       = "rgba(7,26,26,0.82)"    if not is_light else "rgba(230,245,245,0.92)"
+    _tb_brd      = "#1a4040"               if not is_light else "#c0d8d8"
+    _tb_clr      = "#6ab8b8"              if not is_light else "#336868"
+    _tb_act_clr  = "#2ac0c0"              if not is_light else "#088a87"
+    _tb_act_bg   = "rgba(42,192,192,0.18)" if not is_light else "rgba(8,138,135,0.12)"
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
@@ -376,25 +414,86 @@ html, body {{ background:{BG}; overflow:hidden; width:100%; height:100% }}
 svg {{ display:block; width:100%; height:{height_px}px; cursor:grab; user-select:none }}
 svg.panning {{ cursor:grabbing }}
 [data-eid] {{ cursor:pointer }}
+[data-room] {{ cursor:pointer; transition: fill-opacity .15s; }}
+[data-room]:hover {{ fill-opacity: .98 !important; filter: brightness(1.06); }}
+#tt {{
+  position:fixed; pointer-events:none; display:none;
+  background:{_tt_bg}; color:{_tt_clr}; border:1px solid {_tt_brd};
+  border-radius:6px; padding:6px 10px; font-size:11px; font-family:'Suisse Intl','Suisse Int\'l','Inter','Segoe UI',sans-serif;
+  line-height:1.5; box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:9999; max-width:180px;
+  white-space:pre-line;
+}}
+#tt .tt-name {{ font-weight:700; font-size:12px; color:{_tt_brd}; margin-bottom:2px; }}
+#vis-tb {{
+  position:fixed; top:8px; right:8px; z-index:1000;
+  display:flex; align-items:center; gap:2px;
+  background:{_tb_bg}; border:1px solid {_tb_brd};
+  border-radius:8px; padding:3px 5px;
+  backdrop-filter:blur(6px);
+}}
+.tb-btn {{
+  background:none; border:none; cursor:pointer;
+  color:{_tb_clr}; font-size:.60rem; font-family:'Suisse Intl','Suisse Int\'l','Inter','Segoe UI',sans-serif;
+  font-weight:700; letter-spacing:.6px; text-transform:uppercase;
+  padding:3px 8px; border-radius:5px;
+  transition:background .12s,color .12s;
+}}
+.tb-btn:hover {{ background:{_tb_act_bg}; color:{_tb_act_clr}; }}
+.tb-btn.tb-on {{ background:{_tb_act_bg}; color:{_tb_act_clr}; }}
+.tb-sep {{ width:1px; height:13px; background:{_tb_brd}; margin:0 3px; flex-shrink:0; }}
 </style></head>
 <body>
+<div id="tt"><span class="tt-name" id="tt-name"></span><span id="tt-body"></span></div>
 <svg xmlns="http://www.w3.org/2000/svg"
      viewBox="{vb_x} {vb_y} {vb_w} {vb_h}"
      preserveAspectRatio="xMidYMid meet">
   <rect x="{vb_x}" y="{vb_y}" width="{vb_w}" height="{vb_h}" fill="{BG}"/>
   {svg_inner}
 </svg>
+<div id="vis-tb">
+  <button id="tb-vm"   class="tb-btn" onclick="tbToggleVM()">{_tb_vm_txt}</button>
+  <div class="tb-sep"></div>
+  <button id="tb-lab"  class="tb-btn" onclick="tbToggleLabels()">Labels</button>
+  <button id="tb-diff" class="tb-btn" onclick="tbToggleDiff()">Diff</button>
+  <button id="tb-auto" class="tb-btn" onclick="tbToggleAuto()">Auto</button>
+</div>
 <script>
 (function(){{
+  // ── Toolbar state ──────────────────────────────────────────────────────────
+  var _tbVM    = '{_tb_vm_txt}';
+  var _tbLab   = {_tb_lab_js};
+  var _tbDiff  = {_tb_diff_js};
+  var _tbAuto  = {_tb_auto_js};
+
+  function tbPost(key, val) {{
+    window.parent.postMessage({{type:'toolbar', key:key, val:String(val)}}, '*');
+  }}
+  function tbUI() {{
+    var bvm   = document.getElementById('tb-vm');
+    var blab  = document.getElementById('tb-lab');
+    var bdiff = document.getElementById('tb-diff');
+    var bauto = document.getElementById('tb-auto');
+    if(bvm)  {{ bvm.textContent = _tbVM; bvm.className  = 'tb-btn' + (_tbVM === '3D' ? ' tb-on' : ''); }}
+    if(blab)  blab.className  = 'tb-btn' + (_tbLab  ? ' tb-on' : '');
+    if(bdiff) bdiff.className = 'tb-btn' + (_tbDiff ? ' tb-on' : '');
+    if(bauto) bauto.className = 'tb-btn' + (_tbAuto ? ' tb-on' : '');
+  }}
+  function tbToggleVM()     {{ _tbVM  = _tbVM==='2D'?'3D':'2D'; tbPost('vm',    _tbVM);           tbUI(); }}
+  function tbToggleLabels() {{ _tbLab  = !_tbLab;               tbPost('labels', _tbLab?'1':'0'); tbUI(); }}
+  function tbToggleDiff()   {{ _tbDiff = !_tbDiff;              tbPost('diff',   _tbDiff?'1':'0'); tbUI(); }}
+  function tbToggleAuto()   {{ _tbAuto = !_tbAuto;              tbPost('auto',   _tbAuto?'1':'0'); tbUI(); }}
+  tbUI();
+
   var HL = {hl_json};
   var svg = document.querySelector('svg');
+  var tt  = document.getElementById('tt');
+  var ttName = document.getElementById('tt-name');
+  var ttBody = document.getElementById('tt-body');
   var vbArr = svg.getAttribute('viewBox').split(' ').map(Number);
   var origX = vbArr[0], origY = vbArr[1], origW = vbArr[2], origH = vbArr[3];
   var vbx = origX, vby = origY, vbw = origW, vbh = origH;
 
-  function setVB(){{
-    svg.setAttribute('viewBox', vbx+' '+vby+' '+vbw+' '+vbh);
-  }}
+  function setVB(){{ svg.setAttribute('viewBox', vbx+' '+vby+' '+vbw+' '+vbh); }}
 
   // Restore highlight for already-selected element
   if(HL) {{
@@ -404,56 +503,88 @@ svg.panning {{ cursor:grabbing }}
     }});
   }}
 
-  // Zoom on wheel (zoom toward mouse position)
+  // ── Room hover tooltip ────────────────────────────────────────────────────
+  document.querySelectorAll('[data-room]').forEach(function(el){{
+    var name = el.getAttribute('data-name') || '';
+    el.addEventListener('mouseenter', function(e){{
+      if(!name) return;
+      ttName.textContent = name;
+      // Try to extract area from title
+      var titleEl = el.querySelector('title');
+      var extra = titleEl ? titleEl.textContent.replace(name,'').replace(/^\\n/,'') : '';
+      ttBody.textContent = extra;
+      tt.style.display = 'block';
+      positionTT(e);
+    }});
+    el.addEventListener('mousemove', positionTT);
+    el.addEventListener('mouseleave', function(){{ tt.style.display = 'none'; }});
+  }});
+
+  function positionTT(e){{
+    var x = e.clientX + 12, y = e.clientY + 12;
+    var w = tt.offsetWidth, h = tt.offsetHeight;
+    if(x + w > window.innerWidth  - 8) x = e.clientX - w - 8;
+    if(y + h > window.innerHeight - 8) y = e.clientY - h - 8;
+    tt.style.left = x + 'px';
+    tt.style.top  = y + 'px';
+  }}
+
+  // ── Room click: flash highlight ───────────────────────────────────────────
+  document.querySelectorAll('[data-room]').forEach(function(el){{
+    el.addEventListener('click', function(e){{
+      if(moved) return;
+      // deselect structural elements
+      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
+      el.style.filter = 'brightness(1.12) saturate(1.4)';
+      setTimeout(function(){{ el.style.filter=''; }}, 600);
+      window.parent.postMessage({{type:'selectElement', elementId:''}}, '*');
+    }});
+  }});
+
+  // ── Zoom on wheel ─────────────────────────────────────────────────────────
   svg.addEventListener('wheel', function(e){{
     e.preventDefault();
     var rect = svg.getBoundingClientRect();
     var px = (e.clientX - rect.left) / rect.width;
-    var py = (e.clientY - rect.top) / rect.height;
+    var py = (e.clientY - rect.top)  / rect.height;
     var factor = e.deltaY < 0 ? 0.87 : 1/0.87;
-    var cx = vbx + px * vbw, cy = vby + py * vbh;
+    var cx = vbx + px*vbw, cy = vby + py*vbh;
     vbw *= factor; vbh *= factor;
-    vbx = cx - px * vbw; vby = cy - py * vbh;
+    vbx = cx - px*vbw; vby = cy - py*vbh;
     setVB();
-  }}, {{passive: false}});
+  }}, {{passive:false}});
 
-  // Pan on drag
+  // ── Pan on drag ───────────────────────────────────────────────────────────
   var drag = false, moved = false, lx, ly;
   svg.addEventListener('mousedown', function(e){{
-    drag = true; moved = false;
-    lx = e.clientX; ly = e.clientY;
+    drag=true; moved=false; lx=e.clientX; ly=e.clientY;
     svg.classList.add('panning');
+    tt.style.display = 'none';
   }});
   document.addEventListener('mousemove', function(e){{
     if(!drag) return;
-    var dx = e.clientX - lx, dy = e.clientY - ly;
-    if(Math.abs(dx) + Math.abs(dy) > 2) moved = true;
-    var rect = svg.getBoundingClientRect();
-    vbx -= dx * vbw / rect.width;
-    vby -= dy * vbh / rect.height;
-    lx = e.clientX; ly = e.clientY;
-    setVB();
+    var dx=e.clientX-lx, dy=e.clientY-ly;
+    if(Math.abs(dx)+Math.abs(dy) > 2) moved=true;
+    var rect=svg.getBoundingClientRect();
+    vbx -= dx*vbw/rect.width; vby -= dy*vbh/rect.height;
+    lx=e.clientX; ly=e.clientY; setVB();
   }});
-  document.addEventListener('mouseup', function(){{
-    drag = false;
-    svg.classList.remove('panning');
-  }});
+  document.addEventListener('mouseup', function(){{ drag=false; svg.classList.remove('panning'); }});
 
-  // Double-click empty area to reset zoom/pan
+  // ── Double-click to reset zoom ────────────────────────────────────────────
   svg.addEventListener('dblclick', function(e){{
-    if(!e.target.closest('[data-eid]')){{
-      vbx = origX; vby = origY; vbw = origW; vbh = origH;
-      setVB();
+    if(!e.target.closest('[data-eid]') && !e.target.closest('[data-room]')){{
+      vbx=origX; vby=origY; vbw=origW; vbh=origH; setVB();
     }}
   }});
 
-  // Click elements: instant local highlight + notify Streamlit
+  // ── Click structural elements ─────────────────────────────────────────────
   document.querySelectorAll('[data-eid]').forEach(function(el){{
     var id = el.getAttribute('data-eid');
     el.addEventListener('click', function(e){{
       if(moved) return;
       e.stopPropagation();
-      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter = ''; }});
+      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
       document.querySelectorAll('[data-eid="'+id+'"]').forEach(function(x){{
         if(x.getAttribute('stroke') !== 'transparent')
           x.style.filter = 'brightness(1.8) drop-shadow(0 0 3px {SEL_C})';
@@ -462,10 +593,10 @@ svg.panning {{ cursor:grabbing }}
     }});
   }});
 
-  // Click empty SVG to deselect
+  // ── Click empty to deselect ───────────────────────────────────────────────
   svg.addEventListener('click', function(e){{
-    if(!moved && !e.target.closest('[data-eid]')){{
-      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter = ''; }});
+    if(!moved && !e.target.closest('[data-eid]') && !e.target.closest('[data-room]')){{
+      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
       window.parent.postMessage({{type:'selectElement', elementId:''}}, '*');
     }}
   }});
@@ -594,21 +725,6 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
         return []
 
 
-def _run_cost_flex(before_str: str, after_str: str) -> dict | None:
-    try:
-        from nodes.cost_flexibility import build_cost_flexibility_node
-        node = build_cost_flexibility_node()
-        state: dict = {
-            "layout_json_string":          after_str,
-            "layout_before_change":        before_str,
-            "original_layout_json_string": before_str,
-            "came_from":                   "modify",
-        }
-        out = node(state)
-        return out.get("cost_flexibility")
-    except Exception as e:
-        st.warning(f"Cost/flex error: {e}")
-        return None
 
 
 def _get_failure_alternatives(eval_result: dict, material: str) -> list[str]:
@@ -715,6 +831,65 @@ def _apply_alternative(alt: str, layout_str: str, material: str,
         return layout_str, ev
 
     return layout_str, None
+
+
+# ── Alt-metrics helpers ────────────────────────────────────────────────────────
+
+_MAT_DENSITY_KNM3  = {"RCC": 25.0,   "STEEL": 78.5,   "TIMBER": 5.0}
+_MAT_COST_PER_M3   = {"RCC": 200,    "STEEL": 8_000,  "TIMBER": 1_000}
+
+
+def _section_area_m2(section_mm: str, material: str) -> float:
+    from nodes.modify import STEEL_BEAM_PROPS, STEEL_COL_PROPS
+    if "STEEL" in material.upper():
+        sp = STEEL_BEAM_PROPS.get(section_mm) or STEEL_COL_PROPS.get(section_mm)
+        if sp:
+            return sp["A_mm2"] / 1e6
+    if "x" in section_mm:
+        parts = section_mm.split("x")
+        if len(parts) == 2:
+            try:
+                return float(parts[0]) / 1000.0 * float(parts[1]) / 1000.0
+            except ValueError:
+                pass
+    return 0.01
+
+
+def _eval_weight_cost(ev: dict) -> tuple[float, float]:
+    w = c = 0.0
+    for b in ev.get("beams", []):
+        mk = next((k for k in _MAT_DENSITY_KNM3 if k in b.get("material", "").upper()), "RCC")
+        A  = _section_area_m2(b.get("section_mm", ""), b.get("material", ""))
+        v  = A * b.get("span_m", 0.0)
+        w += _MAT_DENSITY_KNM3[mk] * v
+        c += _MAT_COST_PER_M3[mk]  * v
+    for col in ev.get("columns", []):
+        mk = next((k for k in _MAT_DENSITY_KNM3 if k in col.get("material", "").upper()), "RCC")
+        A  = _section_area_m2(col.get("section_mm", ""), col.get("material", ""))
+        v  = A * col.get("height_m", 3.0)
+        w += _MAT_DENSITY_KNM3[mk] * v
+        c += _MAT_COST_PER_M3[mk]  * v
+    return w, c
+
+
+def _compute_alt_metrics(alt: str, layout_obj: dict, ev0: dict,
+                          mat: str, sdl: float, ll: float) -> dict:
+    try:
+        w0, c0 = _eval_weight_cost(ev0)
+        d0 = max((b.get("delta_total_mm", 0) for b in ev0.get("beams", [])), default=0.0)
+        _, ev1 = _apply_alternative(alt, json.dumps(layout_obj), mat, sdl, ll)
+        if not ev1:
+            return {}
+        w1, c1 = _eval_weight_cost(ev1)
+        d1 = max((b.get("delta_total_mm", 0) for b in ev1.get("beams", [])), default=0.0)
+        def _pct(a, b): return (a - b) / max(abs(b), 0.001) * 100
+        return {
+            "weight_pct": _pct(w1, w0),
+            "cost_pct":   _pct(c1, c0),
+            "defl_pct":   _pct(d1, d0),
+        }
+    except Exception:
+        return {}
 
 
 # ── Agent chat ─────────────────────────────────────────────────────────────────
@@ -828,753 +1003,1363 @@ def _ensure_session() -> None:
         "auto_eval":       True,
         "snapshots":       [],
         "theme":           "dark",
+        "view_mode":       "2D",
+        "compare_view_mode": "2D",
+        "inputs_expanded": True,
+        "selected_opt_bar_idx": -1,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 
-# ── Page setup ─────────────────────────────────────────────────────────────────
-
-st.set_page_config(page_title="PermanenceOS", layout="wide", initial_sidebar_state="collapsed")
 _ensure_session()
 
+# ─── query params ─────────────────────────────────────────────────────────────
 _pending_sel = st.query_params.get("_sel", "")
 if _pending_sel != st.session_state.get("_last_sel_applied", "\x00"):
     st.session_state.selected_el = _pending_sel
     st.session_state["_last_sel_applied"] = _pending_sel
 
+# Toolbar state via query params (set by JS bridge when overlay buttons are clicked)
+_tb_vm = st.query_params.get("_tb_vm", "")
+if _tb_vm in ("2D", "3D"):
+    st.session_state["view_mode"] = _tb_vm
+_tb_labels = st.query_params.get("_tb_labels", "")
+if _tb_labels in ("0", "1"):
+    _new_lab = _tb_labels == "1"
+    if _new_lab != st.session_state.labels_on:
+        st.session_state.labels_on = _new_lab
+        st.session_state.viewer_nonce += 1
+_tb_diff = st.query_params.get("_tb_diff", "")
+if _tb_diff in ("0", "1"):
+    st.session_state.compare_mode = _tb_diff == "1"
+_tb_auto = st.query_params.get("_tb_auto", "")
+if _tb_auto in ("0", "1"):
+    st.session_state["auto_eval"] = _tb_auto == "1"
+
 _is_light = st.session_state.get("theme", "dark") == "light"
 
-_DARK = """
-  html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#071a1a!important}
-  [data-testid="stHeader"]{background:#071a1a!important;border-bottom:1px solid #1a4040!important}
-  [role="tabpanel"]{background:#071a1a!important}
-  [data-testid="stTabPanel"]{background:#071a1a!important}
-  [data-testid="stVerticalBlock"]{background:transparent}
-  [data-testid="stForm"]{background:#0d2828!important;border:1px solid #1a5555!important;border-radius:8px!important}
-  [data-testid="stTextArea"] textarea{background:#0d2828!important;color:#c8eeed!important;border-color:#1a5555!important}
-  [data-testid="stTextInput"] input{background:#0d2828!important;color:#c8eeed!important;border-color:#1a5555!important}
-  [data-baseweb="select"] > div{background:#0d2828!important;border-color:#1a5555!important;color:#c8eeed!important}
-  [data-baseweb="popover"] [role="listbox"]{background:#0d2828!important}
-  [data-baseweb="popover"] [role="option"]{color:#c8eeed!important}
-  [data-testid="stExpander"] details{background:#0d2828!important;border:1px solid #1a5555!important}
-  [data-testid="stExpander"] summary{color:#2ac0c0!important}
-  [data-testid="stFileUploader"] section{background:#0d2828!important;border-color:#1a5555!important}
-  [data-testid="stSlider"] [data-baseweb="slider"] [role="slider"]{background:#2ac0c0!important}
-  [data-testid="stRadio"] label p{color:#a0d8d8!important}
-  [data-testid="stCheckbox"] label p{color:#a0d8d8!important}
-  [data-testid="stSelectSlider"] [data-testid="stMarkdown"]{color:#c8eeed!important}
-  p,label{color:#c8eeed}
-  [data-testid="stWidgetLabel"] p{color:#a0d8d8!important}
-  [data-testid="stMetricLabel"] p{color:#6ab8b8!important;font-size:.65rem}
-  [data-testid="stMetricValue"]{color:#c8eeed!important}
-  [data-testid="stCaption"] p,[data-testid="stCaptionContainer"] p{color:#6ab8b8!important}
-  small{color:#6ab8b8!important}
-  [data-testid="stMarkdown"] p{color:#c8eeed}
-  .stat-chip{display:inline-block;background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:2px 8px;margin-left:4px;font-size:.68rem;color:#a0d8d8}
-  .stat-chip b{color:#c8eeed}
-  .needs-review{background:#3a1a08;color:#ff9860;border-color:#7a4020}
-  .panel-hdr{font-size:.62rem;font-weight:700;color:#2ac0c0;letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 4px;padding-bottom:0}
-  .chat-q{background:#0a3030;border-left:3px solid #2ac0c0;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#a0c8c8;line-height:1.4}
-  .chat-a{background:#071a1a;border-left:3px solid #40d090;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#c8eeed;line-height:1.4}
-  .grid-card{border:1px solid #1a5555;border-radius:6px;padding:6px 9px;margin-bottom:4px;background:#0d2828}
-  .grid-card-active{border-color:#2ac0c0;background:#0d3030}
-  .grid-label{font-size:.78rem;font-weight:700;color:#c8eeed}
-  .grid-spacing{font-size:.67rem;color:#6ab8b8}
-  .grid-stats{font-size:.68rem;color:#5a9090;margin-top:2px}
-  .eval-big{font-size:2.2rem;font-weight:800;line-height:1.1}
-  .eval-label{font-size:.61rem;color:#5a9090;text-transform:uppercase;letter-spacing:.5px}
-  .eval-fail{color:#ff5050}.eval-pass{color:#40d090}
-  .crit-item{background:#0d2828;border-left:3px solid #cc3030;padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.68rem;color:#a0d8d8}
-  .pass-badge{background:#0a4040;color:#2ac0c0;padding:2px 9px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:4px 0}
-  .agent-response{background:#0d2828;border-left:3px solid #2ac0c0;padding:7px 11px;border-radius:3px;font-size:.72rem;color:#c8eeed;margin-top:6px;line-height:1.5}
-  .cost-box{background:#0d2828;border:1px solid #1a5555;border-radius:6px;padding:9px 11px;margin-top:6px}
-  .alt-btn{background:#0d3030;border:1px solid #1a5555;border-radius:4px;padding:3px 7px;margin-bottom:3px;font-size:.68rem;color:#6ab8b8;cursor:pointer}
-  .snap-pill{display:inline-block;background:#0d3030;border:1px solid #1a5555;color:#6ab8b8;padding:2px 8px;border-radius:10px;margin:2px;font-size:.66rem}
-  .snap-pill-active{background:#1a5555;border-color:#2ac0c0;color:#2ac0c0;font-weight:700}
-  .viewer-label{font-size:.62rem;color:#5a9090;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-  .state-pill{display:inline-block;background:#0d3030;color:#6ab8b8;padding:2px 7px;border-radius:10px;margin:2px;font-size:.66rem}
-  .log-entry{background:#0d2828;border-left:3px solid #2ac0c0;padding:4px 7px;margin-bottom:3px;border-radius:3px;font-size:.70rem;color:#8abfbf}
-  [data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
-  [data-testid="stFileUploaderDropzone"]{min-height:auto!important;padding:3px 8px!important;background:#0d2828!important;border-color:#1a5555!important}
-"""
-_LIGHT = """
-  html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#f0f8f8!important}
-  [data-testid="stHeader"]{background:#e6f2f2!important;border-bottom:1px solid #b0d8d8!important}
-  [role="tabpanel"]{background:#f0f8f8!important}
-  [data-testid="stTabPanel"]{background:#f0f8f8!important}
-  [data-testid="stVerticalBlock"]{background:transparent}
-  [data-testid="stForm"]{background:#ffffff!important;border:1px solid #b0d8d8!important;border-radius:8px!important}
-  [data-testid="stTextArea"] textarea{background:#ffffff!important;color:#1a3535!important;border-color:#b0d8d8!important}
-  [data-testid="stTextInput"] input{background:#ffffff!important;color:#1a3535!important;border-color:#b0d8d8!important}
-  [data-baseweb="select"] > div{background:#ffffff!important;border-color:#b0d8d8!important;color:#1a3535!important}
-  [data-baseweb="popover"] [role="listbox"]{background:#ffffff!important}
-  [data-baseweb="popover"] [role="option"]{color:#1a3535!important}
-  [data-testid="stExpander"] details{background:#ffffff!important;border:1px solid #b0d8d8!important}
-  [data-testid="stExpander"] summary{color:#088a87!important}
-  [data-testid="stFileUploader"] section{background:#ffffff!important;border-color:#b0d8d8!important}
-  [data-testid="stSlider"] [data-baseweb="slider"] [role="slider"]{background:#088a87!important}
-  [data-testid="stRadio"] label p{color:#2a5050!important}
-  [data-testid="stCheckbox"] label p{color:#2a5050!important}
-  [data-testid="stSelectSlider"] [data-testid="stMarkdown"]{color:#1a3535!important}
-  p,label{color:#1a3535}
-  [data-testid="stWidgetLabel"] p{color:#2a5050!important}
-  [data-testid="stMetricLabel"] p{color:#4a7070!important;font-size:.65rem}
-  [data-testid="stMetricValue"]{color:#1a3535!important}
-  [data-testid="stCaption"] p,[data-testid="stCaptionContainer"] p{color:#4a7070!important}
-  small{color:#4a7070!important}
-  [data-testid="stMarkdown"] p{color:#1a3535}
-  .stat-chip{display:inline-block;background:#fff;border:1px solid #c0d8d8;border-radius:4px;padding:2px 8px;margin-left:4px;font-size:.68rem;color:#2a5050}
-  .stat-chip b{color:#088a87}
-  .needs-review{background:#fff0e8;color:#c04010;border-color:#e08060}
-  .panel-hdr{font-size:.62rem;font-weight:700;color:#088a87;letter-spacing:1.5px;text-transform:uppercase;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid #b0d8d8}
-  .chat-q{background:#ddeef0;border-left:3px solid #088a87;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#1a4040;line-height:1.4}
-  .chat-a{background:#f0f9f9;border-left:3px solid #40a080;border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.67rem;color:#1a3535;line-height:1.4}
-  .grid-card{border:1px solid #c8dede;border-radius:6px;padding:6px 9px;margin-bottom:4px;background:#fff}
-  .grid-card-active{border-color:#088a87;background:#e6f7f7}
-  .grid-label{font-size:.78rem;font-weight:700;color:#1a2a30}
-  .grid-spacing{font-size:.67rem;color:#4a7070}
-  .grid-stats{font-size:.68rem;color:#5a7070;margin-top:2px}
-  .eval-big{font-size:2.2rem;font-weight:800;line-height:1.1}
-  .eval-label{font-size:.61rem;color:#4a7070;text-transform:uppercase;letter-spacing:.5px}
-  .eval-fail{color:#cc2020}.eval-pass{color:#088a87}
-  .crit-item{background:#fff4f4;border-left:3px solid #cc3030;padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.68rem;color:#2a3040}
-  .pass-badge{background:#d4f0ee;color:#065f5d;padding:2px 9px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:4px 0}
-  .agent-response{background:#e8f7f7;border-left:3px solid #088a87;padding:7px 11px;border-radius:3px;font-size:.72rem;color:#1a2a30;margin-top:6px;line-height:1.5}
-  .cost-box{background:#f0f9f9;border:1px solid #b0d8d8;border-radius:6px;padding:9px 11px;margin-top:6px}
-  .alt-btn{background:#e6f0f0;border:1px solid #a0c8c8;border-radius:4px;padding:3px 7px;margin-bottom:3px;font-size:.68rem;color:#1a4040;cursor:pointer}
-  .snap-pill{display:inline-block;background:#e6f0f0;border:1px solid #a0c8c8;color:#1a4040;padding:2px 8px;border-radius:10px;margin:2px;font-size:.66rem}
-  .snap-pill-active{background:#c0e4e4;border-color:#088a87;color:#065f5d;font-weight:700}
-  .viewer-label{font-size:.62rem;color:#5a7070;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-  .state-pill{display:inline-block;background:#e6f0f0;color:#2a5050;padding:2px 7px;border-radius:10px;margin:2px;font-size:.66rem}
-  .log-entry{background:#e8f7f7;border-left:3px solid #088a87;padding:4px 7px;margin-bottom:3px;border-radius:3px;font-size:.70rem;color:#1a3030}
-  [data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
-  [data-testid="stFileUploaderDropzone"]{min-height:auto!important;padding:3px 8px!important;background:#ffffff!important;border-color:#b0d8d8!important}
-"""
-_fail_ct = ".fail-ct{color:#ff6060;font-weight:700}.pass-ct{color:#40c040;font-weight:700}"
 if _is_light:
-    _fail_ct = ".fail-ct{color:#cc2020;font-weight:700}.pass-ct{color:#208020;font-weight:700}"
+    _BG="#f0f7f7"; _SB="#e2eeee"; _CARD="#ffffff"; _ACC="#088a87"; _ACC2="#40a090"
+    _BORD="#c0d8d8"; _TEXT="#1a2a30"; _MUT="#5a7070"; _DIM="#8aacac"
+    _FAIL="#c02020"; _PASS_C="#097040"; _PASS_BG="#d0f4e8"; _FAIL_BG="#fce8e8"
+    _CHAT_Q="#ddeef0"; _CHAT_A="#f0f9f9"; _NUM1_BG=_ACC; _NUM1_C="#fff"
+    _NUM2_BG="#c07020"; _NUM3_BG="#3070a0"
+    _HIGH_BG="#d4f0d4"; _HIGH_C="#1a7020"
+    _MED_BG="#f4e4b0";  _MED_C="#806010"
+    _LOW_BG="#c8ddf0";  _LOW_C="#2060a0"
+    _LOAD_BG="#eef6f6"; _SNAP_BG="#e0eef0"
+else:
+    _BG="#071a1a"; _SB="#091f1f"; _CARD="#0d2828"; _ACC="#2ac0c0"; _ACC2="#40d090"
+    _BORD="#1a4040"; _TEXT="#c8eeed"; _MUT="#5a9090"; _DIM="#3a6060"
+    _FAIL="#ff5050"; _PASS_C="#40d090"; _PASS_BG="#0a3020"; _FAIL_BG="#300a0a"
+    _CHAT_Q="#0a3030"; _CHAT_A="#071a1a"; _NUM1_BG=_ACC; _NUM1_C="#071a1a"
+    _NUM2_BG="#c07020"; _NUM3_BG="#3070a0"
+    _HIGH_BG="#0d2e0d"; _HIGH_C="#60d060"
+    _MED_BG="#2e2400";  _MED_C="#d0a020"
+    _LOW_BG="#0a1e30";  _LOW_C="#40a0c8"
+    _LOAD_BG="#0d2020"; _SNAP_BG="#0d2020"
 
-st.markdown(
-    f"<style>"
-    f"html{{font-size:13px!important}}"
-    f"html,body,[data-testid='stApp'],[data-testid='stAppViewContainer'],[data-testid='stMain']"
-    f"{{font-family:'Aptos','Segoe UI',system-ui,-apple-system,sans-serif!important}}"
-    f"input,textarea,select,button,[data-testid='stMarkdown'],[data-testid='stWidgetLabel'] p"
-    f"{{font-family:'Aptos','Segoe UI',system-ui,-apple-system,sans-serif!important}}"
-    f"[data-testid='block-container']{{padding-top:.6rem;padding-bottom:.3rem}}"
-    f"div[data-testid='stTabs'] button{{font-size:.74rem}}"
-    f"button[kind='secondary'],button[kind='primary']{{font-size:.72rem!important}}"
-    f"{_fail_ct}"
-    f"{''.join((_LIGHT if _is_light else _DARK).splitlines())}"
-    f"</style>",
-    unsafe_allow_html=True,
-)
+_F = "'Suisse Intl','Suisse Int\\'l','Inter','Segoe UI',system-ui,sans-serif"
 
-# ── Load working layout ────────────────────────────────────────────────────────
+_CSS = f"""
+@import url('https://fonts.cdnfonts.com/css/suisse-intl');
+/* ── Universal font: all text elements except icon spans ────────────────── */
+html,body,p,h1,h2,h3,h4,h5,h6,
+div,section,article,aside,header,main,footer,nav,
+label,a,li,td,th,caption,
+input,textarea,select,option,
+button,
+[data-testid]:not([data-testid="stIconMaterial"]){{
+  font-family:{_F}!important;
+  -webkit-font-smoothing:antialiased!important;
+  -moz-osx-font-smoothing:grayscale!important;
+}}
+/* ── Restore Material Symbols for Streamlit icon spans ───────────────────── */
+[data-testid="stIconMaterial"],
+[class*="material-symbols"],
+[class*="material-icons"]{{
+  font-family:'Material Symbols Rounded','Material Symbols Sharp','Material Icons Rounded','Material Icons'!important;
+  font-feature-settings:'liga'!important;
+  -webkit-font-feature-settings:'liga'!important;
+}}
+/* ── Buttons: always fit text, no overflow ───────────────────────────────── */
+button{{overflow:hidden!important}}
+button>div,button p,button span:not([data-testid="stIconMaterial"]){{
+  overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+}}
+/* ── Type scale (5 steps) ──────────────────────────────────────────────── */
+/* xs=0.63rem  sm=0.70rem  md=0.78rem  lg=0.88rem  xl=1.0rem             */
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{{
+  background:{_BG}!important;font-family:{_F}!important;font-size:13px!important;
+  letter-spacing:.01em!important}}
+[data-testid="block-container"]{{padding:.3rem 1rem .2rem!important}}
+section[data-testid="stSidebar"]{{background:{_SB}!important;border-right:1px solid {_BORD}!important}}
+section[data-testid="stSidebar"]>div:first-child{{padding:14px 14px 10px!important}}
+[data-testid="stSidebarHeader"]{{display:none!important;height:0!important;padding:0!important;margin:0!important}}
+section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:{_TEXT}!important;font-family:{_F}!important}}
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{{color:{_MUT}!important;font-size:.70rem!important}}
+[data-testid="stHeader"],
+[data-testid="stStatusWidget"],
+[data-testid="stDecoration"],
+[data-testid="stToolbar"]{{display:none!important;height:0!important;overflow:hidden!important;padding:0!important;margin:0!important}}
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+[data-testid="stTabs"] [data-baseweb="tab-list"]{{background:transparent!important;border-bottom:1px solid {_BORD}!important;gap:0!important;padding:0!important;display:flex!important}}
+[data-testid="stTabs"] [data-baseweb="tab"]{{flex:1!important;text-align:center!important;justify-content:center!important;color:{_MUT}!important;font-size:.63rem!important;font-weight:700!important;letter-spacing:1.4px!important;text-transform:uppercase!important;padding:6px 8px!important;border-bottom:2px solid transparent!important;background:transparent!important;font-family:{_F}!important}}
+[data-testid="stTabs"] [aria-selected="true"]{{color:{_ACC}!important;border-bottom:2px solid {_ACC}!important}}
+[data-testid="stTabs"] [data-baseweb="tab-border"]{{display:none!important}}
+[data-testid="stTabPanel"]{{padding-top:6px!important}}
+/* ── Form elements ─────────────────────────────────────────────────────── */
+[data-testid="stForm"]{{background:{_CARD}!important;border:1px solid {_BORD}!important;border-radius:8px!important;padding:8px!important}}
+[data-testid="stTextArea"] textarea{{background:{_CARD}!important;color:{_TEXT}!important;border-color:{_BORD}!important;font-size:.70rem!important;font-family:{_F}!important}}
+[data-testid="stTextInput"] input{{background:{_CARD}!important;color:{_TEXT}!important;border-color:{_BORD}!important;font-family:{_F}!important}}
+[data-baseweb="select"]>div{{background:{_CARD}!important;border-color:{_BORD}!important;color:{_TEXT}!important;font-family:{_F}!important}}
+[data-baseweb="popover"] [role="listbox"]{{background:{_CARD}!important}}
+[data-baseweb="popover"] [role="option"]{{color:{_TEXT}!important;font-family:{_F}!important}}
+[data-testid="stExpander"] details{{background:{_CARD}!important;border:1px solid {_BORD}!important;border-radius:6px!important}}
+[data-testid="stExpander"] summary{{color:{_ACC}!important;font-size:.70rem!important;font-weight:600!important;font-family:{_F}!important}}
+/* ── INPUTS dropdown button ────────────────────────────────────────────── */
+section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type details{{
+  background:{_ACC}!important;border:none!important;border-radius:8px!important}}
+section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type summary{{
+  color:#ffffff!important;font-size:.78rem!important;
+  font-weight:800!important;letter-spacing:1.2px!important;text-transform:uppercase!important;
+  padding:10px 14px!important;font-family:{_F}!important}}
+section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type details[open]{{
+  background:{_CARD}!important;border:1px solid {_ACC}!important}}
+section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type details[open] summary{{
+  color:{_ACC}!important;border-bottom:1px solid {_BORD}!important;margin-bottom:4px!important}}
+.inp-sub-hdr{{font-size:.63rem;font-weight:700;color:{_ACC};letter-spacing:1.1px;font-family:{_F};
+  text-transform:uppercase;margin:4px 0 6px;padding-bottom:3px;border-bottom:1px solid {_BORD}}}
+[data-testid="stFileUploader"] section{{background:{_CARD}!important;border-color:{_BORD}!important}}
+[data-testid="stFileUploaderDropzoneInstructions"]{{display:none!important}}
+[data-testid="stFileUploaderDropzone"]{{min-height:auto!important;padding:5px 10px!important;background:{_CARD}!important;border-color:{_BORD}!important}}
+[data-testid="stRadio"] label p{{color:{_TEXT}!important;font-size:.70rem!important;font-family:{_F}!important}}
+[data-testid="stCheckbox"] label p{{color:{_TEXT}!important;font-size:.70rem!important;font-family:{_F}!important}}
+[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"]{{background:{_ACC}!important}}
+p,label{{color:{_TEXT};font-family:{_F}}}
+[data-testid="stMarkdown"] p{{color:{_TEXT};font-family:{_F}}}
+small,[data-testid="stCaption"] p{{color:{_MUT}!important;font-size:.63rem!important;font-family:{_F}!important}}
+[data-testid="stMetricValue"]{{color:{_TEXT}!important;font-size:.88rem!important;font-family:{_F}!important}}
+[data-testid="stMetricLabel"] p{{color:{_MUT}!important;font-size:.63rem!important;font-family:{_F}!important}}
+hr{{border-color:{_BORD}!important;margin:8px 0!important}}
+button[kind="primary"]{{background:{_ACC}!important;color:#ffffff!important;border:none!important;font-weight:700!important;font-size:.70rem!important;border-radius:6px!important;font-family:{_F}!important;letter-spacing:.3px!important}}
+button[kind="secondary"]{{background:transparent!important;color:{_TEXT}!important;border:1px solid {_BORD}!important;font-size:.70rem!important;border-radius:6px!important;font-family:{_F}!important}}
+[data-testid="stFormSubmitButton"] button{{color:#ffffff!important}}
+/* ── INPUTS expander label ────────────────────────────────────────────── */
+section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type summary{{
+  color:#ffffff!important}}
+/* ── Sidebar components ────────────────────────────────────────────────── */
+.sb-brand{{font-size:.88rem;font-weight:800;color:{_ACC};letter-spacing:.8px;line-height:1.1;font-family:{_F}}}
+.sb-sub{{font-size:.63rem;color:{_MUT};margin-bottom:10px;font-family:{_F}}}
+.sb-section{{font-size:.63rem;font-weight:700;color:{_ACC};letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 5px;display:flex;align-items:center;gap:6px;font-family:{_F}}}
+.sb-section::after{{content:'';flex:1;height:1px;background:{_BORD}}}
+.sb-filename{{font-size:.70rem;font-weight:600;color:{_TEXT};margin:3px 0 1px;font-family:{_F}}}
+.sb-success{{font-size:.63rem;color:{_ACC2};font-weight:600;font-family:{_F}}}
+.beta{{background:{"#d4f0ee" if _is_light else "#0a3030"};color:{_ACC};font-size:.60rem;font-weight:700;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px;text-transform:uppercase;letter-spacing:.5px;border:1px solid {_BORD};font-family:{_F}}}
+.load-row{{display:flex;justify-content:space-between;font-size:.70rem;padding:3px 0;border-bottom:1px solid {_BORD};color:{_MUT};font-family:{_F}}}
+.load-row b{{color:{_TEXT};font-weight:600}}
+.load-block{{background:{_LOAD_BG};border:1px solid {_BORD};border-radius:6px;padding:8px 10px}}
+/* ── Page header ───────────────────────────────────────────────────────── */
+.page-hdr{{display:flex;align-items:center;gap:4px;padding:4px 0 3px;font-family:{_F}}}
+.hdr-lid{{font-size:.70rem;color:{_MUT};margin-right:6px;font-family:{_F}}}
+.stat-chip{{display:inline-block;background:{"#e8f4f4" if _is_light else "#0d3030"};border:1px solid {_BORD};border-radius:4px;padding:2px 7px;margin-left:3px;font-size:.63rem;color:{_MUT};font-family:{_F}}}
+.stat-chip b{{color:{_ACC}}}
+.needs-review{{background:{"#fff0e8" if _is_light else "#3a1a08"}!important;color:{"#c04010" if _is_light else "#ff9860"}!important;border-color:{"#d08060" if _is_light else "#7a4020"}!important}}
+/* ── Step bar ──────────────────────────────────────────────────────────── */
+.step-bar{{display:flex;align-items:center;gap:0;overflow:hidden;padding:2px 0;font-family:{_F}}}
+.stp{{display:flex;align-items:center;gap:4px;padding:3px 5px;white-space:nowrap;min-width:0}}
+.stp-n{{display:inline-flex;width:20px;height:20px;border-radius:50%;font-size:.60rem;font-weight:800;align-items:center;justify-content:center;flex-shrink:0;font-family:{_F}}}
+.stp-done .stp-n{{background:{_ACC};color:{"#fff" if _is_light else "#071a1a"}}}
+.stp-active .stp-n{{background:{"#fff" if _is_light else "#0d2828"};color:{_ACC};border:2px solid {_ACC}}}
+.stp-todo .stp-n{{background:{"#dde8e8" if _is_light else "#1a3030"};color:{_MUT}}}
+.stp-lbl{{font-size:.63rem;font-weight:600;font-family:{_F}}}
+.stp-done .stp-lbl{{color:{_TEXT}}}
+.stp-active .stp-lbl{{color:{_ACC};font-weight:700}}
+.stp-todo .stp-lbl{{color:{_MUT}}}
+.stp-sub{{font-size:.60rem;color:{_MUT};font-family:{_F}}}
+.stp-arr{{color:{_BORD};font-size:.63rem;margin:0 0px;flex-shrink:0}}
+/* ── Plan legend ───────────────────────────────────────────────────────── */
+.plan-legend{{display:flex;gap:12px;padding:5px 4px 3px;flex-wrap:wrap;font-family:{_F}}}
+.leg-item{{display:flex;align-items:center;gap:4px;font-size:.63rem;color:{_MUT}}}
+.leg-col{{width:9px;height:9px;border-radius:50%;background:{_ACC};flex-shrink:0}}
+.leg-beam{{width:14px;height:3px;background:{_ACC2};flex-shrink:0;border-radius:1px}}
+.leg-wall{{width:14px;height:3px;background:{"#889898" if _is_light else "#445858"};flex-shrink:0}}
+.leg-dash{{width:14px;height:0;border-top:2px dashed {_MUT};flex-shrink:0}}
+.stat-bar{{background:{_CARD};border:1px solid {_BORD};border-radius:6px;padding:6px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;font-family:{_F}}}
+.sb-i{{font-size:.63rem;color:{_MUT};white-space:nowrap;font-family:{_F}}}
+.sb-i b{{color:{_TEXT};font-weight:600}}
+.sb-pass{{background:{_PASS_BG};color:{_PASS_C};font-size:.63rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;font-family:{_F}}}
+.sb-fail{{background:{_FAIL_BG};color:{_FAIL};font-size:.63rem;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;font-family:{_F}}}
+.sb-pend{{color:{_MUT};font-size:.63rem;font-family:{_F}}}
+/* ── Panel header ──────────────────────────────────────────────────────── */
+.panel-hdr{{font-size:.60rem;font-weight:700;color:{_ACC};letter-spacing:1.4px;text-transform:uppercase;margin:4px 0 7px;display:flex;align-items:center;gap:6px;font-family:{_F}}}
+.panel-hdr::after{{content:'';flex:1;height:1px;background:{_BORD}}}
+/* ── Recommendation cards ──────────────────────────────────────────────── */
+.rec-card{{background:{_CARD};border:1px solid {_BORD};border-radius:8px;padding:12px;margin-bottom:9px;font-family:{_F}}}
+.rec-top{{display:flex;align-items:center;gap:6px;margin-bottom:4px}}
+.rec-n{{display:inline-flex;width:22px;height:22px;border-radius:50%;font-size:.63rem;font-weight:800;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-family:{_F}}}
+.rec-title{{font-size:.78rem;font-weight:700;color:{_TEXT};flex:1;min-width:0;font-family:{_F}}}
+.imp-high{{background:{_HIGH_BG};color:{_HIGH_C};font-size:.60rem;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;font-family:{_F}}}
+.imp-med{{background:{_MED_BG};color:{_MED_C};font-size:.60rem;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;font-family:{_F}}}
+.imp-low{{background:{_LOW_BG};color:{_LOW_C};font-size:.60rem;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;font-family:{_F}}}
+.rec-desc{{font-size:.70rem;color:{_MUT};line-height:1.4;margin-bottom:8px;font-family:{_F}}}
+.rec-metrics{{display:flex;gap:0;border-top:1px solid {_BORD};padding-top:8px;margin-bottom:8px}}
+.rec-met{{flex:1;text-align:center}}
+.rec-met-lbl{{font-size:.60rem;color:{_MUT};text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px;font-family:{_F}}}
+.rec-met-pos{{font-size:.70rem;font-weight:700;color:{_PASS_C};font-family:{_F}}}
+.rec-met-neg{{font-size:.70rem;font-weight:700;color:{_FAIL};font-family:{_F}}}
+/* ── Chat & agent ──────────────────────────────────────────────────────── */
+.chat-q{{background:{_CHAT_Q};border-left:3px solid {_ACC};border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.70rem;color:{_TEXT};line-height:1.4;font-family:{_F}}}
+.chat-a{{background:{_CHAT_A};border-left:3px solid {_ACC2};border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.70rem;color:{_TEXT};line-height:1.4;font-family:{_F}}}
+.agent-resp{{background:{_CHAT_Q};border-left:3px solid {_ACC};padding:7px 10px;border-radius:3px;font-size:.70rem;color:{_TEXT};line-height:1.5;margin-top:5px;font-family:{_F}}}
+/* ── Element & analysis ────────────────────────────────────────────────── */
+.crit-item{{background:{"#fff4f4" if _is_light else "#200808"};border-left:3px solid {"#cc2020" if _is_light else "#aa2020"};padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.70rem;color:{_TEXT};cursor:pointer;font-family:{_F}}}
+.pass-badge{{background:{_PASS_BG};color:{_PASS_C};padding:2px 8px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:3px 0;font-family:{_F}}}
+.hist-item{{display:flex;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid {_BORD};font-family:{_F}}}
+.hist-dot{{width:7px;height:7px;border-radius:50%;background:{_ACC};margin-top:4px;flex-shrink:0}}
+.hist-label{{font-size:.70rem;color:{_TEXT};font-weight:600;font-family:{_F}}}
+.hist-sub{{font-size:.63rem;color:{_MUT};font-family:{_F}}}
+.log-entry{{background:{_CARD};border-left:3px solid {_ACC};padding:4px 7px;margin-bottom:3px;border-radius:3px;font-size:.70rem;color:{_TEXT};font-family:{_F}}}
+/* ── Grid option cards ─────────────────────────────────────────────────── */
+.grid-card{{border:1px solid {_BORD};border-radius:6px;padding:6px 9px;margin-bottom:4px;background:{_CARD};font-family:{_F}}}
+.grid-card-active{{border-color:{_ACC};background:{"#ddf4f4" if _is_light else "#0d3030"}}}
+.grid-label{{font-size:.78rem;font-weight:700;color:{_TEXT};font-family:{_F}}}
+.grid-spacing{{font-size:.63rem;color:{_MUT};font-family:{_F}}}
+.fail-ct{{color:{_FAIL};font-weight:700}}.pass-ct{{color:{_PASS_C};font-weight:700}}
+.snap-pill{{display:inline-block;background:{_SNAP_BG};border:1px solid {_BORD};color:{_MUT};padding:2px 8px;border-radius:10px;margin:2px;font-size:.63rem;font-family:{_F}}}
+.snap-pill-active{{border-color:{_ACC};color:{_ACC};font-weight:700}}
+/* ── Compare cards ─────────────────────────────────────────────────────── */
+.cmp-card-hdr{{background:{"#eef7f7" if _is_light else "#0d2828"};border-bottom:1px solid {_BORD};padding:6px 11px;display:flex;justify-content:space-between;align-items:center;font-family:{_F}}}
+.cmp-title{{font-size:.70rem;font-weight:700;color:{_TEXT};font-family:{_F}}}
+.badge-curr{{background:{"#d0ecec" if _is_light else "#0d3030"};color:{_ACC};font-size:.60rem;padding:2px 7px;border-radius:8px;font-family:{_F}}}
+.badge-opt{{background:{_HIGH_BG};color:{_HIGH_C};font-size:.60rem;padding:2px 7px;border-radius:8px;font-family:{_F}}}
+.insight-card{{background:{_CARD};border:1px solid {_BORD};border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px;font-family:{_F}}}
+.insight-ico{{font-size:1.0rem;margin-top:1px}}
+.insight-lbl{{font-size:.60rem;color:{_MUT};text-transform:uppercase;letter-spacing:.3px;font-family:{_F}}}
+.insight-opt{{font-size:.78rem;font-weight:700;color:{_TEXT};font-family:{_F}}}
+.insight-det{{font-size:.63rem;color:{_MUT};font-family:{_F}}}
+.rec-box{{background:{_HIGH_BG};border:1px solid {"#90c8a0" if _is_light else "#1a5020"};border-radius:8px;padding:11px;margin-top:7px;font-family:{_F}}}
+.rec-box-lbl{{font-size:.60rem;color:{_HIGH_C};text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px;font-family:{_F}}}
+.rec-box-txt{{font-size:.70rem;color:{_TEXT};line-height:1.5;font-family:{_F}}}
+/* ── Compare table ─────────────────────────────────────────────────────── */
+.cmp-tbl{{width:100%;border-collapse:collapse;border:1px solid {_BORD};border-radius:8px;overflow:hidden;font-family:{_F}}}
+.cmp-tbl th{{padding:6px 10px;background:{_CARD};border-bottom:1px solid {_BORD};font-size:.63rem;color:{_MUT};text-transform:uppercase;letter-spacing:.6px;text-align:center;font-family:{_F}}}
+.cmp-tbl th:first-child{{text-align:left}}
+.cmp-tbl td{{padding:6px 10px;font-size:.70rem;text-align:center;border-bottom:1px solid {_BORD};font-family:{_F}}}
+.cmp-tbl td:first-child{{text-align:left;color:{_MUT};font-size:.63rem;font-weight:600}}
+.cmp-best{{color:{_PASS_C};font-weight:700}}
+.cmp-norm{{color:{_TEXT};font-weight:600}}
+/* ── Layout ────────────────────────────────────────────────────────────── */
+[data-testid="stAppViewContainer"]{{overflow-x:hidden!important}}
+[data-testid="stMainBlockContainer"]{{padding:.4rem .8rem .4rem!important;max-width:100%!important}}
+[data-testid="block-container"]{{padding:.4rem .8rem .4rem!important;max-width:100%!important}}
+/* ── Static sidebar ────────────────────────────────────────────────────── */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapsedControl"],
+button[aria-label="Close sidebar"],
+button[aria-label="Open sidebar"],
+button[aria-label="collapse"],
+button[aria-label="expand"]{{display:none!important;pointer-events:none!important}}
+section[data-testid="stSidebar"]{{
+  width:280px!important;min-width:280px!important;max-width:280px!important;
+  transform:translateX(0)!important;transition:none!important;visibility:visible!important}}
+section[data-testid="stSidebar"]>div:first-child{{
+  width:280px!important;padding:12px 12px 10px!important;overflow-y:auto!important}}
+.inp-toggle button{{
+  padding:1px 6px!important;min-height:unset!important;font-size:.70rem!important;
+  background:transparent!important;border:1px solid {_BORD}!important;
+  color:{_MUT}!important;border-radius:4px!important;line-height:1.4!important;font-family:{_F}!important}}
+"""
 
+st.markdown(f"<style>{_CSS}</style>", unsafe_allow_html=True)
+
+# ─── JS bridge ────────────────────────────────────────────────────────────────
+components.html("""
+<script>
+(function(){
+  if(window._selBridgeReady)return;window._selBridgeReady=true;
+  function _rerun(url){
+    window.parent.history.replaceState(null,'',url.toString());
+    window.parent.dispatchEvent(new PopStateEvent('popstate',{state:null}));
+    setTimeout(function(){window.parent.dispatchEvent(new PopStateEvent('popstate',{state:null}));},40);
+  }
+  window.parent.addEventListener('message',function(ev){
+    if(!ev.data||!ev.data.type)return;
+    var url=new URL(window.parent.location.href);
+    if(ev.data.type==='selectElement'){
+      var eid=ev.data.elementId||'';
+      var prev=url.searchParams.get('_sel')||'';
+      if(eid===prev)return;
+      if(eid){url.searchParams.set('_sel',eid);}else{url.searchParams.delete('_sel');}
+      _rerun(url);
+    } else if(ev.data.type==='toolbar'){
+      url.searchParams.set('_tb_'+ev.data.key, ev.data.val);
+      _rerun(url);
+    }
+  });
+})();
+</script>""", height=1)
+
+# ─── layout data ──────────────────────────────────────────────────────────────
 layout_obj      = _load_working_layout()
 n_cols, n_beams = _count_elements(layout_obj)
 er              = st.session_state.eval_result
-has_failures    = (
-    er is not None
-    and (er.get("summary", {}).get("beam_failures", 0) > 0
-         or er.get("summary", {}).get("column_failures", 0) > 0)
-)
+_sm             = (er or {}).get("summary", {})
+_has_fail       = _sm.get("beam_failures", 0) > 0 or _sm.get("column_failures", 0) > 0
+_mat_now        = st.session_state.material
+_sdl_now        = st.session_state.sdl_kNm2
+_ll_now         = st.session_state.live_load_kNm2
 
-# ── Header (compact dark bar) ──────────────────────────────────────────────────
 
-_logo_part = (
-    f'<img src="data:image/png;base64,{_logo_b64}" '
-    f'style="height:22px;width:auto;margin-right:10px;vertical-align:middle">'
-    if _logo_b64 else
-    '<span style="font-size:.78rem;font-weight:800;color:#2ac0c0;letter-spacing:2px;margin-right:12px">PERMANENCEOS</span>'
-)
-_cf_hdr   = st.session_state.get("cost_flexibility")
-_review   = '<span class="stat-chip needs-review">&#9888;</span>' if has_failures else ""
-_cost_chip = (
-    f'<span class="stat-chip">net <b>${_cf_hdr["net_cost_usd"]:+,.0f}</b></span>'
-    if _cf_hdr else ""
-)
-_hdr_bg     = "#eaf4f4" if _is_light else "#071a1a"
-_hdr_border = "#b0d8d8" if _is_light else "#1a4040"
-_lid_color  = "#4a7070" if _is_light else "#5a9090"
-_lid = layout_obj.get("layoutId", "")
-_lid_chip = f'<span style="font-size:.65rem;color:{_lid_color};margin-right:8px">{_lid}</span>' if _lid else ""
-st.markdown(
-    f'<div style="background:{_hdr_bg};margin:-0.6rem -2rem 0.2rem;padding:5px 2rem;'
-    f'display:flex;align-items:center;justify-content:space-between;'
-    f'border-bottom:1px solid {_hdr_border};min-height:38px">'
-    f'<div style="display:flex;align-items:center;gap:0">'
-    f'{_logo_part}{_lid_chip}'
-    f'<span class="stat-chip"><b>{n_cols}</b> col</span>'
-    f'<span class="stat-chip"><b>{n_beams}</b> beam</span>'
-    f'{_cost_chip}{_review}'
-    f'</div></div>',
-    unsafe_allow_html=True,
-)
+# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+prompt_input = ""
+submitted    = False
 
-_, _hc_up, _hc2, _hc_tm, _hc4 = st.columns([0.8, 2.5, 1, 0.7, 1])
-with _hc_up:
-    _top_upload = st.file_uploader(
-        "layout", type=["json"], label_visibility="collapsed", key="top_uploader"
-    )
-    if _top_upload is not None:
-        try:
-            _loaded = _normalize_layout(json.loads(_top_upload.getvalue().decode("utf-8")))
-            _write_json(EDITED_LAYOUT_PATH, _loaded)
-            for _k in ("eval_result", "eval_alts", "agent_log", "grid_options",
-                       "selected_grid", "cost_flexibility", "last_comparison"):
-                st.session_state[_k] = [] if _k in ("eval_alts", "agent_log", "grid_options") else None
-            st.session_state.viewer_nonce += 1
-            st.success(f"Loaded '{_loaded.get('layoutId', 'unnamed')}'")
+with st.sidebar:
+    _active_logo = _logo_b64_light if _is_light else _logo_b64_dark
+    if _active_logo:
+        st.markdown(
+            f'<img src="data:image/png;base64,{_active_logo}"'
+            f' style="width:100%;max-height:120px;object-fit:contain;'
+            f'object-position:left center;display:block;margin-bottom:6px">',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="sb-brand">PermanenceOS</div>'
+            '<div class="sb-sub">AI-Powered Structural Design</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── INPUTS dropdown ───────────────────────────────────────────────────────
+    _lid = layout_obj.get("layoutId", "")   # always defined for page header use
+
+    with st.expander("INPUTS", expanded=True):
+
+        # ── Upload ────────────────────────────────────────────────────────────
+        st.markdown(
+            f'<div class="inp-sub-hdr">Upload</div>',
+            unsafe_allow_html=True,
+        )
+        _upload = st.file_uploader(
+            "layout", type=["json"], label_visibility="collapsed", key="sb_uploader"
+        )
+        if _upload is not None:
+            try:
+                _loaded = _normalize_layout(json.loads(_upload.getvalue().decode("utf-8")))
+                _write_json(EDITED_LAYOUT_PATH, _loaded)
+                for _k in ("eval_result", "eval_alts", "agent_log", "grid_options",
+                           "selected_grid", "cost_flexibility", "last_comparison"):
+                    st.session_state[_k] = (
+                        [] if isinstance(st.session_state.get(_k), list) else None)
+                st.session_state.viewer_nonce += 1
+                st.rerun()
+            except Exception as _exc:
+                st.error(f"Invalid JSON: {_exc}")
+        if _lid:
+            st.markdown(
+                f'<div class="sb-filename">{_lid}</div>'
+                f'<div class="sb-success">✓ Model loaded successfully</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.divider()
+
+        # ── Define Loads ──────────────────────────────────────────────────────
+        st.markdown(
+            f'<div class="inp-sub-hdr">Define Loads</div>',
+            unsafe_allow_html=True,
+        )
+        _sdl_opts = {1.5: "1.5", 2.5: "2.5", 3.5: "3.5", 5.0: "5.0"}
+        _sdl_v = st.select_slider(
+            "Dead Load SDL (kN/m²)", list(_sdl_opts.keys()),
+            value=_sdl_now, format_func=lambda v: f"{v} kN/m²",
+        )
+        if _sdl_v != _sdl_now:
+            st.session_state.sdl_kNm2 = _sdl_v
+
+        _ll_opts = {2.0: "2.0", 3.0: "3.0", 5.0: "5.0"}
+        _ll_v = st.select_slider(
+            "Live Load LL (kN/m²)", list(_ll_opts.keys()),
+            value=_ll_now, format_func=lambda v: f"{v} kN/m²",
+        )
+        if _ll_v != _ll_now:
+            st.session_state.live_load_kNm2 = _ll_v
+
+        st.divider()
+
+        # ── Define Materials ──────────────────────────────────────────────────
+        st.markdown(
+            f'<div class="inp-sub-hdr">Define Materials</div>',
+            unsafe_allow_html=True,
+        )
+        _MAT_LABELS = {"RCC": "Concrete", "STEEL": "Steel", "TIMBER": "Timber"}
+        mat_choice = st.radio(
+            "Material", list(_MAT_LABELS.keys()),
+            format_func=lambda k: _MAT_LABELS[k],
+            index=list(_MAT_LABELS.keys()).index(_mat_now),
+            horizontal=True, label_visibility="collapsed",
+        )
+        if mat_choice != _mat_now:
+            st.session_state.material     = mat_choice
+            st.session_state.grid_options = []
             st.rerun()
-        except Exception as _exc:
-            st.error(f"Invalid JSON: {_exc}")
-with _hc2:
-    _can_undo = BEFORE_LAYOUT_PATH.exists()
-    if st.button("↩ Undo", use_container_width=True, key="btn_undo",
-                 disabled=not _can_undo, help="Restore layout to previous state"):
-        _current = EDITED_LAYOUT_PATH.read_text(encoding="utf-8") if EDITED_LAYOUT_PATH.exists() else "{}"
-        _before  = BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")
-        EDITED_LAYOUT_PATH.write_text(_before,  encoding="utf-8")
-        BEFORE_LAYOUT_PATH.write_text(_current, encoding="utf-8")
-        st.session_state.viewer_nonce    += 1
-        st.session_state.eval_result      = None
-        st.session_state.eval_alts        = []
-        st.session_state.cost_flexibility = None
-        st.session_state.last_comparison  = None
-        st.rerun()
-with _hc_tm:
-    _cur_theme = st.session_state.get("theme", "dark")
-    if st.button("Light" if _cur_theme == "dark" else "Dark",
-                 use_container_width=True, key="btn_theme",
-                 help="Toggle light / dark mode"):
-        st.session_state.theme = "light" if _cur_theme == "dark" else "dark"
-        st.session_state.viewer_nonce += 1
-        st.rerun()
-with _hc4:
-    st.download_button(
-        "Export",
-        data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
-        file_name="layout_export.json",
-        mime="application/json",
-        use_container_width=True,
+
+    # ── Generate Grid + Options ───────────────────────────────────────────────
+    st.markdown(
+        f'<div style="margin:8px 0 6px;border-top:1px solid {_BORD}"></div>',
+        unsafe_allow_html=True,
     )
+    _gopts_sb = st.session_state.grid_options
+    if st.button("⊕  Generate Grid", use_container_width=True,
+                 type="primary", key="btn_gen_main"):
+        with st.spinner("Computing grid options…"):
+            st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
+        for _gi, _gopt_g in enumerate(st.session_state.grid_options, 1):
+            (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
+                json.dumps(_gopt_g["layout"], indent=2, ensure_ascii=False),
+                encoding="utf-8")
+        st.session_state["selected_opt_bar_idx"] = -1
+        st.rerun()
 
-# ── Three-column body ──────────────────────────────────────────────────────────
-col_ctrl, col_plan, col_analysis = st.columns([2.0, 3.2, 1.5], gap="small")
+    if _gopts_sb:
+        _ob1, _ob2, _ob3 = st.columns(3, gap="small")
+        for _bi, (_obc, _gopt_sb) in enumerate(zip([_ob1, _ob2, _ob3], _gopts_sb[:3])):
+            _is_sel_sb = st.session_state.get("selected_opt_bar_idx", -1) == _bi
+            with _obc:
+                if st.button(
+                    f"Option {_bi+1}", key=f"sb_opt_{_bi}",
+                    use_container_width=True,
+                    type="primary" if _is_sel_sb else "secondary",
+                ):
+                    _opt_ev = _gopt_sb.get("evaluation")
+                    if _opt_ev is None:
+                        with st.spinner(f"Evaluating Option {_bi+1}…"):
+                            _opt_ev = _run_evaluate(
+                                json.dumps(_gopt_sb.get("layout", {})),
+                                sdl=_sdl_now, ll=_ll_now)
+                        if _opt_ev:
+                            st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
+                    st.session_state["selected_opt_bar_idx"] = _bi
+                    st.session_state.eval_result = _opt_ev
+                    st.session_state.eval_alts = _get_failure_alternatives(
+                        _opt_ev or {}, _mat_now)
+                    st.rerun()
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# LEFT — Controls
-# ══════════════════════════════════════════════════════════════════════════════
-
-with col_ctrl:
-
-    # ── Agent chat ─────────────────────────────────────────────────────────────
-    st.markdown('<div class="panel-hdr">Ask Agent</div>', unsafe_allow_html=True)
-
-    # Scrollable chat thread
+    # ── AI AGENT ──────────────────────────────────────────────────────────────
+    st.markdown(
+        f'<div style="border-top:1px solid {_BORD};margin:10px 0 6px"></div>'
+        f'<div style="font-size:.76rem;font-weight:700;color:{_TEXT};margin-bottom:4px">'
+        f'AI Agent <span class="beta">BETA</span></div>',
+        unsafe_allow_html=True,
+    )
     _history = st.session_state.get("history", [])
     if _history:
-        _bubbles = ""
-        for _msg in _history[-6:]:
+        _bub = ""
+        for _msg in _history[-3:]:
             _q = _msg.get("prompt", "")
             _a = _msg.get("response", "")
             if _q:
-                _bubbles += f'<div class="chat-q">{_q[:120]}{"…" if len(_q)>120 else ""}</div>'
+                _bub += f'<div class="chat-q">{_q[:90]}{"…" if len(_q)>90 else ""}</div>'
             if _a:
-                _short = _a[:200] + ("…" if len(_a) > 200 else "")
-                _bubbles += f'<div class="chat-a">{_short}</div>'
+                _bub += f'<div class="chat-a">{_a[:120]}{"…" if len(_a)>120 else ""}</div>'
         st.markdown(
-            f'<div style="max-height:200px;overflow-y:auto;margin-bottom:6px">{_bubbles}</div>',
+            f'<div style="max-height:90px;overflow-y:auto;margin-bottom:5px">{_bub}</div>',
             unsafe_allow_html=True,
         )
 
     with st.form("agent_form", clear_on_submit=True):
         prompt_input = st.text_area(
-            "prompt",
-            placeholder="Ask agent… e.g. evaluate, remove beam A1",
+            "Ask agent",
+            placeholder="Ask anything about your structure…\ne.g. reduce deflection in beam B1",
             label_visibility="collapsed",
-            height=58,
+            height=60,
         )
-        submitted = st.form_submit_button("Ask Agent", use_container_width=True)
+        submitted = st.form_submit_button("Ask Agent  ›", use_container_width=True)
 
-    if st.button("Reset to default", use_container_width=True, key="btn_reset"):
-        if DEFAULT_LAYOUT_PATH.exists():
-            _write_json(EDITED_LAYOUT_PATH, _read_json(DEFAULT_LAYOUT_PATH))
-        elif EDITED_LAYOUT_PATH.exists():
-            EDITED_LAYOUT_PATH.unlink()
+    # ── AI Recommendations (shown in ANALYSIS tab) ────────────────────────────
+    _alts_sb = st.session_state.eval_alts
+    if _alts_sb:
+        st.markdown(
+            f'<div style="font-size:.63rem;color:{_MUT};margin-top:8px;line-height:1.6">'
+            f'{len(_alts_sb)} recommendation{"s" if len(_alts_sb)>1 else ""} ready — '
+            f'open the <b style="color:{_ACC}">Analysis</b> tab to preview or apply.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="font-size:.63rem;color:{_MUT};margin-top:8px;line-height:1.5">'
+            f'Generate a grid and run analysis to see AI recommendations.</div>',
+            unsafe_allow_html=True,
+        )
+
+# ─── Agent processing ─────────────────────────────────────────────────────────
+if submitted and prompt_input.strip():
+    with st.spinner("Agent reasoning…"):
+        _resp = _run_agent_chat(prompt_input.strip(), layout_obj, er)
+
+    if _resp == "GENERATE_GRID":
+        with st.spinner("Generating structural grid options…"):
+            st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
+        for _gi, _gopt in enumerate(st.session_state.grid_options, 1):
+            (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
+                json.dumps(_gopt["layout"], indent=2, ensure_ascii=False), encoding="utf-8")
+        _resp = f"Generated {len(st.session_state.grid_options)} grid option(s)."
+    elif _resp == "EVALUATE":
+        from nodes.modify import apply_material_override
+        _ls_ag = apply_material_override(json.dumps(layout_obj), _mat_now)
+        BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+        _write_json(EDITED_LAYOUT_PATH, json.loads(_ls_ag))
         st.session_state.viewer_nonce += 1
-        for k in ("eval_result", "eval_alts", "agent_log", "state_history",
-                  "grid_options", "selected_grid", "output_log",
-                  "cost_flexibility", "last_comparison"):
-            st.session_state[k] = [] if isinstance(st.session_state.get(k), list) else None
+        with st.spinner("Evaluating structure…"):
+            _ev_ag = _run_evaluate(_ls_ag, sdl=_sdl_now, ll=_ll_now)
+        if _ev_ag:
+            st.session_state.eval_result = _ev_ag
+            st.session_state.eval_alts   = _get_failure_alternatives(_ev_ag, _mat_now)
+        _sag  = (_ev_ag or {}).get("summary", {})
+        _resp = (
+            f"Evaluation: {'PASS' if _sag.get('overall_PASS') else 'FAIL'} — "
+            f"{_sag.get('beam_failures',0)} beam failure(s), "
+            f"{_sag.get('column_failures',0)} column failure(s)."
+        )
+
+    st.session_state.output_log.append(_resp)
+    st.session_state.history.append({"prompt": prompt_input, "response": _resp})
+    st.session_state.state_history.append({
+        "label":       prompt_input[:28] + ("…" if len(prompt_input) > 28 else ""),
+        "layout_json": layout_obj,
+        "eval_result": st.session_state.eval_result,
+    })
+    st.rerun()
+
+# ─── Page header ──────────────────────────────────────────────────────────────
+_cf_h  = st.session_state.get("cost_flexibility")
+_hcols = st.columns([5, 1, 1, 0.35], gap="small")
+
+with _hcols[0]:
+    _rev_chip  = ('<span class="stat-chip needs-review">⚠ Review</span>'
+                  if _has_fail else "")
+    _cost_chip = (f'<span class="stat-chip">net <b>${_cf_h["net_cost_usd"]:+,.0f}</b></span>'
+                  if _cf_h else "")
+    st.markdown(
+        f'<div class="page-hdr">'
+        f'<span class="hdr-lid">{_lid}</span>'
+        f'<span class="stat-chip"><b>{n_cols}</b> col</span>'
+        f'<span class="stat-chip"><b>{n_beams}</b> beam</span>'
+        f'<span class="stat-chip"><b>{_mat_now}</b></span>'
+        f'{_cost_chip}{_rev_chip}</div>',
+        unsafe_allow_html=True,
+    )
+with _hcols[1]:
+    if st.button("Light" if not _is_light else "Dark",
+                 use_container_width=True, key="btn_theme"):
+        st.session_state.theme        = "light" if not _is_light else "dark"
+        st.session_state.viewer_nonce += 1
+        st.rerun()
+with _hcols[2]:
+    st.download_button(
+        "Export JSON",
+        data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
+        file_name="layout_export.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+with _hcols[3]:
+    with st.popover("⋮", use_container_width=True):
+        st.markdown(
+            f'<div style="font-size:.72rem;font-weight:700;color:#c8eeed;'
+            f'margin-bottom:6px">PermanenceOS</div>'
+            f'<div style="font-size:.65rem;color:#5a9090">AI Structural Design</div>',
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        if st.button("Rerun", key="btn_menu_rerun", use_container_width=True):
+            st.rerun()
+        _theme_lbl = "Switch to Light" if not _is_light else "Switch to Dark"
+        if st.button(_theme_lbl, key="btn_menu_theme", use_container_width=True):
+            st.session_state.theme        = "light" if not _is_light else "dark"
+            st.session_state.viewer_nonce += 1
+            st.rerun()
+        st.download_button(
+            "Export JSON",
+            data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
+            file_name="layout_export.json",
+            mime="application/json",
+            use_container_width=True,
+            key="btn_menu_export",
+        )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TABS
+# ══════════════════════════════════════════════════════════════════════════════
+tab_mod, tab_cmp = st.tabs(["  MODIFY WORK PLACE  ", "  COMPARE WORK PLACE  "])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 1 — MODIFY
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_mod:
+
+    _er_done = er is not None
+    _alts_ok = bool(st.session_state.eval_alts)
+    _snap_ok = bool(st.session_state.snapshots)
+
+    _steps = [
+        ("1", "Upload",          "Model & Data",      True),
+        ("2", "Define Loads",    "Set load cases",    True),
+        ("3", "Evaluate",        "Run analysis",      _er_done),
+        ("4", "Recommendations", "AI suggestions",    _alts_ok),
+        ("5", "Apply Changes",   "Modify design",     _snap_ok),
+        ("6", "Compare",         "Evaluate options",  False),
+    ]
+    _sbar_html = '<div class="step-bar">'
+    for _si, (_sn, _sl, _ss, _sdone) in enumerate(_steps):
+        _cls = "stp-done" if _sdone else (
+            "stp-active" if (_si == 2 and not _er_done) else "stp-todo")
+        _sbar_html += (
+            f'<div class="stp {_cls}">'
+            f'<span class="stp-n">{_sn}</span>'
+            f'<div><div class="stp-lbl">{_sl}</div>'
+            f'<div class="stp-sub">{_ss}</div></div></div>'
+        )
+        if _si < len(_steps) - 1:
+            _sbar_html += '<span class="stp-arr">›</span>'
+    _sbar_html += '</div>'
+
+    _sb_col, _run_col, _snap_col = st.columns([3.5, 1.5, 1.5], gap="small")
+    with _sb_col:
+        st.markdown(_sbar_html, unsafe_allow_html=True)
+    with _run_col:
+        _run_clicked = st.button(
+            "▶  Run Structural Analysis",
+            type="primary", use_container_width=True, key="btn_run_analysis",
+        )
+    with _snap_col:
+        _sn_n = len(st.session_state.snapshots) + 1
+        _snap_clicked = st.button(
+            f"Save Snapshot #{_sn_n}", key="btn_snap", use_container_width=True,
+        )
+
+    if _snap_clicked:
+        st.session_state.snapshots.append({
+            "label":            f"Option {_sn_n}",
+            "layout_json":      json.dumps(layout_obj),
+            "eval_result":      er,
+            "cost_flexibility": st.session_state.cost_flexibility,
+            "before_json":      (BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")
+                                 if BEFORE_LAYOUT_PATH.exists()
+                                 else json.dumps(layout_obj)),
+        })
         st.rerun()
 
+    if _run_clicked:
+        from nodes.modify import apply_material_override
+        _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
+        BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+        _write_json(EDITED_LAYOUT_PATH, json.loads(_ls2))
+        st.session_state.viewer_nonce += 1
+        with st.spinner("Evaluating structure…"):
+            _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
+        if _ev2:
+            st.session_state.eval_result = _ev2
+            st.session_state.eval_alts   = _get_failure_alternatives(_ev2, _mat_now)
+        st.rerun()
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CENTER — Dominant 2D Floor Plan
-# ══════════════════════════════════════════════════════════════════════════════
+    # ── Toolbar state (overlay rendered inside floor plan HTML) ───────────────
+    _vm = st.session_state.get("view_mode", "2D")
 
-with col_plan:
-
-    # JS bridge: postMessage from SVG iframe → URL param → Streamlit rerun
-    components.html("""
-<script>
-  (function() {
-    if (window._selBridgeReady) return;
-    window._selBridgeReady = true;
-    window.parent.addEventListener('message', function(ev) {
-      if (!ev.data || ev.data.type !== 'selectElement') return;
-      var eid = ev.data.elementId || '';
-      var url = new URL(window.parent.location.href);
-      var prev = url.searchParams.get('_sel') || '';
-      if (eid === prev) return;
-      if (eid) { url.searchParams.set('_sel', eid); }
-      else      { url.searchParams.delete('_sel'); }
-      window.parent.history.replaceState(null, '', url.toString());
-      window.parent.dispatchEvent(new PopStateEvent('popstate', {state: null}));
-      setTimeout(function() {
-        window.parent.dispatchEvent(new PopStateEvent('popstate', {state: null}));
-      }, 40);
-    });
-  })();
-</script>""", height=1)
-
-    # ── Compact toolbar ────────────────────────────────────────────────────────
-    _tv1, _tv2, _tv3, _tv4, _tv5 = st.columns([1.4, 1.4, 1.4, 1.4, 2], gap="small")
-    with _tv1:
-        _labels_on = st.toggle("IDs", value=st.session_state.labels_on,
-                               key="labels_toggle", help="Show element IDs")
-        if _labels_on != st.session_state.labels_on:
-            st.session_state.labels_on = _labels_on
-            st.session_state.viewer_nonce += 1
-            st.rerun()
-    with _tv2:
-        _compare_on = st.toggle("Diff", value=st.session_state.compare_mode,
-                                key="compare_toggle", help="Before/after 3D",
-                                disabled=not BEFORE_LAYOUT_PATH.exists())
-        if _compare_on != st.session_state.compare_mode:
-            st.session_state.compare_mode = _compare_on
-            st.session_state.viewer_nonce += 1
-            st.rerun()
-    with _tv3:
-        _auto_eval = st.checkbox("Auto", value=st.session_state.get("auto_eval", True),
-                                 key="chk_auto_eval", help="Auto-evaluate on change")
-        if _auto_eval != st.session_state.get("auto_eval", True):
-            st.session_state.auto_eval = _auto_eval
-    with _tv4:
-        _snap_n = len(st.session_state.get("snapshots", [])) + 1
-        if st.button(f"Save #{_snap_n}", key="btn_snap", use_container_width=True,
-                     help="Save snapshot"):
-            st.session_state.snapshots.append({
-                "label":            f"Change {_snap_n}",
-                "layout_json":      json.dumps(layout_obj),
-                "eval_result":      st.session_state.eval_result,
-                "cost_flexibility": st.session_state.cost_flexibility,
-                "before_json":      (BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")
-                                     if BEFORE_LAYOUT_PATH.exists() else json.dumps(layout_obj)),
-            })
-            st.rerun()
-
-    _preview_opt_file = ""
-    if st.session_state.grid_options:
-        with _tv5:
-            _opt_names = ["Working layout"] + [
-                f"{o['label']} ({o.get('failures',0)} fail · ${o.get('cost',0):,.0f})"
-                for o in st.session_state.grid_options
-            ]
-            _prev_sel = st.radio("Preview", _opt_names, horizontal=True,
-                                 label_visibility="collapsed", key="preview_radio")
-            if _prev_sel != "Working layout":
-                _prev_idx = _opt_names.index(_prev_sel) - 1
-                _preview_opt_file = f"team_01_option_{_prev_idx + 1}.json"
-
-    # Snapshot pills
-    _snaps = st.session_state.get("snapshots", [])
+    _snaps = st.session_state.snapshots
     if _snaps:
-        _pills = " ".join(
-            f'<span class="snap-pill{" snap-pill-active" if i == len(_snaps)-1 else ""}">'
+        _pills = "".join(
+            f'<span class="snap-pill{" snap-pill-active" if i==len(_snaps)-1 else ""}">'
             f'{s["label"]}</span>'
             for i, s in enumerate(_snaps)
         )
         st.markdown(_pills, unsafe_allow_html=True)
 
-    # ── 2D Floor Plan — dominant, full-height ──────────────────────────────────
+    # ── Option selection (handled by sidebar buttons; resolve preview file here) ─
+    _gopts_bar = st.session_state.grid_options
+    _sel_opt_i = st.session_state.get("selected_opt_bar_idx", -1)
+
+    _preview_opt_file = ""
+    if _gopts_bar and 0 <= _sel_opt_i < len(_gopts_bar):
+        _preview_opt_file = f"team_01_option_{_sel_opt_i + 1}.json"
+
     _plan_layout = layout_obj
     if _preview_opt_file:
         _opt_path = REPO_ROOT / _preview_opt_file
         if _opt_path.exists():
             try:
                 _plan_layout = _normalize_layout(
-                    json.loads(_opt_path.read_text(encoding="utf-8"))
-                )
+                    json.loads(_opt_path.read_text(encoding="utf-8")))
             except Exception:
                 pass
-    components.html(
-        _render_floor_plan_html(
-            _plan_layout,
-            eval_result=st.session_state.eval_result,
-            highlight=st.session_state.selected_el,
-            labels=st.session_state.labels_on,
-            height_px=620,
-            is_light=_is_light,
-        ),
-        height=622,
-        scrolling=False,
-    )
 
-    # ── 3D View — collapsed expander below plan ────────────────────────────────
-    with st.expander("3D Structural View", expanded=False):
-        if _viewer_is_reachable():
-            components.iframe(
-                _viewer_url(
+    # ── Main: floor plan | right panel ───────────────────────────────────────
+    _main_col, _right_col = st.columns([1.65, 0.75], gap="small")
+
+    with _main_col:
+        if _vm == "2D":
+            components.html(
+                _render_floor_plan_html(
+                    _plan_layout, eval_result=er,
                     highlight=st.session_state.selected_el,
-                    compare=st.session_state.compare_mode,
                     labels=st.session_state.labels_on,
-                    option_file=_preview_opt_file,
+                    height_px=510, is_light=_is_light,
+                    view_mode=_vm,
+                    diff_on=st.session_state.compare_mode,
+                    auto_on=st.session_state.get("auto_eval", True),
                 ),
-                height=320, scrolling=False,
+                height=512, scrolling=False,
             )
         else:
-            st.caption("3D viewer offline — run `python -m http.server 8000` from repo root.")
+            if _viewer_is_reachable():
+                components.iframe(
+                    _viewer_url(
+                        highlight=st.session_state.selected_el,
+                        compare=st.session_state.compare_mode,
+                        labels=st.session_state.labels_on,
+                        option_file=_preview_opt_file,
+                    ),
+                    height=512, scrolling=False,
+                )
+            else:
+                st.caption("3D viewer offline — run `python -m http.server 8000` from repo root.")
+                components.html(
+                    _render_floor_plan_html(
+                        _plan_layout, eval_result=er,
+                        highlight=st.session_state.selected_el,
+                        labels=st.session_state.labels_on,
+                        height_px=510, is_light=_is_light,
+                    ),
+                    height=512, scrolling=False,
+                )
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# RIGHT — Element Detail + Evaluation + Cost
-# ══════════════════════════════════════════════════════════════════════════════
-
-with col_analysis:
-
-    # Agent form is in left panel; wire submitted / prompt_input here
-    if submitted and prompt_input.strip():
-        with st.spinner("Agent reasoning…"):
-            response = _run_agent_chat(
-                prompt_input.strip(), layout_obj, st.session_state.eval_result,
-            )
-
-        if response == "GENERATE_GRID":
-            with st.spinner("Generating structural grid options…"):
-                st.session_state.grid_options = _run_grid_options(layout_obj, st.session_state.material)
-            for _i, _opt in enumerate(st.session_state.grid_options, 1):
-                _op = REPO_ROOT / f"team_01_option_{_i}.json"
-                _op.write_text(json.dumps(_opt["layout"], indent=2, ensure_ascii=False), encoding="utf-8")
-            response = (
-                f"Generated {len(st.session_state.grid_options)} structural grid option(s). "
-                "Review the Grid Options in the left panel."
-            )
-        elif response == "EVALUATE":
-            from nodes.modify import apply_material_override
-            _mat_now = st.session_state.get("material", "RCC")
-            _sdl_now = st.session_state.get("sdl_kNm2", 3.5)
-            _ll_now  = st.session_state.get("live_load_kNm2", 2.0)
-            _ls      = apply_material_override(json.dumps(layout_obj), _mat_now)
-            BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-            _write_json(EDITED_LAYOUT_PATH, json.loads(_ls))
-            st.session_state.viewer_nonce += 1
-            with st.spinner("Evaluating structure…"):
-                _ev = _run_evaluate(_ls, sdl=_sdl_now, ll=_ll_now)
-            if _ev:
-                st.session_state.eval_result = _ev
-                st.session_state.eval_alts   = _get_failure_alternatives(_ev, _mat_now)
-            _s = (_ev or {}).get("summary", {})
-            response = (
-                f"Evaluation: **{'PASS' if _s.get('overall_PASS') else 'FAIL'}** — "
-                f"{_s.get('beam_failures', 0)} beam failure(s), "
-                f"{_s.get('column_failures', 0)} column failure(s)."
-            )
-
-        st.session_state.output_log.append(response)
-        st.session_state.history.append({"prompt": prompt_input, "response": response})
-        label = prompt_input[:28] + ("…" if len(prompt_input) > 28 else "")
-        st.session_state.state_history.append({
-            "label":       label,
-            "layout_json": _load_working_layout(),
-            "eval_result": st.session_state.eval_result,
-        })
-        st.rerun()
-
-    _mat_now = st.session_state.material
-    _sdl_now = st.session_state.sdl_kNm2
-    _ll_now  = st.session_state.live_load_kNm2
-    er       = st.session_state.eval_result
-
-    # ── Selected element detail (SENSI-style) ──────────────────────────────────
-    _sel = st.session_state.selected_el
-    _structure_r = layout_obj.get("structure", [])
-    _sel_obj = next((e for e in _structure_r if e["id"] == _sel), None) if _sel else None
-
-    if _sel_obj:
         st.markdown(
-            _el_detail_html(_sel_obj, er),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<div style="font-size:.7rem;color:#3a7070;padding:6px 0 4px">'
-            'Click an element in the plan to inspect it</div>',
+            '<div class="plan-legend">'
+            '<span class="leg-item"><span class="leg-col"></span>Columns</span>'
+            '<span class="leg-item"><span class="leg-beam"></span>Beams</span>'
+            '<span class="leg-item"><span class="leg-wall"></span>Walls</span>'
+            '<span class="leg-item"><span class="leg-dash"></span>Load Path</span>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
-    # ── Material & Loads ───────────────────────────────────────────────────────
-    with st.expander("Material & Loads", expanded=False):
-        _MAT_LABELS = {"RCC": "Concrete", "STEEL": "Steel", "TIMBER": "Timber"}
-        mat_choice = st.radio(
-            "material_selector",
-            options=list(_MAT_LABELS.keys()),
-            format_func=lambda k: _MAT_LABELS[k],
-            index=list(_MAT_LABELS.keys()).index(st.session_state.material),
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        if mat_choice != st.session_state.material:
-            st.session_state.material    = mat_choice
-            st.session_state.grid_options = []
-            st.rerun()
+        _mdef  = _sm.get("max_defl_mm", None)
+        _tw    = _sm.get("total_weight_kN", None)
+        _bf_sb = _sm.get("beam_failures", 0)
+        _cf_sb = _sm.get("column_failures", 0)
+        if er and _sm.get("overall_PASS"):
+            _anlys = '<span class="sb-pass">✓ Analysis Complete</span>'
+        elif er:
+            _anlys = '<span class="sb-fail">✗ Analysis Failed</span>'
+        else:
+            _anlys = '<span class="sb-pend">Not analysed</span>'
 
-        sdl_options = {1.5: "Timber 1.5", 2.5: "Light 2.5", 3.5: "Standard 3.5", 5.0: "Heavy 5.0"}
-        sdl_val = st.select_slider(
-            "SDL kN/m²", options=list(sdl_options.keys()),
-            value=st.session_state.sdl_kNm2,
-            format_func=lambda v: f"{sdl_options[v]}",
-        )
-        if sdl_val != st.session_state.sdl_kNm2:
-            st.session_state.sdl_kNm2 = sdl_val
-
-        ll_options = {2.0: "Residential", 3.0: "Office", 5.0: "Retail/Public"}
-        ll_val = st.select_slider(
-            "LL kN/m²", options=list(ll_options.keys()),
-            value=st.session_state.live_load_kNm2,
-            format_func=lambda v: f"{ll_options[v]}",
-        )
-        if ll_val != st.session_state.live_load_kNm2:
-            st.session_state.live_load_kNm2 = ll_val
-
-    # ── Structural Grid ────────────────────────────────────────────────────────
-    with st.expander("Structural Grid", expanded=False):
-        _cg, _cr = st.columns(2)
-        with _cg:
-            gen_clicked = st.button("Generate", use_container_width=True, key="btn_gen")
-        with _cr:
-            rec_clicked = st.button("↺ Refresh", use_container_width=True, key="btn_rec")
-
-        if gen_clicked or rec_clicked:
-            with st.spinner("Computing grid options…"):
-                st.session_state.grid_options = _run_grid_options(layout_obj, st.session_state.material)
-            for _i, _opt in enumerate(st.session_state.grid_options, 1):
-                _op = REPO_ROOT / f"team_01_option_{_i}.json"
-                _op.write_text(json.dumps(_opt["layout"], indent=2, ensure_ascii=False), encoding="utf-8")
-            st.rerun()
-
-        for opt in st.session_state.grid_options:
-            _gl     = opt["label"]
-            _gs     = opt["spacing"]
-            _gf     = opt.get("failures", 0)
-            _gc     = opt.get("cost", 0)
-            _active = st.session_state.selected_grid == _gl
-            _fcls   = "fail-ct" if _gf > 0 else "pass-ct"
-            _ccls   = "grid-card grid-card-active" if _active else "grid-card"
-            st.markdown(
-                f'<div class="{_ccls}">'
-                f'<span class="grid-label">{_gl}</span>'
-                f'<span class="grid-spacing" style="margin-left:6px">{_gs}m</span>'
-                f'<div class="grid-stats">'
-                f'<span class="{_fcls}">{_gf} fail</span>'
-                f' &bull; ${_gc:,.0f}'
-                f'</div></div>',
-                unsafe_allow_html=True,
-            )
-            if st.button(f"Apply {_gl}", key=f"grid_{_gl}", use_container_width=True):
-                _opt_layout = opt.get("layout", {})
-                _bstr = EDITED_LAYOUT_PATH.read_text(encoding="utf-8") if EDITED_LAYOUT_PATH.exists() else json.dumps(layout_obj)
-                BEFORE_LAYOUT_PATH.write_text(_bstr, encoding="utf-8")
-                _write_json(EDITED_LAYOUT_PATH, _opt_layout)
-                st.session_state.selected_grid    = _gl
-                st.session_state.viewer_nonce    += 1
-                st.session_state.eval_result      = opt.get("evaluation")
-                st.session_state.eval_alts        = _get_failure_alternatives(
-                    opt.get("evaluation") or {}, st.session_state.material
-                )
-                st.session_state.cost_flexibility = None
-                st.session_state.last_comparison  = None
-                st.rerun()
-
-    # ── Evaluation summary ─────────────────────────────────────────────────────
-    st.markdown('<div class="panel-hdr">Evaluation</div>', unsafe_allow_html=True)
-
-    if st.button("▶ Run Evaluation", use_container_width=True, key="btn_eval"):
-        from nodes.modify import apply_material_override
-        layout_str     = json.dumps(layout_obj)
-        layout_str_mat = apply_material_override(layout_str, _mat_now)
-        BEFORE_LAYOUT_PATH.write_text(layout_str, encoding="utf-8")
-        _write_json(EDITED_LAYOUT_PATH, json.loads(layout_str_mat))
-        st.session_state.viewer_nonce += 1
-        with st.spinner("Evaluating…"):
-            ev = _run_evaluate(layout_str_mat, sdl=_sdl_now, ll=_ll_now)
-        if ev:
-            st.session_state.eval_result = ev
-            st.session_state.eval_alts   = _get_failure_alternatives(ev, _mat_now)
-        st.rerun()
-
-    if er is None:
-        st.caption("Run evaluation or apply a grid.")
-    else:
-        _sm   = er.get("summary", {})
-        _bf   = _sm.get("beam_failures", 0)
-        _cf_c = _sm.get("column_failures", 0)
-        _ok   = _sm.get("overall_PASS", False)
-        _tot  = max(len(er.get("beams", [])) + len(er.get("columns", [])), 1)
-        _score = round(1 - (_bf + _cf_c) / _tot, 2)
-
-        _cls  = "eval-pass" if _ok else "eval-fail"
-        _txt  = "PASS" if _ok else "FAIL"
-        _sc_c = "eval-pass" if _score >= 0.9 else ("eval-fail" if _score < 0.7 else "")
         st.markdown(
-            f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'
-            f'<span class="{_cls}" style="font-size:1.4rem;font-weight:800">{_txt}</span>'
-            f'<span class="{_sc_c}" style="font-size:1.1rem;font-weight:700">{_score:.2f}</span>'
-            f'</div>'
-            f'<div style="font-size:.68rem;color:#5a9090">'
-            f'{_bf} beam fail · {_cf_c} col fail · {_mat_now}</div>',
+            f'<div class="stat-bar">'
+            f'<span class="sb-i">Nodes <b>{n_cols}</b></span>'
+            f'<span class="sb-i">Beams <b>{n_beams}</b></span>'
+            f'<span class="sb-i">Columns <b>{n_cols}</b></span>'
+            + (f'<span class="sb-i">Weight <b>{_tw:.1f}</b> kN</span>' if _tw else "")
+            + (f'<span class="sb-i">Max Defl <b>{_mdef:.1f}</b> mm</span>' if _mdef else "")
+            + f'<span class="sb-i">Beam fail <b>{_bf_sb}</b></span>'
+            f'<span class="sb-i">Col fail <b>{_cf_sb}</b></span>'
+            f'{_anlys}</div>',
             unsafe_allow_html=True,
         )
 
-        # Failing items (compact)
-        _fbeams = [b for b in er.get("beams", [])
-                   if not b.get("bend_PASS") or not b.get("shear_PASS")
-                   or not b.get("defl_TL_PASS") or not b.get("defl_LL_PASS")]
-        _fcols  = [c for c in er.get("columns", [])
-                   if not c.get("stress_PASS") or not c.get("buckling_PASS")]
+    with _right_col:
+        _rt1, _rt2 = st.tabs(["  ANALYSIS  ", "  DESIGN DETAILS  "])
 
-        if not _fbeams and not _fcols:
-            st.markdown('<span class="pass-badge">All checks passed ✓</span>',
-                        unsafe_allow_html=True)
-        else:
-            _items_html = ""
-            for b in _fbeams[:4]:
-                _chks = [k for k, f in [("bend", not b.get("bend_PASS")),
-                                         ("shear", not b.get("shear_PASS")),
-                                         ("defl", not b.get("defl_TL_PASS") or not b.get("defl_LL_PASS"))] if f]
-                _items_html += (
-                    f'<div class="crit-item" style="cursor:pointer" '
-                    f'onclick="window.parent.postMessage({{type:\'selectElement\',elementId:\'{b["id"]}\'}},\'*\')">'
-                    f'<b>{b["id"]}</b> {b.get("span_m",0):.1f}m'
-                    f'<span style="float:right;color:#ff6060">{", ".join(_chks)}</span></div>'
-                )
-            for c in _fcols[:3]:
-                _chks = [k for k, f in [("stress", not c.get("stress_PASS")),
-                                         ("buck", not c.get("buckling_PASS"))] if f]
-                _items_html += (
-                    f'<div class="crit-item" style="cursor:pointer" '
-                    f'onclick="window.parent.postMessage({{type:\'selectElement\',elementId:\'{c["id"]}\'}},\'*\')">'
-                    f'<b>{c["id"]}</b> {c.get("section_mm","?")}'
-                    f'<span style="float:right;color:#ff6060">{", ".join(_chks)}</span></div>'
-                )
-            st.markdown(_items_html, unsafe_allow_html=True)
+        with _rt1:
+            _sel_opt_i2 = st.session_state.get("selected_opt_bar_idx", -1)
+            _gopts_main = st.session_state.grid_options
 
-        # Suggested fixes
-        alts = st.session_state.eval_alts
-        if alts:
-            st.markdown('<div class="panel-hdr" style="margin-top:6px">Fixes</div>',
-                        unsafe_allow_html=True)
-            for i, alt in enumerate(alts[:4]):
-                if st.button(alt[:52] + ("…" if len(alt) > 52 else ""),
-                             key=f"alt_{i}", use_container_width=True):
-                    before_str = json.dumps(layout_obj)
-                    BEFORE_LAYOUT_PATH.write_text(before_str, encoding="utf-8")
-                    with st.spinner(f"Applying…"):
-                        new_str, new_ev = _apply_alternative(alt, before_str, _mat_now, _sdl_now, _ll_now)
-                    if new_str != before_str:
-                        _write_json(EDITED_LAYOUT_PATH, json.loads(new_str))
-                        st.session_state.viewer_nonce    += 1
-                        st.session_state.cost_flexibility = None
-                        st.session_state.state_history.append({
-                            "label":       alt[:30], "layout_json": json.loads(new_str),
-                            "eval_result": new_ev,
-                        })
-                        with st.spinner("Summarising…"):
-                            _cf_res  = _run_cost_flex(before_str, new_str)
-                            _cmp_txt = _run_comparison(before_str, new_str)
-                        if _cf_res:
-                            st.session_state.cost_flexibility = _cf_res
-                        if _cmp_txt:
-                            st.session_state.output_log.append(_cmp_txt)
-                            st.session_state.last_comparison = _cmp_txt
-                    if new_ev is not None:
-                        st.session_state.eval_result = new_ev
-                        st.session_state.eval_alts   = _get_failure_alternatives(new_ev, _mat_now)
-                    st.rerun()
-
-    # ── Cost & Change ──────────────────────────────────────────────────────────
-    _cf       = st.session_state.get("cost_flexibility")
-    _last_cmp = st.session_state.get("last_comparison")
-
-    if _cf is not None:
-        st.markdown('<div class="panel-hdr">Cost & Change</div>', unsafe_allow_html=True)
-        _net  = _cf.get("net_cost_usd", 0)
-        _flex = _cf.get("flexibility_score", 0)
-        _dis  = _cf.get("disruption_score", 0)
-        _r1, _r2, _r3 = st.columns(3)
-        _r1.metric("Net", f"${_net:+,.0f}")
-        _r2.metric("Flex", f"{_flex:.1f}/10")
-        _r3.metric("Disrupt", f"{_dis}/10")
-        if _last_cmp:
-            st.markdown(
-                f'<div class="agent-response" style="margin-top:6px">'
-                f'{_last_cmp[:400]}{"…" if len(_last_cmp) > 400 else ""}</div>',
-                unsafe_allow_html=True,
-            )
-    elif er is not None:
-        if st.button("Analyse cost & flexibility", use_container_width=True, key="btn_cf"):
-            _bs = (BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")
-                   if BEFORE_LAYOUT_PATH.exists() else json.dumps(layout_obj))
-            with st.spinner("Analysing…"):
-                _cf_res = _run_cost_flex(_bs, json.dumps(layout_obj))
-            if _cf_res:
-                st.session_state.cost_flexibility = _cf_res
-            st.rerun()
-
-    # ── History & log (collapsed) ──────────────────────────────────────────────
-    _snaps_cost = st.session_state.get("snapshots", [])
-    if _snaps_cost:
-        with st.expander(f"Snapshots ({len(_snaps_cost)})", expanded=False):
-            for _sn in _snaps_cost:
-                _scf  = _sn.get("cost_flexibility")
-                _sev  = (_sn.get("eval_result") or {}).get("summary", {})
-                _fail = _sev.get("beam_failures", 0) + _sev.get("column_failures", 0)
-                with st.expander(f"{_sn['label']} · {'✓' if _fail == 0 else f'✗ {_fail}'}", expanded=False):
-                    if _scf:
-                        _sc1, _sc2 = st.columns(2)
-                        _sc1.metric("Net", f"${_scf.get('net_cost_usd', 0):+,.0f}")
-                        _sc2.metric("Flex", f"{_scf.get('flexibility_score', 0):.1f}/10")
-                    else:
-                        st.caption("No cost data saved.")
-
-    with st.expander("State History", expanded=False):
-        if not st.session_state.state_history:
-            st.caption("No states recorded.")
-        else:
-            for i, snap in enumerate(reversed(st.session_state.state_history[-8:])):
-                real_i = len(st.session_state.state_history) - 1 - i
+            if not _gopts_main:
                 st.markdown(
-                    f'<span class="state-pill">{real_i + 1}. {snap["label"]}</span>',
+                    f'<div style="font-size:.70rem;color:{_MUT};padding:8px 2px;line-height:1.6">'
+                    f'Click <b>Generate Grid</b> in the sidebar, then select an option '
+                    f'to view structural analysis.</div>',
                     unsafe_allow_html=True,
                 )
-                if st.button(f"Restore #{real_i + 1}", key=f"restore_{real_i}"):
-                    _write_json(EDITED_LAYOUT_PATH, snap["layout_json"])
-                    st.session_state.viewer_nonce += 1
-                    st.session_state.eval_result   = snap.get("eval_result")
-                    st.session_state.eval_alts     = _get_failure_alternatives(
-                        snap.get("eval_result") or {}, st.session_state.material)
-                    st.session_state.grid_options  = []
-                    st.rerun()
+            elif _sel_opt_i2 < 0:
+                st.markdown(
+                    f'<div style="font-size:.70rem;color:{_MUT};padding:8px 2px;line-height:1.6">'
+                    f'Select <b>Option 1</b>, <b>2</b> or <b>3</b> in the sidebar '
+                    f'to view its structural analysis here.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                _sel_gopt = _gopts_main[_sel_opt_i2]
+                _sel_ev   = _sel_gopt.get("evaluation") or {}
+                _sel_sm   = _sel_ev.get("summary", {})
+                _sel_pass = _sel_sm.get("overall_PASS")
 
-    with st.expander("Output Log", expanded=False):
-        for msg in reversed(st.session_state.output_log[-8:]):
+                if not _sel_ev:
+                    st.markdown(
+                        f'<div style="font-size:.70rem;color:{_MUT}">No analysis data yet.</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    _is_pass  = _sel_pass is True
+                    _is_fail  = _sel_pass is False
+                    _res_clr  = _PASS_C if _is_pass else (_FAIL if _is_fail else _MUT)
+                    _res_lbl  = "PASS" if _is_pass else ("FAIL" if _is_fail else "—")
+                    _bf       = _sel_sm.get("beam_failures",   0)
+                    _cf2      = _sel_sm.get("column_failures", 0)
+                    _score    = _sel_sm.get("score",           None)
+                    _mspan    = _sel_sm.get("max_beam_span_m", None)
+
+                    def _stat(val, label):
+                        return (
+                            f'<div style="display:flex;flex-direction:column;gap:2px">'
+                            f'<span style="font-size:1.5rem;font-weight:800;color:{_TEXT};line-height:1">{val}</span>'
+                            f'<span style="font-size:.58rem;font-weight:700;color:{_MUT};'
+                            f'letter-spacing:1px;text-transform:uppercase">{label}</span>'
+                            f'</div>'
+                        )
+
+                    _score_html = _stat(f"{_score:.1f}" if _score is not None else "—", "Score / 100")
+                    _mspan_html = (
+                        f'<div style="font-size:.63rem;color:{_MUT};margin-top:6px">'
+                        f'Max beam span: <b style="color:{_TEXT}">{_mspan:.2f} m</b></div>'
+                        if _mspan else ""
+                    )
+                    st.markdown(
+                        f'<div style="background:{_CARD};border:1px solid {_BORD};'
+                        f'border-radius:10px;padding:16px 18px;margin:4px 0">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
+                        f'<div style="display:flex;flex-direction:column;gap:2px">'
+                        f'<span style="font-size:1.7rem;font-weight:900;color:{_res_clr};line-height:1">{_res_lbl}</span>'
+                        f'<span style="font-size:.58rem;font-weight:700;color:{_MUT};letter-spacing:1px;text-transform:uppercase">Overall</span>'
+                        f'</div>'
+                        f'{_score_html}'
+                        f'</div>'
+                        f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+                        f'{_stat(_bf, "Beam Failures")}'
+                        f'{_stat(_cf2, "Column Failures")}'
+                        f'</div>'
+                        f'{_mspan_html}'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # ── AI Recommendations ────────────────────────────────────────────
+                    _alts_tab = st.session_state.eval_alts
+                    if _alts_tab:
+                        st.markdown(
+                            f'<div class="panel-hdr" style="margin-top:16px;margin-bottom:6px">'
+                            f'AI Recommendations</div>',
+                            unsafe_allow_html=True,
+                        )
+                        # Cache metrics so re-runs don't re-evaluate 3x every time
+                        _mck = tuple(_alts_tab[:3])
+                        if st.session_state.get("_alt_mck") != _mck:
+                            st.session_state["_alt_mck"] = _mck
+                            st.session_state["_alt_mcache"] = [
+                                _compute_alt_metrics(
+                                    _a, layout_obj, er or {},
+                                    _mat_now, _sdl_now, _ll_now,
+                                )
+                                for _a in _alts_tab[:3]
+                            ]
+                        _mcache = st.session_state.get("_alt_mcache", [])
+
+                        def _metric_col(pct, label):
+                            if pct is None:
+                                clr, arrow, val = _MUT, "", "—"
+                            else:
+                                arrow = "↓" if pct < 0 else "↑"
+                                clr   = _PASS_C if pct < 0 else _FAIL
+                                val   = f"{abs(pct):.2f}%"
+                            return (
+                                f'<div style="flex:1;text-align:center">'
+                                f'<div style="font-size:.58rem;color:{_MUT};'
+                                f'font-weight:600;text-transform:uppercase;'
+                                f'letter-spacing:.5px;margin-bottom:3px">{label}</div>'
+                                f'<div style="font-size:.70rem;font-weight:700;'
+                                f'color:{clr}">{arrow} {val}</div>'
+                                f'</div>'
+                            )
+
+                        for _ri, _alt in enumerate(_alts_tab[:3]):
+                            _nc = [_NUM1_BG, _NUM2_BG, _NUM3_BG][min(_ri, 2)]
+                            _alt_lo = _alt.lower()
+                            if ("recommended" in _alt_lo
+                                    or _alt_lo.startswith("increase the")):
+                                _icss, _ilbl = "imp-high", "HIGH IMPACT"
+                            elif "upgrade all" in _alt_lo or "switch all" in _alt_lo:
+                                _icss, _ilbl = "imp-high", "HIGH IMPACT"
+                            elif ("add midspan" in _alt_lo or "add lateral" in _alt_lo
+                                  or "add transfer" in _alt_lo
+                                  or "add intermediate" in _alt_lo):
+                                _icss, _ilbl = "imp-med", "MED IMPACT"
+                            elif "upgrade " in _alt_lo:
+                                _icss, _ilbl = "imp-med", "MED IMPACT"
+                            else:
+                                _icss, _ilbl = "imp-low", "LOW IMPACT"
+                            if " — " in _alt:
+                                _rt, _rd = _alt.split(" — ", 1)
+                            elif " (" in _alt:
+                                _rt = _alt.split(" (")[0]
+                                _rd = "(" + _alt.split(" (", 1)[1]
+                            else:
+                                _rt, _rd = _alt, ""
+                            _rt = _rt.strip(); _rd = _rd.strip()
+                            _desc_html = (
+                                f'<div style="font-size:.63rem;color:{_MUT};'
+                                f'line-height:1.5;margin-top:6px">{_rd}</div>'
+                                if _rd else ""
+                            )
+                            _m = _mcache[_ri] if _ri < len(_mcache) else {}
+                            _metrics_html = (
+                                f'<div style="display:flex;gap:4px;margin-top:10px;'
+                                f'padding-top:8px;border-top:1px solid {_BORD}">'
+                                + _metric_col(_m.get("weight_pct"), "Weight")
+                                + _metric_col(_m.get("cost_pct"),   "Cost")
+                                + _metric_col(_m.get("defl_pct"),   "Max Deflection")
+                                + '</div>'
+                            ) if _m else ""
+                            st.markdown(
+                                f'<div class="rec-card" style="margin-bottom:6px">'
+                                f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+                                f'<span class="rec-n" style="background:{_nc};flex-shrink:0">{_ri+1}</span>'
+                                f'<span class="rec-title">{_rt}</span>'
+                                f'<span class="{_icss}">{_ilbl}</span>'
+                                f'</div>'
+                                f'{_desc_html}'
+                                f'{_metrics_html}'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                            _bc1, _bc2 = st.columns(2)
+                            with _bc1:
+                                if st.button(
+                                    "Preview", key=f"rec_prev_{_ri}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["preview_alt"] = _alt
+                                    st.session_state.viewer_nonce += 1
+                                    st.rerun()
+                            with _bc2:
+                                if st.button(
+                                    "Apply Change", key=f"rec_apply_{_ri}",
+                                    use_container_width=True, type="primary",
+                                ):
+                                    _new_ls, _new_ev = _apply_alternative(
+                                        _alt, json.dumps(layout_obj),
+                                        _mat_now, _sdl_now, _ll_now,
+                                    )
+                                    if _new_ev:
+                                        BEFORE_LAYOUT_PATH.write_text(
+                                            json.dumps(layout_obj), encoding="utf-8"
+                                        )
+                                        _write_json(EDITED_LAYOUT_PATH, json.loads(_new_ls))
+                                        st.session_state.eval_result = _new_ev
+                                        st.session_state.eval_alts = _get_failure_alternatives(
+                                            _new_ev, _mat_now
+                                        )
+                                        st.session_state.viewer_nonce += 1
+                                        st.rerun()
+
+        with _rt2:
+            _sel     = st.session_state.selected_el
+            _sel_obj = next(
+                (e for e in layout_obj.get("structure", []) if e["id"] == _sel), None
+            ) if _sel else None
+
+            if _sel_obj:
+                st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    f'<div style="font-size:.70rem;color:{_MUT};padding:4px 0">'
+                    f'Click an element in the plan to inspect it.</div>',
+                    unsafe_allow_html=True,
+                )
+
+            if er:
+                _fbeams = [b for b in er.get("beams", [])
+                           if not all([b.get("bend_PASS"), b.get("shear_PASS"),
+                                       b.get("defl_TL_PASS"), b.get("defl_LL_PASS")])]
+                _fcols  = [c for c in er.get("columns", [])
+                           if not all([c.get("stress_PASS"), c.get("buckling_PASS")])]
+                if _fbeams or _fcols:
+                    st.markdown(
+                        '<div class="panel-hdr" style="margin-top:8px">Critical Elements</div>',
+                        unsafe_allow_html=True,
+                    )
+                    _crit_html = ""
+                    for _b in _fbeams[:4]:
+                        _chks = [k for k, f in [
+                            ("bend",  not _b.get("bend_PASS")),
+                            ("shear", not _b.get("shear_PASS")),
+                            ("defl",  not _b.get("defl_TL_PASS") or not _b.get("defl_LL_PASS")),
+                        ] if f]
+                        _crit_html += (
+                            f'<div class="crit-item" '
+                            f'onclick="window.parent.postMessage({{type:\'selectElement\','
+                            f'elementId:\'{_b["id"]}\'}},\'*\')">'
+                            f'<b>{_b["id"]}</b> {_b.get("span_m",0):.1f}m'
+                            f'<span style="float:right;color:{_FAIL}">{", ".join(_chks)}</span></div>'
+                        )
+                    for _c in _fcols[:2]:
+                        _chks = [k for k, f in [
+                            ("stress", not _c.get("stress_PASS")),
+                            ("buck",   not _c.get("buckling_PASS")),
+                        ] if f]
+                        _crit_html += (
+                            f'<div class="crit-item" '
+                            f'onclick="window.parent.postMessage({{type:\'selectElement\','
+                            f'elementId:\'{_c["id"]}\'}},\'*\')">'
+                            f'<b>{_c["id"]}</b>'
+                            f'<span style="float:right;color:{_FAIL}">{", ".join(_chks)}</span></div>'
+                        )
+                    st.markdown(_crit_html, unsafe_allow_html=True)
+                elif er:
+                    st.markdown('<span class="pass-badge">✓ All elements pass</span>',
+                                unsafe_allow_html=True)
+
+            # ── Stress Hierarchy ──────────────────────────────────────────────
+            if er:
+                st.markdown(
+                    '<div class="panel-hdr" style="margin-top:10px">Stress Hierarchy</div>',
+                    unsafe_allow_html=True,
+                )
+                _hier_items = []
+                for _hb in er.get("beams", []):
+                    _hu = max(
+                        _hb.get("sigma_bend_MPa", 0) / max(_hb.get("allow_bend_MPa",  1), 1e-6),
+                        _hb.get("tau_MPa",         0) / max(_hb.get("allow_shear_MPa", 1), 1e-6),
+                        _hb.get("delta_total_mm",  0) / max(_hb.get("limit_TL_mm",     1), 1e-6),
+                    )
+                    _hier_items.append({
+                        "id": _hb.get("id", ""), "type": "Primary Girder",
+                        "util": _hu, "dim": f'{_hb.get("span_m", 0):.1f} m',
+                    })
+                for _hc in er.get("columns", []):
+                    _hu = max(
+                        _hc.get("sigma_comp_MPa", 0) / max(_hc.get("allow_comp_MPa", 1), 1e-6),
+                        (1 / max(_hc.get("SF_buckling", 3.0), 0.01)) * 3.0,
+                    )
+                    _hier_items.append({
+                        "id": _hc.get("id", ""), "type": "Column",
+                        "util": _hu, "dim": f'{_hc.get("trib_area_m2", 0):.1f} m²',
+                    })
+                _hier_items.sort(key=lambda x: x["util"], reverse=True)
+                _hh = '<div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">'
+                for _hi in _hier_items[:16]:
+                    _u    = min(_hi["util"], 1.0)
+                    _pct  = int(_u * 100)
+                    _pw   = f"{_u * 100:.0f}%"
+                    _hclr = ("#e05050" if _u >= 0.70 else
+                             "#e08020" if _u >= 0.50 else
+                             "#d4a800" if _u >= 0.35 else "#40d090")
+                    _hh += (
+                        f'<div style="display:flex;align-items:center;gap:5px;padding:2px 0">'
+                        f'<span style="width:7px;height:7px;border-radius:50%;'
+                        f'background:{_hclr};flex-shrink:0"></span>'
+                        f'<span style="font-size:.62rem;font-weight:700;color:#c8eeed;'
+                        f'width:48px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;'
+                        f'white-space:nowrap">{_hi["id"]}</span>'
+                        f'<span style="font-size:.58rem;color:#5a8080;flex:1;min-width:0;'
+                        f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+                        f'{_hi["type"]}</span>'
+                        f'<div style="width:68px;height:3px;background:#0d3030;'
+                        f'border-radius:2px;overflow:hidden;flex-shrink:0">'
+                        f'<div style="width:{_pw};height:100%;background:{_hclr};'
+                        f'border-radius:2px"></div></div>'
+                        f'<span style="font-size:.62rem;font-weight:700;color:{_hclr};'
+                        f'width:26px;text-align:right;flex-shrink:0">{_pct}%</span>'
+                        f'<span style="font-size:.58rem;color:#5a8080;width:36px;'
+                        f'text-align:right;flex-shrink:0">{_hi["dim"]}</span>'
+                        f'</div>'
+                    )
+                if not _hier_items:
+                    _hh += f'<div style="font-size:.70rem;color:#5a9090;padding:6px 0">Run structural analysis to see hierarchy.</div>'
+                _hh += '</div>'
+                st.markdown(_hh, unsafe_allow_html=True)
+
             st.markdown(
-                f'<div class="log-entry">{msg[:280]}{"…" if len(msg) > 280 else ""}</div>',
+                '<div class="panel-hdr" style="margin-top:10px">History</div>',
                 unsafe_allow_html=True,
             )
+            _sh = st.session_state.state_history
+            if not _sh:
+                st.markdown(
+                    f'<div style="font-size:.70rem;color:{_MUT}">No history yet.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                _hist_html = ""
+                for _h in reversed(_sh[-5:]):
+                    _hev  = (_h.get("eval_result") or {}).get("summary", {})
+                    _hbf  = _hev.get("beam_failures", 0)
+                    _hcf2 = _hev.get("column_failures", 0)
+                    _hp   = _hev.get("overall_PASS", None)
+                    _ht   = "Pass" if _hp else ("Fail" if _hp is False else "--")
+                    _hist_html += (
+                        f'<div class="hist-item">'
+                        f'<div class="hist-dot"></div>'
+                        f'<div><div class="hist-label">{_h["label"]}</div>'
+                        f'<div class="hist-sub">{_ht} · {_hbf}B {_hcf2}C</div></div></div>'
+                    )
+                st.markdown(_hist_html, unsafe_allow_html=True)
+
+            if _snaps:
+                with st.expander(f"Saved Snapshots ({len(_snaps)})", expanded=False):
+                    for _sn in _snaps:
+                        _sev   = (_sn.get("eval_result") or {}).get("summary", {})
+                        _sfail = _sev.get("beam_failures",0) + _sev.get("column_failures",0)
+                        _scf   = _sn.get("cost_flexibility")
+                        with st.expander(
+                            f"{_sn['label']} · {'OK' if _sfail==0 else f'{_sfail} fail'}",
+                            expanded=False,
+                        ):
+                            if _scf:
+                                _s1, _s2 = st.columns(2)
+                                _s1.metric("Net",  f"${_scf.get('net_cost_usd',0):+,.0f}")
+                                _s2.metric("Flex", f"{_scf.get('flexibility_score',0):.1f}/10")
+                            if st.button(f"Restore {_sn['label']}",
+                                         key=f"restore_{_sn['label']}"):
+                                _write_json(EDITED_LAYOUT_PATH, json.loads(_sn["layout_json"]))
+                                st.session_state.viewer_nonce += 1
+                                st.session_state.eval_result   = _sn.get("eval_result")
+                                st.session_state.eval_alts     = _get_failure_alternatives(
+                                    _sn.get("eval_result") or {}, _mat_now)
+                                st.rerun()
+
+            with st.expander("Output Log", expanded=False):
+                for _msg in reversed(st.session_state.output_log[-6:]):
+                    st.markdown(
+                        f'<div class="log-entry">{_msg[:220]}'
+                        f'{"…" if len(_msg)>220 else ""}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 2 — COMPARE
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_cmp:
+
+    _snaps_c = st.session_state.snapshots
+    _cvm_now = st.session_state.get("compare_view_mode", "2D")
+
+    def _snap_fails(s):
+        _ev_ = (s.get("eval_result") or {}).get("summary", {})
+        return _ev_.get("beam_failures", 0) + _ev_.get("column_failures", 0)
+
+    _cmp_opts = [
+        {"label": "Baseline", "sub": "Current design",
+         "layout_json": json.dumps(layout_obj),
+         "eval_result": er, "cost_flexibility": st.session_state.cost_flexibility}
+    ] + [
+        {"label": s["label"],
+         "sub":   "Pass" if _snap_fails(s) == 0 else f"{_snap_fails(s)} fail",
+         "layout_json":      s["layout_json"],
+         "eval_result":      s.get("eval_result"),
+         "cost_flexibility": s.get("cost_flexibility")}
+        for s in _snaps_c[:2]
+    ]
+    _n_opts = len(_cmp_opts)
+
+    _ctl1, _ctl2, _ctl3, _ctl4 = st.columns([2.5, 0.7, 0.7, 1.5], gap="small")
+    with _ctl1:
+        st.markdown(
+            f'<div style="font-size:.72rem;font-weight:700;color:{_TEXT};padding:5px 0">'
+            f'Comparing <b>{_n_opts}</b> of 3 max options</div>',
+            unsafe_allow_html=True,
+        )
+    with _ctl2:
+        if st.button("2D", key="cmp_2d", use_container_width=True,
+                     type="primary" if _cvm_now == "2D" else "secondary"):
+            st.session_state["compare_view_mode"] = "2D"
+            st.rerun()
+    with _ctl3:
+        if st.button("3D", key="cmp_3d", use_container_width=True,
+                     type="primary" if _cvm_now == "3D" else "secondary"):
+            st.session_state["compare_view_mode"] = "3D"
+            st.rerun()
+    with _ctl4:
+        _cmp_ids = st.checkbox("Show IDs",     value=False, key="cmp_labels")
+        _cmp_ev  = st.checkbox("Eval overlay", value=True,  key="cmp_eval")
+
+    if _n_opts == 1:
+        st.info("Save at least one snapshot in the Modify tab to compare options.")
+        st.markdown(
+            '<div class="cmp-card-hdr"><span class="cmp-title">Baseline</span>'
+            '<span class="badge-curr">Current Design</span></div>',
+            unsafe_allow_html=True,
+        )
+        components.html(
+            _render_floor_plan_html(
+                _normalize_layout(json.loads(_cmp_opts[0]["layout_json"])),
+                eval_result=_cmp_opts[0]["eval_result"] if _cmp_ev else None,
+                labels=_cmp_ids, height_px=440, is_light=_is_light,
+            ),
+            height=442, scrolling=False,
+        )
+    else:
+        _plan_cols = st.columns(_n_opts, gap="small")
+        _DOT_C = [_ACC, _ACC2, "#ffd060"]
+        for _ci, (_pcol, _co) in enumerate(zip(_plan_cols, _cmp_opts)):
+            with _pcol:
+                _badge = ('<span class="badge-curr">Current Design</span>'
+                          if _ci == 0 else f'<span class="badge-opt">Snapshot {_ci}</span>')
+                _dc = _DOT_C[min(_ci, 2)]
+                st.markdown(
+                    f'<div class="cmp-card-hdr">'
+                    f'<span style="display:flex;align-items:center;gap:6px">'
+                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_dc};'
+                    f'flex-shrink:0;display:inline-block"></span>'
+                    f'<span class="cmp-title">{_co["label"]}</span></span>'
+                    f'{_badge}</div>',
+                    unsafe_allow_html=True,
+                )
+                _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
+                _ph = 390 if _n_opts == 2 else 320
+                if _cvm_now == "2D":
+                    components.html(
+                        _render_floor_plan_html(
+                            _plan_ci,
+                            eval_result=_co["eval_result"] if _cmp_ev else None,
+                            labels=_cmp_ids, height_px=_ph, is_light=_is_light,
+                        ),
+                        height=_ph + 2, scrolling=False,
+                    )
+                else:
+                    if _viewer_is_reachable():
+                        _of = f"team_01_option_{_ci}.json" if _ci > 0 else ""
+                        components.iframe(
+                            _viewer_url(labels=_cmp_ids, option_file=_of),
+                            height=_ph + 2, scrolling=False,
+                        )
+                    else:
+                        components.html(
+                            _render_floor_plan_html(
+                                _plan_ci,
+                                eval_result=_co["eval_result"] if _cmp_ev else None,
+                                labels=_cmp_ids, height_px=_ph, is_light=_is_light,
+                            ),
+                            height=_ph + 2, scrolling=False,
+                        )
+
+    if _n_opts > 1:
+        _tbl_col, _ins_col = st.columns([1.7, 1.0], gap="small")
+
+        with _tbl_col:
+            st.markdown(
+                '<div class="panel-hdr" style="margin-top:10px">Summary Metrics</div>',
+                unsafe_allow_html=True,
+            )
+
+            def _get_m(co):
+                _ev_ = (co.get("eval_result") or {}).get("summary", {})
+                _cf_ = co.get("cost_flexibility") or {}
+                return {
+                    "Beam Failures": _ev_.get("beam_failures",  None),
+                    "Col Failures":  _ev_.get("column_failures", None),
+                    "Max Defl (mm)": _ev_.get("max_defl_mm",     None),
+                    "Net Cost ($)":  _cf_.get("net_cost_usd",    None),
+                }
+
+            _all_m   = [_get_m(c) for c in _cmp_opts]
+            _metrics = ["Beam Failures", "Col Failures", "Max Defl (mm)", "Net Cost ($)"]
+
+            def _fmt(v):
+                if v is None: return "—"
+                return f"{v:.1f}" if isinstance(v, float) else str(v)
+
+            _hrow  = "".join(f'<th>{c["label"]}</th>' for c in _cmp_opts)
+            _tbody = ""
+            for _mname in _metrics:
+                _vals = [_all_m[i][_mname] for i in range(_n_opts)]
+                _nums = [v for v in _vals if isinstance(v, (int, float))]
+                _best = min(_nums) if _nums else None
+                _cells = (
+                    f'<td style="text-align:left;color:{_MUT};font-size:.63rem;'
+                    f'font-weight:600">{_mname}</td>'
+                )
+                for _v in _vals:
+                    _cls = "cmp-best" if (_v is not None and _v == _best) else "cmp-norm"
+                    _cells += f'<td class="{_cls}">{_fmt(_v)}</td>'
+                _tbody += f'<tr style="background:{_BG}">{_cells}</tr>'
+
+            st.markdown(
+                f'<table class="cmp-tbl">'
+                f'<thead><tr><th style="text-align:left">Metric</th>{_hrow}</tr></thead>'
+                f'<tbody>{_tbody}</tbody></table>',
+                unsafe_allow_html=True,
+            )
+
+        with _ins_col:
+            st.markdown(
+                '<div class="panel-hdr" style="margin-top:10px">Comparison Insights</div>',
+                unsafe_allow_html=True,
+            )
+
+            def _best_opt(key, lower=True):
+                _vals = []
+                for _co in _cmp_opts:
+                    _ev_ = (_co.get("eval_result") or {}).get("summary", {})
+                    _cf_ = _co.get("cost_flexibility") or {}
+                    _v   = _ev_.get(key, _cf_.get(key))
+                    _vals.append((_co["label"], _v))
+                _valid = [(l, v) for l, v in _vals if isinstance(v, (int, float))]
+                if not _valid: return "—", "No data"
+                _bl, _bv = (min if lower else max)(_valid, key=lambda x: x[1])
+                return _bl, (f"{_bv:.1f}" if isinstance(_bv, float) else str(_bv))
+
+            _insights = [
+                ("🏆", "Best Stability",  *_best_opt("beam_failures", True),  "Fewest beam failures"),
+                ("📉", "Best Deflection", *_best_opt("max_defl_mm",   True),  "Lowest max deflection"),
+                ("💰", "Best Cost",       *_best_opt("net_cost_usd",  True),  "Lowest cost delta"),
+            ]
+            _ins_html = ""
+            for _ico, _lbl, _opt, _val, _det in _insights:
+                _ins_html += (
+                    f'<div class="insight-card">'
+                    f'<span class="insight-ico">{_ico}</span>'
+                    f'<div><div class="insight-lbl">{_lbl}</div>'
+                    f'<div class="insight-opt">{_opt}</div>'
+                    f'<div class="insight-det">{_det}: {_val}</div></div></div>'
+                )
+            st.markdown(_ins_html, unsafe_allow_html=True)
+
+            _best_lbl, _ = _best_opt("beam_failures", True)
+            _last        = st.session_state.get("last_comparison", "")
+            st.markdown(
+                f'<div class="rec-box">'
+                f'<div class="rec-box-lbl">Recommended Option</div>'
+                f'<div class="rec-box-txt"><b>{_best_lbl}</b> provides the best structural '
+                f'performance based on analysis.'
+                + (f' {_last[:180]}{"…" if len(_last)>180 else ""}' if _last else "")
+                + '</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    _rep1, _rep2, _rep3 = st.columns([2, 1, 1], gap="small")
+    with _rep1:
+        _slots = 2 - len(_snaps_c)
+        if _slots > 0:
+            st.caption(f"Save {_slots} more snapshot(s) in Modify tab to fill all comparison slots.")
+    with _rep2:
+        if _snaps_c and st.button("Reset", use_container_width=True, key="btn_reset_cmp"):
+            st.session_state.snapshots = []
+            st.rerun()
+    with _rep3:
+        st.download_button(
+            "Export Report",
+            data=json.dumps({"baseline": layout_obj,
+                             "options": [{"label": s["label"],
+                                          "layout": json.loads(s["layout_json"])}
+                                         for s in _snaps_c]},
+                            indent=2, ensure_ascii=False),
+            file_name="comparison_report.json",
+            mime="application/json",
+            use_container_width=True,
+        )
