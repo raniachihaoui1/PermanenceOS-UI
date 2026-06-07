@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import json
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+import plotly.graph_objects as go
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 REPO_ROOT           = Path(__file__).resolve().parents[2]
@@ -129,6 +130,253 @@ def _door_swing_points(a, b, fy_fn, n=12):
         t = t0 + (math.pi / 2) * (i / n)
         pts.append((a[0] + r * math.cos(t), fy_fn(a[1] + r * math.sin(t))))
     return " ".join(f"{x},{y}" for x, y in pts)
+
+
+def _render_floor_plan_plotly(
+    layout: dict,
+    eval_result: dict | None = None,
+    highlight: str = "",
+    labels: bool = False,
+    height_px: int = 510,
+    is_light: bool = False,
+    diff_on: bool = False,
+    before_layout: dict | None = None,
+):
+    """Return a Plotly figure of the floor plan with clickable structural elements."""
+    if is_light:
+        BG = "#f0f8f8"; ROOM_F = "rgba(218,234,234,0.80)"; ROOM_L = "#a0c8c8"
+        FG = "#1a3535"; ACCENT = "#088a87"
+        PASS_C = "#1a8050"; FAIL_C = "#cc2020"; SEL_C = "#c07800"; WIN_C = "#2060a0"
+    else:
+        BG = "#0c2020"; ROOM_F = "rgba(23,46,46,0.88)"; ROOM_L = "#1e4040"
+        FG = "#c8eeed"; ACCENT = "#2ac0c0"
+        PASS_C = "#40d090"; FAIL_C = "#ff5050"; SEL_C = "#ffd060"; WIN_C = "#4696dc"
+
+    el_status: dict[str, str] = {}
+    eval_map_b: dict = {}
+    eval_map_c: dict = {}
+    if eval_result:
+        for b in eval_result.get("beams", []):
+            ok = b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"]
+            el_status[b["id"]] = "pass" if ok else "fail"
+            eval_map_b[b["id"]] = b
+        for c in eval_result.get("columns", []):
+            ok = c["stress_PASS"] and c["buckling_PASS"]
+            el_status[c["id"]] = "pass" if ok else "fail"
+            eval_map_c[c["id"]] = c
+
+    traces: list = []
+    annotations: list = []
+
+    # ── ROOMS ─────────────────────────────────────────────────────────────────
+    for room in layout.get("rooms", []):
+        geo = room.get("geometry", [])
+        if len(geo) < 3:
+            continue
+        rxs = [p[0] for p in geo] + [geo[0][0]]
+        rys = [p[1] for p in geo] + [geo[0][1]]
+        rname = room.get("name", "")
+        area = abs(sum(
+            (geo[i][0]*geo[(i+1)%len(geo)][1] - geo[(i+1)%len(geo)][0]*geo[i][1])
+            for i in range(len(geo))
+        )) / 2
+        traces.append(go.Scatter(
+            x=rxs, y=rys, fill="toself",
+            fillcolor=ROOM_F,
+            line=dict(color=ROOM_L, width=0.8),
+            mode="lines", showlegend=False,
+            hovertemplate=(f"<b>{rname}</b><br>Area: {area:.1f} m²<extra></extra>"
+                           if rname else None),
+            hoverinfo=("skip" if not rname else None),
+        ))
+        if rname:
+            cx = sum(p[0] for p in geo) / len(geo)
+            cy = sum(p[1] for p in geo) / len(geo)
+            annotations.append(dict(
+                x=cx, y=cy, text=rname, showarrow=False,
+                font=dict(size=8, color=FG, family="monospace"),
+                opacity=0.55,
+            ))
+
+    # ── OUTLINE ───────────────────────────────────────────────────────────────
+    outline = layout.get("outline", [])
+    if len(outline) > 1:
+        traces.append(go.Scatter(
+            x=[p[0] for p in outline], y=[p[1] for p in outline],
+            mode="lines", line=dict(color=ACCENT, width=1.5),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── WINDOWS ───────────────────────────────────────────────────────────────
+    for win in layout.get("windows", []):
+        geo = win.get("geometry", [])
+        if len(geo) >= 2:
+            traces.append(go.Scatter(
+                x=[p[0] for p in geo], y=[p[1] for p in geo],
+                mode="lines", line=dict(color=WIN_C, width=1.5),
+                showlegend=False, hoverinfo="skip",
+            ))
+
+    # ── FURNITURE ─────────────────────────────────────────────────────────────
+    for furn in layout.get("furniture", []):
+        geo = furn.get("geometry", [])
+        if len(geo) >= 3:
+            fxs = [p[0] for p in geo] + [geo[0][0]]
+            fys = [p[1] for p in geo] + [geo[0][1]]
+            traces.append(go.Scatter(
+                x=fxs, y=fys, fill="toself",
+                fillcolor="rgba(200,238,237,0.06)",
+                line=dict(color=FG, width=0.5),
+                mode="lines", showlegend=False, hoverinfo="skip",
+            ))
+
+    structure = layout.get("structure", [])
+    beams = [s for s in structure if len(s.get("geometry", [])) == 2]
+    cols  = [s for s in structure if len(s.get("geometry", [])) == 1]
+
+    # ── BEAMS ─────────────────────────────────────────────────────────────────
+    for beam in beams:
+        eid = beam["id"]
+        geo = beam["geometry"]
+        p1, p2 = geo[0], geo[1]
+        status = el_status.get(eid, "none")
+        clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+        is_sel = eid == highlight
+        clr = SEL_C if is_sel else clr
+        lw = 4.5 if is_sel else 2.5
+
+        bev = eval_map_b.get(eid, {})
+        htxt = (
+            f"<b>{eid}</b><br>"
+            f"{beam.get('section_mm','?')} · {beam.get('material','?')}<br>"
+            f"Status: <b>{'✓' if status=='pass' else ('✗' if status=='fail' else '—')}</b>"
+        )
+        if bev:
+            htxt += (f"<br>σ = {bev.get('sigma_bend_MPa','?')} MPa"
+                     f"<br>δ = {bev.get('delta_total_mm','?')} mm")
+
+        traces.append(go.Scatter(
+            x=[p1[0], p2[0]], y=[p1[1], p2[1]],
+            mode="lines",
+            line=dict(color=clr, width=lw),
+            customdata=[[eid, "beam"], [eid, "beam"]],
+            name=eid, showlegend=False,
+            hovertemplate=htxt + "<extra></extra>",
+        ))
+        # Wide hit-area trace: dense markers along the beam so any click registers.
+        # Use opacity=0.001 (near-invisible but not excluded from browser hit-testing).
+        import math as _hm
+        _n = max(13, int(_hm.dist(p1, p2) * 3) + 2)
+        _hxs = [p1[0] + (p2[0] - p1[0]) * i / (_n - 1) for i in range(_n)]
+        _hys = [p1[1] + (p2[1] - p1[1]) * i / (_n - 1) for i in range(_n)]
+        traces.append(go.Scatter(
+            x=_hxs, y=_hys,
+            mode="markers",
+            marker=dict(size=18, color=clr, opacity=0.001, symbol="circle"),
+            customdata=[[eid, "beam"]] * _n,
+            name=eid, showlegend=False,
+            hovertemplate=htxt + "<extra></extra>",
+        ))
+        if labels:
+            mx, my = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
+            annotations.append(dict(
+                x=mx, y=my, text=eid, showarrow=False, yshift=7,
+                font=dict(size=7, color=clr, family="monospace"),
+            ))
+
+    # ── COLUMNS ───────────────────────────────────────────────────────────────
+    for col_el in cols:
+        eid = col_el["id"]
+        geo = col_el["geometry"]
+        cx, cy = geo[0][0], geo[0][1]
+        status = el_status.get(eid, "none")
+        clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+        is_sel = eid == highlight
+        clr = SEL_C if is_sel else clr
+        sz = 16 if is_sel else 10
+
+        cev = eval_map_c.get(eid, {})
+        htxt = (
+            f"<b>{eid}</b><br>"
+            f"{col_el.get('section_mm','?')} · {col_el.get('material','?')}<br>"
+            f"Status: <b>{'✓' if status=='pass' else ('✗' if status=='fail' else '—')}</b>"
+        )
+        if cev:
+            htxt += f"<br>σ = {cev.get('sigma_comp_MPa','?')} MPa"
+
+        traces.append(go.Scatter(
+            x=[cx], y=[cy],
+            mode="markers",
+            marker=dict(color=clr, size=sz, symbol="square",
+                        line=dict(color=BG, width=1.5)),
+            customdata=[[eid, "column"]],
+            name=eid, showlegend=False,
+            hovertemplate=htxt + "<extra></extra>",
+        ))
+        # Large invisible hit-area for columns so any nearby click registers.
+        traces.append(go.Scatter(
+            x=[cx], y=[cy],
+            mode="markers",
+            marker=dict(size=28, color=clr, opacity=0.001, symbol="circle"),
+            customdata=[[eid, "column"]],
+            name=eid, showlegend=False,
+            hovertemplate=htxt + "<extra></extra>",
+        ))
+        if labels:
+            annotations.append(dict(
+                x=cx, y=cy, text=eid, showarrow=False, yshift=-13,
+                font=dict(size=7, color=clr, family="monospace"),
+            ))
+
+    # ── DIFF: ghost of before layout ──────────────────────────────────────────
+    if diff_on and before_layout:
+        _bf_struct = before_layout.get("structure", [])
+        for _bel in _bf_struct:
+            _bg = _bel.get("geometry", [])
+            if len(_bg) == 2:
+                traces.insert(0, go.Scatter(
+                    x=[_bg[0][0], _bg[1][0]], y=[_bg[0][1], _bg[1][1]],
+                    mode="lines", line=dict(color=ACCENT, width=1.5, dash="dot"),
+                    opacity=0.25, showlegend=False, hoverinfo="skip",
+                ))
+            elif len(_bg) == 1:
+                traces.insert(0, go.Scatter(
+                    x=[_bg[0][0]], y=[_bg[0][1]],
+                    mode="markers",
+                    marker=dict(color=ACCENT, size=8, symbol="square", opacity=0.25),
+                    showlegend=False, hoverinfo="skip",
+                ))
+
+    # ── AXIS BOUNDS ───────────────────────────────────────────────────────────
+    all_pts: list = list(layout.get("outline", []))
+    for _key in ("rooms", "doors", "windows", "furniture", "structure"):
+        for _el in layout.get(_key, []):
+            all_pts.extend(_el.get("geometry", []))
+    if all_pts:
+        _axs = [p[0] for p in all_pts]; _ays = [p[1] for p in all_pts]
+        _span = max(max(_axs)-min(_axs), max(_ays)-min(_ays), 1)
+        _pad  = _span * 0.06 + 0.3
+        xr = [min(_axs)-_pad, max(_axs)+_pad]
+        yr = [min(_ays)-_pad, max(_ays)+_pad]
+    else:
+        xr = yr = [0, 10]
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        paper_bgcolor=BG, plot_bgcolor=BG,
+        margin=dict(l=0, r=0, t=0, b=0),
+        xaxis=dict(range=xr, constrain="domain",
+                   showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(range=yr, scaleanchor="x", scaleratio=1,
+                   showgrid=False, zeroline=False, showticklabels=False),
+        showlegend=False,
+        hovermode="closest",
+        clickmode="event+select",
+        dragmode="select",
+        annotations=annotations,
+        uirevision=f"plan-{len(structure)}",
+    )
+    return fig
 
 
 def _render_floor_plan_html(
@@ -894,8 +1142,28 @@ def _compute_alt_metrics(alt: str, layout_obj: dict, ev0: dict,
 
 # ── Agent chat ─────────────────────────────────────────────────────────────────
 
-def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) -> str:
+def _llm_is_reachable(timeout: float = 3.0) -> bool:
     try:
+        from _runtime.config import load_settings
+        import urllib.request as _ur
+        _s = load_settings()
+        _url = _s.base_url.rstrip("/").replace("/v1", "") + "/v1/models"
+        with _ur.urlopen(_url, timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) -> str:
+    import math as _math
+    import re as _re
+    try:
+        if not _llm_is_reachable():
+            return (
+                "LM Studio is not running. "
+                "Start LM Studio, load a model, then try again."
+            )
+
         from _runtime.bootstrap import bootstrap
         from _runtime.llm import call_llm
         from nodes.reason import SYSTEM_PROMPT
@@ -907,6 +1175,23 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
         structure    = layout.get("structure", [])
         beams        = [el for el in structure if len(el.get("geometry", [])) == 2]
         cols         = [el for el in structure if len(el.get("geometry", [])) == 1]
+        sdl          = st.session_state.get("sdl_kNm2", 3.5)
+        ll           = st.session_state.get("live_load_kNm2", 2.0)
+
+        # Build comprehensive structure summary (element IDs + sections + spans)
+        beam_lines, col_lines = [], []
+        for el in structure:
+            attrs = el.get("attributes", {})
+            geo   = el.get("geometry", [])
+            mat   = attrs.get("material", "RCC")
+            sec   = (attrs.get("section") or attrs.get("dimensions")
+                     or (f"{attrs.get('width','?')}x{attrs.get('depth','?')}"
+                         if attrs.get("depth") and attrs.get("width") else "?"))
+            if len(geo) == 2:
+                span = round(_math.dist(geo[0], geo[1]), 2)
+                beam_lines.append(f"{el['id']} {mat} {sec} {span}m")
+            elif len(geo) == 1:
+                col_lines.append(f"{el['id']} {mat} {sec}")
 
         eval_lines = ""
         if eval_result:
@@ -931,35 +1216,43 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                         f"(S={c['sigma_comp_MPa']}MPa, SF={c['SF_buckling']})"
                     )
 
+        col_summary  = ", ".join(col_lines[:30])  if col_lines  else "none generated yet"
+        beam_summary = ", ".join(beam_lines[:20]) if beam_lines else "none generated yet"
         context_msg = {
             "role": "user",
             "content": (
                 f"Context: Layout '{layout.get('layoutId', '?')}' has "
-                f"{len(cols)} columns and {len(beams)} beams.{eval_lines}\n\n"
-                f"Valid rooms: {[r.get('name') for r in layout.get('rooms', [])]}\n\n"
-                f"User request:\n{prompt}\n\n"
-                f"Layout summaries:\n"
-                f"{json.dumps({'layoutId': layout.get('layoutId'), 'rooms': [{'id': r['id'], 'name': r['name']} for r in layout.get('rooms', [])]})}"
+                f"{len(cols)} columns and {len(beams)} beams.{eval_lines}\n"
+                f"Columns: {col_summary}\n"
+                f"Beams: {beam_summary}\n\n"
+                f"User request:\n{prompt}"
             ),
         }
 
-        last_err: Exception | None = None
-        result = None
-        for _attempt in range(2):
-            try:
-                result = call_llm(ctx.llm, SYSTEM_PROMPT, [context_msg], tool_catalog)
-                break
-            except Exception as _e:
-                last_err = _e
-                if _attempt == 0:
-                    import time as _time; _time.sleep(1)
-        if result is None:
-            raise last_err  # type: ignore[misc]
+        result = call_llm(ctx.llm, SYSTEM_PROMPT, [context_msg], tool_catalog)
 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
             if any(c.get("name") == "tag_and_audit" for c in calls):
                 return "GENERATE_GRID"
+            for _c in calls:
+                _cname  = _c.get("name", "")
+                _cinput = _c.get("input", _c.get("arguments", {}))
+                # Map modify_structure tool → local function signals
+                if _cname == "modify_structure":
+                    _ms_action = _cinput.get("action", "")
+                    _ms_eid    = _cinput.get("element_id", "")
+                    if _ms_action == "remove" and _ms_eid:
+                        return f"APPLY_TOOL:{json.dumps({'name': 'remove_element', 'input': {'element_id': _ms_eid}})}"
+                    if _ms_action == "set_attribute" and _ms_eid:
+                        _ms_val = _cinput.get("value", "")
+                        if _ms_val:
+                            return f"APPLY_TOOL:{json.dumps({'name': 'upgrade_element_section', 'input': {'element_id': _ms_eid, 'new_section': _ms_val}})}"
+                elif _cname == "evaluate_structure":
+                    return "EVALUATE"
+                elif _cname in {"remove_element", "add_midspan_column",
+                                "upgrade_element_section"}:
+                    return f"APPLY_TOOL:{json.dumps({'name': _cname, 'input': _cinput})}"
             if calls:
                 first = calls[0]
                 return (
@@ -969,11 +1262,97 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
         resp = result.get("final_response", "")
         if not resp:
+            # LLM deferred to the in-app pipeline — handle based on intent.
+            _lower = prompt.lower()
+            # "what if" = simulation only; bare "remove/delete" = execute immediately
+            _is_explicit_whatif = any(kw in _lower for kw in
+                                      ("what if", "if i remove", "if we remove",
+                                       "if you remove", "without"))
+            _is_removal = any(kw in _lower for kw in ("remove", "delete"))
+
+            if not structure:
+                return (
+                    "No structural grid found. "
+                    "Click **Generate Grid**, then select an option."
+                )
+
+            # Shared ID resolver for both paths
+            _sm  = {el["id"].upper(): el["id"] for el in structure}
+            _snm = {el["id"].upper().replace("_", ""): el["id"] for el in structure}
+            def _rid(m: str):
+                k = m.upper()
+                return _sm.get(k) or _snm.get(k.replace("_", ""))
+            _pat = _re.findall(r'\b([A-Za-z]+_?\d+)\b', prompt, _re.IGNORECASE)
+            _ids_in_prompt = list(dict.fromkeys(
+                m for m in _pat if _rid(m) and len(m) <= 14
+            ))
+
+            # ── Imperative removal — execute immediately ──────────────────────
+            if _is_removal and not _is_explicit_whatif:
+                if _ids_in_prompt:
+                    _eid_exec = _rid(_ids_in_prompt[0])
+                    return f"APPLY_TOOL:{json.dumps({'name': 'remove_element', 'input': {'element_id': _eid_exec}})}"
+                _id_list = ", ".join(el["id"] for el in structure[:15])
+                return (
+                    f"Could not find that element ID. "
+                    f"Enable **Labels** to see exact IDs. "
+                    f"Available: {_id_list}{'…' if len(structure) > 15 else ''}."
+                )
+
+            # ── What-if simulation ─────────────────────────────────────────────
+            if _is_explicit_whatif or _is_removal:
+                _remove_ids = [_rid(m) for m in _ids_in_prompt]
+                if _remove_ids:
+                    from nodes.evaluate import simulate_what_if_removal, _beam_trib_widths
+                    _b_trib = _beam_trib_widths(beams)
+                    _wi = simulate_what_if_removal(
+                        json.dumps(layout), _remove_ids, _b_trib,
+                        ll_kNm2=ll, sdl_kNm2=sdl,
+                    )
+                    _aff  = _wi.get("affected_beams", [])
+                    _wism = _wi.get("summary", {})
+                    if not _aff:
+                        return (
+                            f"Removing **{', '.join(_remove_ids)}** does not directly "
+                            "affect any beam spans — the remaining structure can carry the load."
+                        )
+                    _lines = [
+                        f"**What-if: Remove {', '.join(_remove_ids)}**",
+                        f"Result: **{'FAIL' if not _wism.get('overall_PASS') else 'PASS'}** — "
+                        f"{_wism.get('failures', 0)} affected beam(s) would fail",
+                    ]
+                    for _r in _aff[:6]:
+                        _orig = _r.get("original_span_m", "?")
+                        _eff  = _r.get("effective_span_m")
+                        _stxt = (f"{_orig}m → {_eff}m" if _eff else "unsupported")
+                        _fails = [k for k, f in [
+                            ("bending",    not _r.get("bend_PASS",    True)),
+                            ("shear",      not _r.get("shear_PASS",   True)),
+                            ("deflection", not (_r.get("defl_TL_PASS", True)
+                                                 and _r.get("defl_LL_PASS", True))),
+                        ] if f]
+                        _st = f"  FAIL ({', '.join(_fails)})" if _fails else "  ok"
+                        _lines.append(f"• Beam **{_r['id']}**: span {_stxt}{_st}")
+                    if not _wism.get("overall_PASS"):
+                        _lines.append(
+                            "\nOptions: (1) Add intermediate column to halve the span, "
+                            "(2) Upgrade the beam section, "
+                            "(3) Add a transfer beam to redirect the load path."
+                        )
+                    return "\n".join(_lines)
+                _id_list = ", ".join(el["id"] for el in structure[:15])
+                return (
+                    f"Could not find that element ID. "
+                    f"Enable **Labels** to see exact IDs. "
+                    f"Available: {_id_list}{'…' if len(structure) > 15 else ''}."
+                )
+
             return "EVALUATE"
         return resp
     except Exception as e:
         msg = str(e)
-        if "empty response" in msg.lower() or "unavailable" in msg.lower() or "rate-limited" in msg.lower():
+        if any(kw in msg.lower() for kw in
+               ("empty response", "unavailable", "rate-limited", "rate limited")):
             return "The AI model is not responding right now — please try again in a moment."
         return f"Agent error: {msg}"
 
@@ -1037,6 +1416,7 @@ if _tb_diff in ("0", "1"):
 _tb_auto = st.query_params.get("_tb_auto", "")
 if _tb_auto in ("0", "1"):
     st.session_state["auto_eval"] = _tb_auto == "1"
+_aq_raw = st.query_params.get("_aq", "")
 
 _is_light = st.session_state.get("theme", "dark") == "light"
 
@@ -1051,7 +1431,7 @@ if _is_light:
     _LOW_BG="#c8ddf0";  _LOW_C="#2060a0"
     _LOAD_BG="#eef6f6"; _SNAP_BG="#e0eef0"
 else:
-    _BG="#071a1a"; _SB="#091f1f"; _CARD="#0d2828"; _ACC="#2ac0c0"; _ACC2="#40d090"
+    _BG="#071a1a"; _SB="#091f1f"; _CARD="#0d2828"; _ACC="#2ac0c0"; _ACC2="#222D28"
     _BORD="#1a4040"; _TEXT="#c8eeed"; _MUT="#5a9090"; _DIM="#3a6060"
     _FAIL="#ff5050"; _PASS_C="#40d090"; _PASS_BG="#0a3020"; _FAIL_BG="#300a0a"
     _CHAT_Q="#0a3030"; _CHAT_A="#071a1a"; _NUM1_BG=_ACC; _NUM1_C="#071a1a"
@@ -1211,9 +1591,9 @@ section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type summar
 .rec-met-pos{{font-size:.70rem;font-weight:700;color:{_PASS_C};font-family:{_F}}}
 .rec-met-neg{{font-size:.70rem;font-weight:700;color:{_FAIL};font-family:{_F}}}
 /* ── Chat & agent ──────────────────────────────────────────────────────── */
-.chat-q{{background:{_CHAT_Q};border-left:3px solid {_ACC};border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.70rem;color:{_TEXT};line-height:1.4;font-family:{_F}}}
-.chat-a{{background:{_CHAT_A};border-left:3px solid {_ACC2};border-radius:3px;padding:4px 7px;margin-bottom:3px;font-size:.70rem;color:{_TEXT};line-height:1.4;font-family:{_F}}}
-.agent-resp{{background:{_CHAT_Q};border-left:3px solid {_ACC};padding:7px 10px;border-radius:3px;font-size:.70rem;color:{_TEXT};line-height:1.5;margin-top:5px;font-family:{_F}}}
+.chat-q{{background:{_CHAT_Q};border-left:3px solid {_ACC};border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.80rem;color:{_TEXT};line-height:1.5;font-family:{_F}}}
+.chat-a{{background:{_CHAT_A};border-left:3px solid {_ACC2};border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.80rem;color:{_TEXT};line-height:1.5;font-family:{_F}}}
+.agent-resp{{background:{_CHAT_Q};border-left:3px solid {_ACC};padding:8px 10px;border-radius:3px;font-size:.80rem;color:{_TEXT};line-height:1.6;margin-top:5px;font-family:{_F}}}
 /* ── Element & analysis ────────────────────────────────────────────────── */
 .crit-item{{background:{"#fff4f4" if _is_light else "#200808"};border-left:3px solid {"#cc2020" if _is_light else "#aa2020"};padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.70rem;color:{_TEXT};cursor:pointer;font-family:{_F}}}
 .pass-badge{{background:{_PASS_BG};color:{_PASS_C};padding:2px 8px;border-radius:4px;font-weight:700;font-size:.70rem;display:inline-block;margin:3px 0;font-family:{_F}}}
@@ -1264,14 +1644,23 @@ button[aria-label="Open sidebar"],
 button[aria-label="collapse"],
 button[aria-label="expand"]{{display:none!important;pointer-events:none!important}}
 section[data-testid="stSidebar"]{{
-  width:280px!important;min-width:280px!important;max-width:280px!important;
+  width:320px!important;min-width:320px!important;max-width:320px!important;
   transform:translateX(0)!important;transition:none!important;visibility:visible!important}}
 section[data-testid="stSidebar"]>div:first-child{{
-  width:280px!important;padding:12px 12px 10px!important;overflow-y:auto!important}}
+  width:320px!important;padding:12px 14px 10px!important;overflow-y:auto!important}}
 .inp-toggle button{{
   padding:1px 6px!important;min-height:unset!important;font-size:.70rem!important;
   background:transparent!important;border:1px solid {_BORD}!important;
   color:{_MUT}!important;border-radius:4px!important;line-height:1.4!important;font-family:{_F}!important}}
+/* ── Compare tab: hide sidebar when 2nd tab is active (CSS :has) ─ */
+body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
+  section[data-testid="stSidebar"]{{display:none!important}}
+body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
+  [data-testid="stSidebarCollapsedControl"],
+body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
+  [data-testid="collapsedControl"]{{display:none!important}}
+body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
+  [data-testid="stMainBlockContainer"]{{padding-left:.8rem!important;max-width:100%!important}}
 """
 
 st.markdown(f"<style>{_CSS}</style>", unsafe_allow_html=True)
@@ -1298,6 +1687,9 @@ components.html("""
     } else if(ev.data.type==='toolbar'){
       url.searchParams.set('_tb_'+ev.data.key, ev.data.val);
       _rerun(url);
+    } else if(ev.data.type==='agentQuery'){
+      url.searchParams.set('_aq', ev.data.text.slice(0,600));
+      _rerun(url);
     }
   });
 })();
@@ -1313,6 +1705,124 @@ _mat_now        = st.session_state.material
 _sdl_now        = st.session_state.sdl_kNm2
 _ll_now         = st.session_state.live_load_kNm2
 
+# ─── agent drawer: process query + inject global slide-out panel ───────────────
+if _aq_raw.strip():
+    st.query_params["_aq"] = ""
+    _aq_resp = _run_agent_chat(_aq_raw, layout_obj, er)
+    if _aq_resp.startswith("APPLY_TOOL:"):
+        try:
+            _aq_td = json.loads(_aq_resp[len("APPLY_TOOL:"):])
+            _aq_tn, _aq_ti = _aq_td.get("name", ""), _aq_td.get("input", {})
+            if _aq_tn == "remove_element":
+                from nodes.modify import remove_element as _aq_rem
+                _aq_eid = _aq_ti.get("element_id", "")
+                if _aq_eid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_aq_rem(json.dumps(layout_obj), _aq_eid)))
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _aq_resp = f"Removed **{_aq_eid}** from the layout."
+            elif _aq_tn == "add_midspan_column":
+                from nodes.modify import add_midspan_column as _aq_amc
+                _aq_bid = _aq_ti.get("beam_id", "")
+                if _aq_bid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_aq_amc(json.dumps(layout_obj), _aq_bid)))
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _aq_resp = f"Added midspan column to **{_aq_bid}**."
+            elif _aq_tn == "upgrade_element_section":
+                from nodes.modify import upgrade_element_section as _aq_ups
+                _aq_uid = _aq_ti.get("element_id", "")
+                if _aq_uid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_aq_ups(json.dumps(layout_obj), _aq_uid)))
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _aq_resp = f"Upgraded section of **{_aq_uid}**."
+        except Exception as _aq_tex:
+            _aq_resp = f"Tool execution failed: {_aq_tex}"
+    st.session_state.history.append({"prompt": _aq_raw, "response": _aq_resp})
+    st.session_state.viewer_nonce += 1
+
+_drawer_bg    = "#ffffff" if _is_light else "#0d2828"
+_drawer_bord  = "#c0d8d8" if _is_light else "#1a4040"
+_drawer_text  = "#1a2a30" if _is_light else "#c8eeed"
+_drawer_acc   = "#088a87" if _is_light else "#2ac0c0"
+_drawer_mut   = "#5a7070" if _is_light else "#5a9090"
+_drawer_btn_c = "#ffffff" if _is_light else "#071a1a"
+
+_drawer_history_html = ""
+for _dh in st.session_state.get("history", [])[-3:]:
+    _dq = str(_dh.get("prompt", "")).replace("<", "&lt;").replace(">", "&gt;")
+    _da = str(_dh.get("response", "")).replace("<", "&lt;").replace(">", "&gt;")
+    _drawer_history_html += f'<div class="dq">You: {_dq}</div><div>{_da}</div>'
+_hist_js = json.dumps(_drawer_history_html)
+
+components.html(f"""<script>
+(function(){{
+  var par = window.parent.document;
+  var win = window.parent;
+  var _hh = {_hist_js};
+
+  // Always re-inject or update styles so they survive Streamlit hot-reloads
+  var _sid = 'agent-drawer-styles';
+  var _oldStyle = par.getElementById(_sid);
+  if(_oldStyle) _oldStyle.remove();
+  var style = par.createElement('style');
+  style.id = _sid;
+  style.textContent =
+    '#agent-drawer{{position:fixed;top:50%;right:0;transform:translateY(-50%) translateX(100%);transition:transform 0.28s cubic-bezier(.4,0,.2,1);width:290px;z-index:99999;background:{_drawer_bg};border:1px solid {_drawer_bord};border-right:none;border-radius:12px 0 0 12px;box-shadow:-6px 0 24px rgba(0,0,0,0.4);font-family:\'Suisse Intl\',\'Inter\',sans-serif;}}'
+    +'#agent-drawer.open{{transform:translateY(-50%) translateX(0);}}'
+    +'#agent-drawer-tab{{position:absolute;left:-30px;top:50%;transform:translateY(-50%);width:30px;height:52px;background:{_drawer_bg};border:1px solid {_drawer_bord};border-right:none;border-radius:10px 0 0 10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:{_drawer_acc};user-select:none;}}'
+    +'#agent-drawer-body{{padding:14px 14px 12px;}}'
+    +'#agent-drawer-title{{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:{_drawer_acc};margin-bottom:10px;}}'
+    +'#agent-drawer-history{{max-height:180px;overflow-y:auto;font-size:11px;color:{_drawer_mut};margin-bottom:10px;line-height:1.5;}}'
+    +'#agent-drawer-history .dq{{color:{_drawer_text};font-weight:600;}}'
+    +'#agent-drawer-input{{width:100%;box-sizing:border-box;background:rgba(128,128,128,0.08);border:1px solid {_drawer_bord};border-radius:6px;color:{_drawer_text};font-size:12px;padding:8px 10px;resize:none;font-family:inherit;margin-bottom:8px;}}'
+    +'#agent-drawer button{{width:100%;background:{_drawer_acc};color:{_drawer_btn_c};border:none;border-radius:6px;font-size:12px;font-weight:700;padding:7px;cursor:pointer;font-family:inherit;}}';
+  par.head.appendChild(style);
+
+  // Update history if panel already exists
+  var existing = par.getElementById('agent-drawer');
+  if(existing){{
+    var he = par.getElementById('agent-drawer-history');
+    if(he) he.innerHTML = _hh;
+    return;
+  }}
+
+  // Build panel — note: onclick runs in parent page context so call functions directly
+  var panel = par.createElement('div');
+  panel.id = 'agent-drawer';
+  panel.innerHTML =
+    '<div id="agent-drawer-tab" onclick="toggleDrawer()">&#9664;</div>'
+    +'<div id="agent-drawer-body">'
+    +'<div id="agent-drawer-title">Ask Agent</div>'
+    +'<div id="agent-drawer-history"></div>'
+    +'<textarea id="agent-drawer-input" placeholder="Ask about this design…" rows="3"></textarea>'
+    +'<button onclick="submitDrawerQuery()">Send ›</button>'
+    +'</div>';
+  par.body.appendChild(panel);
+  par.getElementById('agent-drawer-history').innerHTML = _hh;
+
+  // Define functions on parent window (global scope of the Streamlit page)
+  win._drawerOpen = false;
+  win.toggleDrawer = function(){{
+    win._drawerOpen = !win._drawerOpen;
+    par.getElementById('agent-drawer').classList.toggle('open', win._drawerOpen);
+    par.getElementById('agent-drawer-tab').innerHTML = win._drawerOpen ? '&#9654;' : '&#9664;';
+  }};
+  win.submitDrawerQuery = function(){{
+    var txt = par.getElementById('agent-drawer-input').value.trim();
+    if(!txt) return;
+    par.getElementById('agent-drawer-input').value = '';
+    var h = par.getElementById('agent-drawer-history');
+    h.innerHTML += '<div class="dq">You: '+txt.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div><div>Processing…</div>';
+    h.scrollTop = h.scrollHeight;
+    win.postMessage({{type:'agentQuery',text:txt}}, '*');
+  }};
+}})();
+</script>""", height=1)
 
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 prompt_input = ""
@@ -1365,6 +1875,22 @@ with st.sidebar:
                 f'<div class="sb-success">✓ Model loaded successfully</div>',
                 unsafe_allow_html=True,
             )
+            if st.button("↺ Reset to Default", use_container_width=True,
+                         key="btn_reset_layout"):
+                if DEFAULT_LAYOUT_PATH.exists():
+                    _write_json(EDITED_LAYOUT_PATH,
+                                _normalize_layout(_read_json(DEFAULT_LAYOUT_PATH)))
+                for _rk, _rv in {
+                    "eval_result": None, "eval_alts": [], "agent_log": [],
+                    "grid_options": [], "selected_grid": None,
+                    "cost_flexibility": None, "last_comparison": None,
+                    "history": [], "state_history": [], "output_log": [],
+                    "snapshots": [], "selected_el": "", "compare_mode": False,
+                    "_last_sel_applied": "\x00", "selected_opt_bar_idx": -1,
+                }.items():
+                    st.session_state[_rk] = _rv
+                st.session_state.viewer_nonce += 1
+                st.rerun()
 
         st.divider()
 
@@ -1422,7 +1948,16 @@ with st.sidebar:
             (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
                 json.dumps(_gopt_g["layout"], indent=2, ensure_ascii=False),
                 encoding="utf-8")
-        st.session_state["selected_opt_bar_idx"] = -1
+        # Auto-apply option 1 so the working layout has structure immediately.
+        if st.session_state.grid_options:
+            _auto_opt = st.session_state.grid_options[0].get("layout", {})
+            if _auto_opt:
+                _auto_before = (EDITED_LAYOUT_PATH.read_text(encoding="utf-8")
+                                if EDITED_LAYOUT_PATH.exists()
+                                else json.dumps(layout_obj))
+                BEFORE_LAYOUT_PATH.write_text(_auto_before, encoding="utf-8")
+                _write_json(EDITED_LAYOUT_PATH, _auto_opt)
+        st.session_state["selected_opt_bar_idx"] = 0
         st.rerun()
 
     if _gopts_sb:
@@ -1435,14 +1970,24 @@ with st.sidebar:
                     use_container_width=True,
                     type="primary" if _is_sel_sb else "secondary",
                 ):
+                    _opt_layout = _gopt_sb.get("layout", {})
                     _opt_ev = _gopt_sb.get("evaluation")
                     if _opt_ev is None:
                         with st.spinner(f"Evaluating Option {_bi+1}…"):
                             _opt_ev = _run_evaluate(
-                                json.dumps(_gopt_sb.get("layout", {})),
+                                json.dumps(_opt_layout),
                                 sdl=_sdl_now, ll=_ll_now)
                         if _opt_ev:
                             st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
+                    # Apply selected option to the working layout file so the
+                    # agent and Run Structural Analysis see the generated structure.
+                    if _opt_layout:
+                        _before_txt = (EDITED_LAYOUT_PATH.read_text(encoding="utf-8")
+                                       if EDITED_LAYOUT_PATH.exists()
+                                       else json.dumps(layout_obj))
+                        BEFORE_LAYOUT_PATH.write_text(_before_txt, encoding="utf-8")
+                        _write_json(EDITED_LAYOUT_PATH, _opt_layout)
+                        st.session_state.viewer_nonce += 1
                     st.session_state["selected_opt_bar_idx"] = _bi
                     st.session_state.eval_result = _opt_ev
                     st.session_state.eval_alts = _get_failure_alternatives(
@@ -1459,15 +2004,15 @@ with st.sidebar:
     _history = st.session_state.get("history", [])
     if _history:
         _bub = ""
-        for _msg in _history[-3:]:
+        for _msg in _history[-4:]:
             _q = _msg.get("prompt", "")
             _a = _msg.get("response", "")
             if _q:
-                _bub += f'<div class="chat-q">{_q[:90]}{"…" if len(_q)>90 else ""}</div>'
+                _bub += f'<div class="chat-q">{_q}</div>'
             if _a:
-                _bub += f'<div class="chat-a">{_a[:120]}{"…" if len(_a)>120 else ""}</div>'
+                _bub += f'<div class="chat-a">{_a}</div>'
         st.markdown(
-            f'<div style="max-height:90px;overflow-y:auto;margin-bottom:5px">{_bub}</div>',
+            f'<div style="max-height:260px;overflow-y:auto;margin-bottom:6px">{_bub}</div>',
             unsafe_allow_html=True,
         )
 
@@ -1507,7 +2052,51 @@ if submitted and prompt_input.strip():
         for _gi, _gopt in enumerate(st.session_state.grid_options, 1):
             (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
                 json.dumps(_gopt["layout"], indent=2, ensure_ascii=False), encoding="utf-8")
-        _resp = f"Generated {len(st.session_state.grid_options)} grid option(s)."
+        # Auto-apply option 1 to the working layout
+        if st.session_state.grid_options:
+            _ag_opt = st.session_state.grid_options[0].get("layout", {})
+            if _ag_opt:
+                BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                _write_json(EDITED_LAYOUT_PATH, _ag_opt)
+                st.session_state["selected_opt_bar_idx"] = 0
+        _resp = f"Generated {len(st.session_state.grid_options)} grid option(s). Option 1 applied."
+    elif _resp.startswith("APPLY_TOOL:"):
+        try:
+            _td = json.loads(_resp[len("APPLY_TOOL:"):])
+            _tn, _ti = _td.get("name", ""), _td.get("input", {})
+            if _tn == "remove_element":
+                from nodes.modify import remove_element as _rem_el
+                _eid = _ti.get("element_id", "")
+                if _eid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_rem_el(json.dumps(layout_obj), _eid)))
+                    st.session_state.viewer_nonce += 1
+                    # Drop option preview so the 2D/3D view reads the modified file
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _resp = f"Removed **{_eid}** from the layout."
+            elif _tn == "add_midspan_column":
+                from nodes.modify import add_midspan_column as _amc
+                _bid = _ti.get("beam_id", "")
+                if _bid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_amc(json.dumps(layout_obj), _bid)))
+                    st.session_state.viewer_nonce += 1
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _resp = f"Added midspan column to **{_bid}**."
+            elif _tn == "upgrade_element_section":
+                from nodes.modify import upgrade_element_section as _ups
+                _uid = _ti.get("element_id", "")
+                if _uid:
+                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+                    _write_json(EDITED_LAYOUT_PATH,
+                                json.loads(_ups(json.dumps(layout_obj), _uid)))
+                    st.session_state.viewer_nonce += 1
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _resp = f"Upgraded section of **{_uid}**."
+        except Exception as _tex:
+            _resp = f"Tool execution failed: {_tex}"
     elif _resp == "EVALUATE":
         from nodes.modify import apply_material_override
         _ls_ag = apply_material_override(json.dumps(layout_obj), _mat_now)
@@ -1656,19 +2245,54 @@ with tab_mod:
         st.rerun()
 
     if _run_clicked:
-        from nodes.modify import apply_material_override
-        _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
-        BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-        _write_json(EDITED_LAYOUT_PATH, json.loads(_ls2))
-        st.session_state.viewer_nonce += 1
-        with st.spinner("Evaluating structure…"):
-            _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
-        if _ev2:
-            st.session_state.eval_result = _ev2
-            st.session_state.eval_alts   = _get_failure_alternatives(_ev2, _mat_now)
-        st.rerun()
+        _struct_els = layout_obj.get("structure", [])
+        if not _struct_els:
+            st.warning(
+                "No structural elements found. "
+                "Generate a structural grid first using the Agent or the Generate Grid button.",
+                icon="⚠️",
+            )
+        else:
+            from nodes.modify import apply_material_override
+            _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
+            BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
+            _write_json(EDITED_LAYOUT_PATH, json.loads(_ls2))
+            st.session_state.viewer_nonce += 1
+            with st.spinner("Evaluating structure…"):
+                _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
+            if _ev2:
+                st.session_state.eval_result = _ev2
+                st.session_state.eval_alts   = _get_failure_alternatives(_ev2, _mat_now)
+                # Keep the selected option's evaluation in sync so the ANALYSIS tab shows results
+                _oi_run = st.session_state.get("selected_opt_bar_idx", -1)
+                _gopts_run = st.session_state.grid_options
+                if 0 <= _oi_run < len(_gopts_run):
+                    st.session_state.grid_options[_oi_run]["evaluation"] = _ev2
+                elif _gopts_run:
+                    st.session_state.grid_options[0]["evaluation"] = _ev2
+                    st.session_state["selected_opt_bar_idx"] = 0
+                _ev2_sm = _ev2.get("summary", {})
+                _ev2_pass = _ev2_sm.get("overall_PASS")
+                _ev2_bf   = _ev2_sm.get("beam_failures", 0)
+                _ev2_cf   = _ev2_sm.get("column_failures", 0)
+                _ev2_sc   = _ev2_sm.get("score")
+                _ev2_icon = "✅" if _ev2_pass else "❌"
+                _ev2_lbl  = "PASS" if _ev2_pass else "FAIL"
+                st.markdown(
+                    f'<div style="background:{"rgba(40,180,100,0.12)" if _ev2_pass else "rgba(200,40,40,0.12)"};'
+                    f'border:1px solid {"#40d090" if _ev2_pass else "#ff5050"};'
+                    f'border-radius:8px;padding:10px 14px;margin:6px 0;font-family:{_F}">'
+                    f'<span style="font-size:1.1rem;font-weight:800;color:{"#40d090" if _ev2_pass else "#ff5050"}">'
+                    f'{_ev2_icon} {_ev2_lbl}</span>'
+                    f'<span style="font-size:.75rem;color:{_MUT};margin-left:10px">'
+                    f'{_ev2_bf} beam fail · {_ev2_cf} col fail'
+                    f'{f" · score {_ev2_sc:.0f}/100" if _ev2_sc is not None else ""}'
+                    f'</span></div>',
+                    unsafe_allow_html=True,
+                )
+            st.rerun()
 
-    # ── Toolbar state (overlay rendered inside floor plan HTML) ───────────────
+    # ── Toolbar + viewer ─────────────────────────────────────────────────────
     _vm = st.session_state.get("view_mode", "2D")
 
     _snaps = st.session_state.snapshots
@@ -1680,7 +2304,7 @@ with tab_mod:
         )
         st.markdown(_pills, unsafe_allow_html=True)
 
-    # ── Option selection (handled by sidebar buttons; resolve preview file here) ─
+    # ── Option selection ──────────────────────────────────────────────────────
     _gopts_bar = st.session_state.grid_options
     _sel_opt_i = st.session_state.get("selected_opt_bar_idx", -1)
 
@@ -1702,19 +2326,68 @@ with tab_mod:
     _main_col, _right_col = st.columns([1.65, 0.75], gap="small")
 
     with _main_col:
+        # Native toolbar (replaces the in-iframe JS bridge toolbar)
+        _tb1, _tb2, _tb3, _tb4, _ = st.columns([0.55, 0.7, 0.6, 0.6, 4], gap="small")
+        with _tb1:
+            if st.button("3D" if _vm == "2D" else "2D",
+                         key="tb_vm_btn", use_container_width=True):
+                st.session_state["view_mode"] = "3D" if _vm == "2D" else "2D"
+                st.rerun()
+        with _tb2:
+            _new_lab = st.toggle("Labels", value=st.session_state.labels_on,
+                                 key="tb_lab_tog")
+            if _new_lab != st.session_state.labels_on:
+                st.session_state.labels_on = _new_lab
+        with _tb3:
+            _new_diff = st.toggle("Diff", value=st.session_state.compare_mode,
+                                  key="tb_diff_tog")
+            if _new_diff != st.session_state.compare_mode:
+                st.session_state.compare_mode = _new_diff
+        with _tb4:
+            _new_auto = st.toggle("Auto", value=st.session_state.get("auto_eval", True),
+                                  key="tb_auto_tog")
+            if _new_auto != st.session_state.get("auto_eval", True):
+                st.session_state["auto_eval"] = _new_auto
+
         if _vm == "2D":
-            components.html(
-                _render_floor_plan_html(
-                    _plan_layout, eval_result=er,
-                    highlight=st.session_state.selected_el,
-                    labels=st.session_state.labels_on,
-                    height_px=510, is_light=_is_light,
-                    view_mode=_vm,
-                    diff_on=st.session_state.compare_mode,
-                    auto_on=st.session_state.get("auto_eval", True),
-                ),
-                height=512, scrolling=False,
+            _before_lay = None
+            if st.session_state.compare_mode and BEFORE_LAYOUT_PATH.exists():
+                try:
+                    _before_lay = _normalize_layout(
+                        json.loads(BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")))
+                except Exception:
+                    pass
+            _fig2d = _render_floor_plan_plotly(
+                _plan_layout, eval_result=er,
+                highlight=st.session_state.selected_el,
+                labels=st.session_state.labels_on,
+                height_px=510, is_light=_is_light,
+                diff_on=st.session_state.compare_mode,
+                before_layout=_before_lay,
             )
+            _sel_ev = st.plotly_chart(
+                _fig2d, on_select="rerun",
+                use_container_width=True,
+                config=dict(
+                    scrollZoom=True, displaylogo=False,
+                    modeBarButtonsToRemove=["lasso2d", "select2d",
+                                            "zoomIn2d", "zoomOut2d",
+                                            "autoScale2d"],
+                ),
+                key="floor_plan_plotly",
+            )
+            # Handle element selection from click
+            if _sel_ev:
+                try:
+                    _pts = _sel_ev.selection.points
+                    if _pts:
+                        _cd = getattr(_pts[0], "customdata", None)
+                        if _cd and str(_cd[0]) != st.session_state.selected_el:
+                            st.session_state.selected_el = str(_cd[0])
+                            st.session_state["_last_sel_applied"] = str(_cd[0])
+                            st.rerun()
+                except Exception:
+                    pass
         else:
             if _viewer_is_reachable():
                 components.iframe(
@@ -1727,16 +2400,16 @@ with tab_mod:
                     height=512, scrolling=False,
                 )
             else:
-                st.caption("3D viewer offline — run `python -m http.server 8000` from repo root.")
-                components.html(
-                    _render_floor_plan_html(
-                        _plan_layout, eval_result=er,
-                        highlight=st.session_state.selected_el,
-                        labels=st.session_state.labels_on,
-                        height_px=510, is_light=_is_light,
-                    ),
-                    height=512, scrolling=False,
+                st.info("3D viewer requires `python -m http.server 8000` from the repo root.")
+                _fig2d_fb = _render_floor_plan_plotly(
+                    _plan_layout, eval_result=er,
+                    highlight=st.session_state.selected_el,
+                    labels=st.session_state.labels_on,
+                    is_light=_is_light,
                 )
+                st.plotly_chart(_fig2d_fb, use_container_width=True,
+                                config=dict(scrollZoom=True, displaylogo=False),
+                                key="floor_plan_3d_fb")
 
         st.markdown(
             '<div class="plan-legend">'
@@ -2146,8 +2819,12 @@ with tab_mod:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_cmp:
 
+    # ── Data ─────────────────────────────────────────────────────────────────
     _snaps_c = st.session_state.snapshots
     _cvm_now = st.session_state.get("compare_view_mode", "2D")
+    _cmp_ids = st.session_state.get("cmp_labels", False)
+    _cmp_ev  = st.session_state.get("cmp_eval",   True)
+    _DOT_C   = [_ACC, _ACC2, "#ffd060"]
 
     def _snap_fails(s):
         _ev_ = (s.get("eval_result") or {}).get("summary", {})
@@ -2167,199 +2844,367 @@ with tab_cmp:
     ]
     _n_opts = len(_cmp_opts)
 
-    _ctl1, _ctl2, _ctl3, _ctl4 = st.columns([2.5, 0.7, 0.7, 1.5], gap="small")
-    with _ctl1:
-        st.markdown(
-            f'<div style="font-size:.72rem;font-weight:700;color:{_TEXT};padding:5px 0">'
-            f'Comparing <b>{_n_opts}</b> of 3 max options</div>',
-            unsafe_allow_html=True,
-        )
-    with _ctl2:
-        if st.button("2D", key="cmp_2d", use_container_width=True,
-                     type="primary" if _cvm_now == "2D" else "secondary"):
-            st.session_state["compare_view_mode"] = "2D"
-            st.rerun()
-    with _ctl3:
-        if st.button("3D", key="cmp_3d", use_container_width=True,
-                     type="primary" if _cvm_now == "3D" else "secondary"):
-            st.session_state["compare_view_mode"] = "3D"
-            st.rerun()
-    with _ctl4:
-        _cmp_ids = st.checkbox("Show IDs",     value=False, key="cmp_labels")
-        _cmp_ev  = st.checkbox("Eval overlay", value=True,  key="cmp_eval")
+    # ── Metric helpers ────────────────────────────────────────────────────────
+    def _co_weight(co):
+        return _eval_weight_cost(co.get("eval_result") or {})[0]
 
-    if _n_opts == 1:
-        st.info("Save at least one snapshot in the Modify tab to compare options.")
+    def _co_cost(co):
+        cf = co.get("cost_flexibility") or {}
+        if cf.get("net_cost_usd") is not None:
+            return float(cf["net_cost_usd"])
+        return _eval_weight_cost(co.get("eval_result") or {})[1]
+
+    def _co_max_defl(co):
+        bs = (co.get("eval_result") or {}).get("beams", [])
+        return max((b.get("delta_total_mm", 0) for b in bs), default=None) if bs else None
+
+    def _co_max_util(co):
+        ev  = co.get("eval_result") or {}
+        rat = []
+        for b in ev.get("beams", []):
+            if b.get("allow_bend_MPa"):
+                rat.append(b["sigma_bend_MPa"] / b["allow_bend_MPa"])
+            if b.get("allow_shear_MPa"):
+                rat.append(b["tau_MPa"] / b["allow_shear_MPa"])
+            if b.get("limit_TL_mm"):
+                rat.append(b["delta_total_mm"] / b["limit_TL_mm"])
+        for c in ev.get("columns", []):
+            if c.get("allow_comp_MPa"):
+                rat.append(c["sigma_comp_MPa"] / c["allow_comp_MPa"])
+        return round(max(rat) * 100, 1) if rat else None
+
+    def _best_from(pairs, lower=True):
+        valid = [(l, v) for l, v in pairs if isinstance(v, (int, float))]
+        if not valid:
+            return "—", None
+        return (min if lower else max)(valid, key=lambda x: x[1])
+
+    # ── Report options bar ────────────────────────────────────────────────────
+    _rp1, _rp2, _rp3, _rp4 = st.columns([3.5, 0.9, 0.9, 0.7], gap="small")
+    with _rp1:
         st.markdown(
-            '<div class="cmp-card-hdr"><span class="cmp-title">Baseline</span>'
-            '<span class="badge-curr">Current Design</span></div>',
+            f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
+            f'text-transform:uppercase;letter-spacing:1px;padding:6px 0">'
+            f'Report Options</div>',
             unsafe_allow_html=True,
         )
-        components.html(
-            _render_floor_plan_html(
-                _normalize_layout(json.loads(_cmp_opts[0]["layout_json"])),
-                eval_result=_cmp_opts[0]["eval_result"] if _cmp_ev else None,
-                labels=_cmp_ids, height_px=440, is_light=_is_light,
+    with _rp2:
+        st.download_button(
+            "↓ Export JSON", use_container_width=True,
+            data=json.dumps(
+                {"baseline": layout_obj,
+                 "options":  [{"label": s["label"],
+                               "layout": json.loads(s["layout_json"])}
+                              for s in _snaps_c]},
+                indent=2, ensure_ascii=False,
             ),
-            height=442, scrolling=False,
+            file_name="comparison_report.json",
+            mime="application/json",
+            key="cmp_export_json",
         )
-    else:
-        _plan_cols = st.columns(_n_opts, gap="small")
-        _DOT_C = [_ACC, _ACC2, "#ffd060"]
-        for _ci, (_pcol, _co) in enumerate(zip(_plan_cols, _cmp_opts)):
-            with _pcol:
-                _badge = ('<span class="badge-curr">Current Design</span>'
-                          if _ci == 0 else f'<span class="badge-opt">Snapshot {_ci}</span>')
-                _dc = _DOT_C[min(_ci, 2)]
-                st.markdown(
-                    f'<div class="cmp-card-hdr">'
-                    f'<span style="display:flex;align-items:center;gap:6px">'
-                    f'<span style="width:8px;height:8px;border-radius:50%;background:{_dc};'
-                    f'flex-shrink:0;display:inline-block"></span>'
-                    f'<span class="cmp-title">{_co["label"]}</span></span>'
-                    f'{_badge}</div>',
-                    unsafe_allow_html=True,
+    with _rp3:
+        st.button("↓ Export PDF", use_container_width=True, disabled=True,
+                  key="cmp_export_pdf")
+    with _rp4:
+        if st.button("✕ Reset", use_container_width=True, key="btn_reset_cmp"):
+            st.session_state.snapshots = []
+            st.rerun()
+
+    # ── 3-column layout ───────────────────────────────────────────────────────
+    _lcol, _ccol, _rcol = st.columns([1.6, 5.5, 2.0], gap="small")
+
+    # ── LEFT: Comparison Set + View Settings ──────────────────────────────────
+    with _lcol:
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:4px">Comparison Set</div>',
+            unsafe_allow_html=True,
+        )
+        for _ci, _co in enumerate(_cmp_opts):
+            _dc = _DOT_C[min(_ci, 2)]
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:7px;'
+                f'padding:5px 8px;margin-bottom:3px;border-radius:6px;'
+                f'background:{"#eef7f7" if _is_light else "#0d2828"}">'
+                f'<span style="width:8px;height:8px;border-radius:50%;'
+                f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
+                f'<div>'
+                f'<div style="font-size:.70rem;font-weight:700;color:{_TEXT}">'
+                f'{_co["label"]}</div>'
+                f'<div style="font-size:.58rem;color:{_MUT}">{_co["sub"]}</div>'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+        if len(_snaps_c) < 2:
+            st.markdown(
+                f'<div style="font-size:.60rem;color:{_MUT};'
+                f'padding:4px 8px;border:1px dashed {_BORD};'
+                f'border-radius:6px;margin-top:3px">'
+                f'+ Add Option — save a snapshot in Modify tab</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:12px">View Settings</div>',
+            unsafe_allow_html=True,
+        )
+        _vs1, _vs2 = st.columns(2, gap="small")
+        with _vs1:
+            if st.button("2D", key="cmp_2d", use_container_width=True,
+                         type="primary" if _cvm_now == "2D" else "secondary"):
+                st.session_state["compare_view_mode"] = "2D"
+                st.rerun()
+        with _vs2:
+            if st.button("3D", key="cmp_3d", use_container_width=True,
+                         type="primary" if _cvm_now == "3D" else "secondary"):
+                st.session_state["compare_view_mode"] = "3D"
+                st.rerun()
+        _cmp_ids = st.toggle("Overlay IDs",   value=_cmp_ids, key="cmp_labels")
+        _cmp_ev  = st.toggle("Eval overlay",  value=_cmp_ev,  key="cmp_eval")
+
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:12px">Display</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div style="font-size:.63rem;color:{_TEXT};line-height:2.0">'
+            f'<span style="margin-right:10px">☑ Columns</span>'
+            f'<span>☑ Beams</span><br>'
+            f'<span style="margin-right:18px">☑ Walls</span>'
+            f'<span>☑ Supports</span></div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:12px">Legend</div>',
+            unsafe_allow_html=True,
+        )
+        _legend_items = [
+            ("#7cb2ff", "Rooms"),
+            ("#9b7cff", "Furniture / MEP"),
+            ("#3a70e0", "Columns"),
+            ("#ffd36a", "Beams / Walls"),
+            ("#ff8a7a", "Doors"),
+            ("#8ad4ff", "Windows"),
+        ]
+        _leg_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 8px;margin-top:2px">'
+        for _lc, _ll in _legend_items:
+            _leg_html += (
+                f'<div style="display:flex;align-items:center;gap:5px;'
+                f'font-size:.60rem;color:{_MUT}">'
+                f'<span style="width:8px;height:8px;border-radius:50%;'
+                f'background:{_lc};flex-shrink:0;display:inline-block"></span>'
+                f'{_ll}</div>'
+            )
+        _leg_html += '</div>'
+        st.markdown(_leg_html, unsafe_allow_html=True)
+
+        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
+        if st.button("Reset View", key="cmp_reset_view", use_container_width=True):
+            st.session_state["compare_view_mode"] = "2D"
+            st.session_state["cmp_labels"] = False
+            st.session_state["cmp_eval"]   = True
+            st.rerun()
+
+    # ── CENTER: Summary Metrics + Floor Plans ─────────────────────────────────
+    with _ccol:
+        if _n_opts < 2:
+            st.markdown(
+                f'<div style="font-size:.70rem;color:{_MUT};padding:40px 8px;'
+                f'text-align:center;line-height:1.9">'
+                f'Save at least one snapshot in the <b>Modify tab</b> '
+                f'to start comparing options.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            # ── Summary Metrics row ────────────────────────────────────────────
+            st.markdown(
+                f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
+                f'text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">'
+                f'Summary Metrics</div>',
+                unsafe_allow_html=True,
+            )
+
+            def _delta_badge(val, base, lower_good=True):
+                if val is None or base is None or abs(base) < 0.001:
+                    return ""
+                d    = (val - base) / abs(base) * 100
+                good = (d < 0) if lower_good else (d > 0)
+                clr  = _PASS_C if good else _FAIL
+                arr  = "↓" if d < 0 else "↑"
+                return (f'<span style="font-size:.58rem;font-weight:700;'
+                        f'color:{clr};margin-left:3px">{arr}&nbsp;{abs(d):.1f}%</span>')
+
+            def _met_card(title, unit, vals, fmt=".1f", lower_good=True):
+                base = vals[0]
+                html = (
+                    f'<div style="flex:1;border:1px solid {_BORD};border-radius:8px;'
+                    f'padding:10px 12px;background:{_CARD};min-width:0">'
+                    f'<div style="font-size:.58rem;font-weight:700;color:{_MUT};'
+                    f'text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">'
+                    f'{title}</div>'
+                    f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:8px">'
+                    f'({unit})</div>'
+                    f'<div style="display:flex;gap:6px">'
                 )
-                _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
-                _ph = 390 if _n_opts == 2 else 320
-                if _cvm_now == "2D":
-                    components.html(
-                        _render_floor_plan_html(
+                for _i, (_co, _v) in enumerate(zip(_cmp_opts, vals)):
+                    _vstr = (f'{_v:{fmt}}' if isinstance(_v, (int, float)) else "—")
+                    _dlta = "" if _i == 0 else _delta_badge(_v, base, lower_good)
+                    _lbl_clr = _MUT if _i == 0 else (
+                        (_PASS_C if (isinstance(_v, (int, float)) and isinstance(base, (int, float))
+                                     and ((_v < base) if lower_good else (_v > base)))
+                         else _TEXT)
+                    )
+                    html += (
+                        f'<div style="flex:1;min-width:0;text-align:center">'
+                        f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:2px;'
+                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                        f'{_co["label"]}</div>'
+                        f'<div style="font-size:.75rem;font-weight:800;color:{_lbl_clr}">'
+                        f'{_vstr}</div>'
+                        f'{_dlta}</div>'
+                    )
+                html += '</div></div>'
+                return html
+
+            _wvals = [_co_weight(c)   for c in _cmp_opts]
+            _cvals = [_co_cost(c)     for c in _cmp_opts]
+            _dvals = [_co_max_defl(c) for c in _cmp_opts]
+            _uvals = [_co_max_util(c) for c in _cmp_opts]
+
+            st.markdown(
+                f'<div style="display:flex;gap:8px;margin-bottom:14px">'
+                + _met_card("Total Weight",    "kN",  _wvals, ".1f")
+                + _met_card("Total Cost",      "USD", _cvals, ".0f")
+                + _met_card("Max Deflection",  "mm",  _dvals, ".1f")
+                + _met_card("Max Utilization", "%",   _uvals, ".1f")
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+
+            # ── Floor plan columns ─────────────────────────────────────────────
+            _pcols = st.columns(_n_opts, gap="small")
+            for _ci, (_pcol, _co) in enumerate(zip(_pcols, _cmp_opts)):
+                with _pcol:
+                    _dc = _DOT_C[min(_ci, 2)]
+                    _badge = (
+                        '<span class="badge-curr">Current Design</span>'
+                        if _ci == 0 else
+                        f'<span class="badge-opt">Applied Changes ({_ci})</span>'
+                    )
+                    st.markdown(
+                        f'<div class="cmp-card-hdr">'
+                        f'<span style="display:flex;align-items:center;gap:6px">'
+                        f'<span style="width:8px;height:8px;border-radius:50%;'
+                        f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
+                        f'<span class="cmp-title">{_co["label"]}</span></span>'
+                        f'{_badge}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
+                    _ph = 300 if _n_opts == 3 else 360
+                    if _cvm_now == "2D":
+                        _fig_ci = _render_floor_plan_plotly(
                             _plan_ci,
                             eval_result=_co["eval_result"] if _cmp_ev else None,
                             labels=_cmp_ids, height_px=_ph, is_light=_is_light,
-                        ),
-                        height=_ph + 2, scrolling=False,
-                    )
-                else:
-                    if _viewer_is_reachable():
-                        _of = f"team_01_option_{_ci}.json" if _ci > 0 else ""
-                        components.iframe(
-                            _viewer_url(labels=_cmp_ids, option_file=_of),
-                            height=_ph + 2, scrolling=False,
+                        )
+                        st.plotly_chart(
+                            _fig_ci, use_container_width=True,
+                            config=dict(scrollZoom=True, displaylogo=False,
+                                        modeBarButtonsToRemove=[
+                                            "lasso2d", "select2d",
+                                            "zoomIn2d", "zoomOut2d", "autoScale2d",
+                                        ]),
+                            key=f"cmp_plan_{_ci}",
                         )
                     else:
-                        components.html(
-                            _render_floor_plan_html(
+                        if _viewer_is_reachable():
+                            _of = f"team_01_option_{_ci}.json" if _ci > 0 else ""
+                            components.iframe(
+                                _viewer_url(labels=_cmp_ids, option_file=_of),
+                                height=_ph + 2, scrolling=False,
+                            )
+                        else:
+                            _fig_ci_fb = _render_floor_plan_plotly(
                                 _plan_ci,
                                 eval_result=_co["eval_result"] if _cmp_ev else None,
                                 labels=_cmp_ids, height_px=_ph, is_light=_is_light,
-                            ),
-                            height=_ph + 2, scrolling=False,
-                        )
+                            )
+                            st.plotly_chart(
+                                _fig_ci_fb, use_container_width=True,
+                                config=dict(scrollZoom=True, displaylogo=False),
+                                key=f"cmp_plan_{_ci}_fb",
+                            )
+                    # Per-plan footer metrics
+                    _fw = _co_weight(_co)
+                    _fc = _co_cost(_co)
+                    _fd = _co_max_defl(_co)
+                    _fu = _co_max_util(_co)
+                    _fparts = []
+                    if _fw is not None: _fparts.append(f"Weight: {_fw:.1f} kN")
+                    if _fc is not None: _fparts.append(f"Cost: ${_fc:,.0f}")
+                    if _fd is not None: _fparts.append(f"Max Defl: {_fd:.1f} mm")
+                    if _fu is not None: _fparts.append(f"Util: {_fu:.0f}%")
+                    st.markdown(
+                        f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
+                        f'padding:4px 2px;border-top:1px solid {_BORD};line-height:1.6">'
+                        + " &nbsp;·&nbsp; ".join(_fparts) + '</div>',
+                        unsafe_allow_html=True,
+                    )
 
-    if _n_opts > 1:
-        _tbl_col, _ins_col = st.columns([1.7, 1.0], gap="small")
-
-        with _tbl_col:
+    # ── RIGHT: Comparison Insights ────────────────────────────────────────────
+    with _rcol:
+        if _n_opts >= 2:
             st.markdown(
-                '<div class="panel-hdr" style="margin-top:10px">Summary Metrics</div>',
+                '<div class="panel-hdr" style="margin-top:4px">Comparison Insights</div>',
                 unsafe_allow_html=True,
             )
+            _wl, _wv = _best_from([(c["label"], _co_weight(c))   for c in _cmp_opts])
+            _cl, _cv = _best_from([(c["label"], _co_cost(c))     for c in _cmp_opts])
+            _dl, _dv = _best_from([(c["label"], _co_max_defl(c)) for c in _cmp_opts])
+            _ul, _uv = _best_from([(c["label"], _co_max_util(c)) for c in _cmp_opts])
 
-            def _get_m(co):
-                _ev_ = (co.get("eval_result") or {}).get("summary", {})
-                _cf_ = co.get("cost_flexibility") or {}
-                return {
-                    "Beam Failures": _ev_.get("beam_failures",  None),
-                    "Col Failures":  _ev_.get("column_failures", None),
-                    "Max Defl (mm)": _ev_.get("max_defl_mm",     None),
-                    "Net Cost ($)":  _cf_.get("net_cost_usd",    None),
-                }
+            _base_w = _co_weight(_cmp_opts[0]) or 1
+            _base_c = _co_cost(_cmp_opts[0])   or 1
+            _base_d = _co_max_defl(_cmp_opts[0]) or 1
+            _base_u = _co_max_util(_cmp_opts[0]) or 1
 
-            _all_m   = [_get_m(c) for c in _cmp_opts]
-            _metrics = ["Beam Failures", "Col Failures", "Max Defl (mm)", "Net Cost ($)"]
-
-            def _fmt(v):
-                if v is None: return "—"
-                return f"{v:.1f}" if isinstance(v, float) else str(v)
-
-            _hrow  = "".join(f'<th>{c["label"]}</th>' for c in _cmp_opts)
-            _tbody = ""
-            for _mname in _metrics:
-                _vals = [_all_m[i][_mname] for i in range(_n_opts)]
-                _nums = [v for v in _vals if isinstance(v, (int, float))]
-                _best = min(_nums) if _nums else None
-                _cells = (
-                    f'<td style="text-align:left;color:{_MUT};font-size:.63rem;'
-                    f'font-weight:600">{_mname}</td>'
-                )
-                for _v in _vals:
-                    _cls = "cmp-best" if (_v is not None and _v == _best) else "cmp-norm"
-                    _cells += f'<td class="{_cls}">{_fmt(_v)}</td>'
-                _tbody += f'<tr style="background:{_BG}">{_cells}</tr>'
-
-            st.markdown(
-                f'<table class="cmp-tbl">'
-                f'<thead><tr><th style="text-align:left">Metric</th>{_hrow}</tr></thead>'
-                f'<tbody>{_tbody}</tbody></table>',
-                unsafe_allow_html=True,
-            )
-
-        with _ins_col:
-            st.markdown(
-                '<div class="panel-hdr" style="margin-top:10px">Comparison Insights</div>',
-                unsafe_allow_html=True,
-            )
-
-            def _best_opt(key, lower=True):
-                _vals = []
-                for _co in _cmp_opts:
-                    _ev_ = (_co.get("eval_result") or {}).get("summary", {})
-                    _cf_ = _co.get("cost_flexibility") or {}
-                    _v   = _ev_.get(key, _cf_.get(key))
-                    _vals.append((_co["label"], _v))
-                _valid = [(l, v) for l, v in _vals if isinstance(v, (int, float))]
-                if not _valid: return "—", "No data"
-                _bl, _bv = (min if lower else max)(_valid, key=lambda x: x[1])
-                return _bl, (f"{_bv:.1f}" if isinstance(_bv, float) else str(_bv))
+            def _pct_str(v, base):
+                if v is None or base is None: return "No data"
+                return f"{abs((v - base) / base * 100):.1f}%"
 
             _insights = [
-                ("🏆", "Best Stability",  *_best_opt("beam_failures", True),  "Fewest beam failures"),
-                ("📉", "Best Deflection", *_best_opt("max_defl_mm",   True),  "Lowest max deflection"),
-                ("💰", "Best Cost",       *_best_opt("net_cost_usd",  True),  "Lowest cost delta"),
+                ("🏆", "Best Weight",
+                 _wl, _pct_str(_wv, _base_w) + " lighter than baseline"),
+                ("💰", "Best Cost",
+                 _cl, _pct_str(_cv, _base_c) + " cost saving"),
+                ("🛡", "Best Deflection",
+                 _dl, _pct_str(_dv, _base_d) + " better deflection"),
+                ("✅", "Best Utilization",
+                 _ul, _pct_str(_uv, _base_u) + " lower utilization"),
             ]
             _ins_html = ""
-            for _ico, _lbl, _opt, _val, _det in _insights:
+            for _ico, _lbl, _opt, _det in _insights:
                 _ins_html += (
                     f'<div class="insight-card">'
                     f'<span class="insight-ico">{_ico}</span>'
-                    f'<div><div class="insight-lbl">{_lbl}</div>'
+                    f'<div style="min-width:0">'
+                    f'<div class="insight-lbl">{_lbl}</div>'
                     f'<div class="insight-opt">{_opt}</div>'
-                    f'<div class="insight-det">{_det}: {_val}</div></div></div>'
+                    f'<div class="insight-det">{_det}</div>'
+                    f'</div></div>'
                 )
             st.markdown(_ins_html, unsafe_allow_html=True)
 
-            _best_lbl, _ = _best_opt("beam_failures", True)
-            _last        = st.session_state.get("last_comparison", "")
+            # Recommended option box
+            _rec_lbl = _wl if _wl != "—" else (_cl if _cl != "—" else "Baseline")
+            _last     = st.session_state.get("last_comparison", "")
             st.markdown(
-                f'<div class="rec-box">'
+                f'<div class="rec-box" style="margin-top:10px">'
                 f'<div class="rec-box-lbl">Recommended Option</div>'
-                f'<div class="rec-box-txt"><b>{_best_lbl}</b> provides the best structural '
-                f'performance based on analysis.'
-                + (f' {_last[:180]}{"…" if len(_last)>180 else ""}' if _last else "")
+                f'<div class="rec-box-txt"><b>{_rec_lbl}</b> provides the best overall '
+                f'balance of weight, cost, and structural performance.'
+                + (f' {_last[:160]}{"…" if len(_last)>160 else ""}' if _last else "")
                 + '</div></div>',
                 unsafe_allow_html=True,
             )
-
-    _rep1, _rep2, _rep3 = st.columns([2, 1, 1], gap="small")
-    with _rep1:
-        _slots = 2 - len(_snaps_c)
-        if _slots > 0:
-            st.caption(f"Save {_slots} more snapshot(s) in Modify tab to fill all comparison slots.")
-    with _rep2:
-        if _snaps_c and st.button("Reset", use_container_width=True, key="btn_reset_cmp"):
-            st.session_state.snapshots = []
-            st.rerun()
-    with _rep3:
-        st.download_button(
-            "Export Report",
-            data=json.dumps({"baseline": layout_obj,
-                             "options": [{"label": s["label"],
-                                          "layout": json.loads(s["layout_json"])}
-                                         for s in _snaps_c]},
-                            indent=2, ensure_ascii=False),
-            file_name="comparison_report.json",
-            mime="application/json",
-            use_container_width=True,
-        )

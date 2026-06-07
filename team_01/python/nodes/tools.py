@@ -50,25 +50,11 @@ def get_action_tools() -> list[dict]:
                     "action": {
                         "type": "string",
                         "enum": ["remove", "add_column", "set_attribute"],
-                        "description": "Type of modification",
                     },
-                    "element_id": {
-                        "type": "string",
-                        "description": "ID of the element to modify or remove",
-                    },
-                    "attribute": {
-                        "type": "string",
-                        "description": "Attribute name (for set_attribute action)",
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "New attribute value (for set_attribute action)",
-                    },
-                    "position": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "description": "Column position [x, y] (for add_column action)",
-                    },
+                    "element_id": {"type": "string"},
+                    "attribute":  {"type": "string"},
+                    "value":      {"type": "string"},
+                    "position":   {"type": "array", "items": {"type": "number"}},
                 },
                 "required": ["layout_json", "action"],
             },
@@ -76,8 +62,7 @@ def get_action_tools() -> list[dict]:
         {
             "name": "evaluate_structure",
             "description": (
-                "Run first-principles structural checks (bending, shear, deflection, buckling) "
-                "on the current layout."
+                "Run structural checks (bending, shear, deflection, buckling) on the layout."
             ),
             "inputSchema": {
                 "type": "object",
@@ -93,39 +78,13 @@ def get_action_tools() -> list[dict]:
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "before_json": {"type": "string", "description": "Previous layout JSON"},
-                    "after_json":  {"type": "string", "description": "Updated layout JSON"},
+                    "before_json": {"type": "string"},
+                    "after_json":  {"type": "string"},
                 },
                 "required": ["before_json", "after_json"],
             },
         },
     ]
-
-
-def format_load_path_for_llm(load_path_result: dict | None) -> str:
-    """Format load-path analysis as a compact text block for LLM context injection."""
-    if not load_path_result:
-        return ""
-    elements       = load_path_result.get("elements", [])
-    narrative      = load_path_result.get("narrative", "")
-    critical_path  = load_path_result.get("critical_path", [])
-    anchor_columns = load_path_result.get("anchor_columns", [])
-
-    lines = ["LOAD PATH ANALYSIS:", narrative]
-    if anchor_columns:
-        lines.append(f"Anchor columns (primary load points): {', '.join(anchor_columns)}")
-    if critical_path:
-        lines.append(f"Critical path: {' → '.join(critical_path)}")
-    lines.append("Stress Hierarchy (highest utilisation first):")
-    for e in elements[:10]:
-        util_pct = f"{e['utilization'] * 100:.0f}%"
-        trib = f"  trib={e['tributary_area_m2']}m²" if e.get("tributary_area_m2") else ""
-        pkn  = f"  P={e['P_kN']}kN" if e.get("P_kN") else ""
-        lines.append(
-            f"  {e['id']:8s} {e['role']:20s} {util_pct:5s} "
-            f"[{e['load_responsibility']}]{trib}{pkn}  {e['details']}"
-        )
-    return "\n".join(lines)
 
 
 def build_structural_grid_with_options(
@@ -136,13 +95,9 @@ def build_structural_grid_with_options(
     sdl_kNm2: float = 3.5,
     ll_kNm2: float = 2.0,
 ) -> dict:
-    """
-    Generate structural grid options for the given layout.
-    Returns {"options": [...]} where each option has:
-      label, spacing (max beam span m), failures, cost (USD), layout, evaluation.
-    """
+    """Generate grid options. Returns {"options": [...]}."""
     from nodes.tag_and_audit import generate_structure
-    from nodes.evaluate import evaluate_structure
+    from nodes.evaluate import evaluate_structure as _eval
     from nodes.modify import apply_material_override, DEFAULT_SECTIONS
 
     raw_options = generate_structure(layout)
@@ -150,48 +105,41 @@ def build_structural_grid_with_options(
         raw_options = [raw_options] if isinstance(raw_options, dict) else []
 
     _cost_m3 = {"RCC": 350.0, "STEEL": 12_000.0, "TIMBER": 800.0}
-    mat_key = "RCC" if "RCC" in material.upper() else ("STEEL" if "STEEL" in material.upper() else "TIMBER")
-    cost_m3 = _cost_m3.get(mat_key, 350.0)
+    mat_key = ("STEEL" if "STEEL" in material.upper()
+               else "TIMBER" if "TIMBER" in material.upper() else "RCC")
+    cost_m3 = _cost_m3[mat_key]
     sec = DEFAULT_SECTIONS.get(material, DEFAULT_SECTIONS["RCC"])
     beam_d = sec["beam_depth_mm"] / 1000.0
     beam_w = sec["beam_width_mm"] / 1000.0
     col_dims = sec["col_dims"]
-    if "x" in col_dims:
-        cw, cd = (float(v) / 1000.0 for v in col_dims.split("x", 1))
-    else:
-        cw = cd = float(col_dims) / 1000.0
-    col_h = 3.0  # assumed storey height
+    cw, cd = ((float(v) / 1000.0 for v in col_dims.split("x", 1))
+              if "x" in col_dims else (float(col_dims) / 1000.0,) * 2)
 
     options = []
     for i, opt_layout in enumerate(raw_options):
         if not isinstance(opt_layout, dict):
             continue
-
         opt_str = apply_material_override(json.dumps(opt_layout), material)
-
         ev = None
         failures = 0
         try:
-            ev = evaluate_structure(opt_str, ll_kNm2=ll_kNm2, sdl_kNm2=sdl_kNm2)
+            ev = _eval(opt_str, ll_kNm2=ll_kNm2, sdl_kNm2=sdl_kNm2)
             if ev:
                 s = ev.get("summary", {})
                 failures = s.get("beam_failures", 0) + s.get("column_failures", 0)
         except Exception:
             pass
-
         structure = opt_layout.get("structure", [])
         beams = [el for el in structure if len(el.get("geometry", [])) == 2]
         cols  = [el for el in structure if len(el.get("geometry", [])) == 1]
-
         max_span = max(
             (math.dist(bm["geometry"][0], bm["geometry"][1]) for bm in beams),
             default=0.0,
         )
-
-        beam_vol = sum(math.dist(bm["geometry"][0], bm["geometry"][1]) * beam_d * beam_w for bm in beams)
-        col_vol  = len(cols) * cw * cd * col_h
+        beam_vol = sum(math.dist(bm["geometry"][0], bm["geometry"][1]) * beam_d * beam_w
+                       for bm in beams)
+        col_vol = len(cols) * cw * cd * 3.0
         cost = (beam_vol + col_vol) * cost_m3
-
         options.append({
             "label":      f"Option {i + 1}",
             "spacing":    round(max_span, 2),
@@ -200,7 +148,6 @@ def build_structural_grid_with_options(
             "layout":     json.loads(opt_str),
             "evaluation": ev,
         })
-
     return {"options": options}
 
 

@@ -102,7 +102,7 @@
     },
     {
       "id": "Room-2",
-      "name": "Washroom-1",
+      "name": "Washrom-1",
       "geometry": [
         [
           3.2,
@@ -369,7 +369,7 @@
       ],
       "attributes": {
         "connectsRooms": [
-          "Washroom-1",
+          "Washrom-1",
           "Circulation-1"
         ]
       }
@@ -489,7 +489,7 @@
         ]
       ],
       "attributes": {
-        "roomID": "Washroom-1"
+        "roomID": "Washrom-1"
       }
     },
     {

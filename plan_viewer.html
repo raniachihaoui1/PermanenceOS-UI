@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Structural Plan</title>
   <style>
+    @import url('https://fonts.cdnfonts.com/css/suisse-intl');
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #071a1a;
       color: #c8eeed;
-      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      font-family: "Suisse Intl", "Suisse Int'l", "Inter", system-ui, sans-serif;
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -123,6 +125,7 @@
     const elInfo   = document.getElementById("el-info");
     const chkLbls  = document.getElementById("chk-labels");
     const chkGrid  = document.getElementById("chk-grid");
+    const UI_FONT  = "'Suisse Intl','Suisse Int\\'l','Inter',system-ui,sans-serif";
 
     let layout    = null;
     let xform     = { scale: 1, ox: 0, oy: 0, minX: 0, minY: 0, maxX: 10, maxY: 10 };
@@ -237,7 +240,7 @@
       }
       // Axis labels
       ctx.fillStyle  = C.gridLabel;
-      ctx.font       = "9px Segoe UI";
+      ctx.font       = `9px ${UI_FONT}`;
       ctx.textAlign  = "center";
       ctx.textBaseline = "top";
       for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 2) {
@@ -272,7 +275,7 @@
 
     function drawLabelWithBg(text, x, y, color) {
       const fs = labelFontSize();
-      ctx.font = `bold ${fs}px Segoe UI`;
+      ctx.font = `bold ${fs}px ${UI_FONT}`;
       const m  = ctx.measureText(text);
       const pw = 4, ph = 2;
       const lw = m.width + pw * 2, lh = fs + ph * 2;
@@ -299,7 +302,7 @@
 
     function drawColLabel(text, x, y) {
       const fs = labelFontSize();
-      ctx.font = `bold ${fs}px Segoe UI`;
+      ctx.font = `bold ${fs}px ${UI_FONT}`;
       const m  = ctx.measureText(text);
       const r  = Math.max(m.width / 2 + 4, fs / 2 + 4);
       ctx.beginPath();
@@ -401,7 +404,7 @@
             const [cx, cy] = centroid(geo);
             const rfs = Math.max(10, Math.min(13, xform.scale * 0.12));
             ctx.fillStyle    = C.roomLabel;
-            ctx.font         = `${rfs}px Segoe UI`;
+            ctx.font         = `${rfs}px ${UI_FONT}`;
             ctx.textAlign    = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(r.name || r.id || "", wx(cx), wy(cy));

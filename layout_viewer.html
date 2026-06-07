@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Layout Viewer</title>
   <style>
+    @import url('https://fonts.cdnfonts.com/css/suisse-intl');
+
     :root {
       --bg: #071a1a;
       --panel: rgba(7, 40, 40, 0.92);
@@ -13,7 +15,7 @@
       --text: #c8eeed;
       --muted: #6ab8b8;
       --accent: #2ac0c0;
-      --accent-2: #1ae8b0;
+      --accent-2: rgba(42, 192, 192, 0.18);
       --warn: #ffcc66;
       --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
     }
@@ -26,7 +28,7 @@
       --text: #1a2540;
       --muted: #4a6080;
       --accent: #2a6ad9;
-      --accent-2: #1a9a70;
+      --accent-2: rgba(26, 154, 112, 0.18);
       --warn: #b07010;
       --shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
     }
@@ -40,7 +42,7 @@
         radial-gradient(circle at top right, rgba(26, 232, 176, 0.07), transparent 25%),
         linear-gradient(180deg, #071a1a 0%, #0a2424 100%);
       color: var(--text);
-      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      font-family: "Suisse Intl", "Suisse Int'l", "Inter", system-ui, sans-serif;
     }
 
     html.light body {
@@ -73,6 +75,7 @@
       bottom: 16px;
       padding: 14px 16px;
       max-width: 420px;
+      display: none !important;
     }
 
     .legend h2 {
@@ -133,7 +136,7 @@
       background:rgba(7,40,40,0.97);
       border:1px solid #1a5555;border-radius:12px;
       padding:14px 16px;min-width:190px;max-width:250px;
-      color:#c8eeed;font-family:'Segoe UI',sans-serif;font-size:13px;
+      color:#c8eeed;font-family:'Suisse Intl','Suisse Int\'l','Inter',system-ui,sans-serif;font-size:13px;
       box-shadow:0 8px 32px rgba(0,0,0,0.6);backdrop-filter:blur(16px);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -424,13 +427,13 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
-      ctx.font = "bold 24px Segoe UI";
+      ctx.font = "bold 24px 'Suisse Intl','Suisse Int\\'l','Inter',system-ui,sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const lines = String(text).split("\n");
       ctx.fillText(lines[0] ?? "", 192, 70);
       ctx.fillStyle = _isLight ? "#2a3a50" : "#e9eefc";
-      ctx.font = "18px Segoe UI";
+      ctx.font = "18px 'Suisse Intl','Suisse Int\\'l','Inter',system-ui,sans-serif";
       ctx.fillText(lines[1] ?? "", 192, 112);
 
       const texture = new THREE.CanvasTexture(canvas);

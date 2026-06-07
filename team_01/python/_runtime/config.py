@@ -23,7 +23,7 @@ def _repo_root() -> Path:
 def load_settings() -> Settings:
     load_dotenv(dotenv_path=_repo_root() / ".env", override=False)
     base_url = os.environ.get("LOCAL_LLM_ENDPOINT", "http://127.0.0.1:1234/v1/")
-    llm_model = os.environ.get("LOCAL_LLM_MODEL", "meta-llama-3.1-8b-instruct")
+    llm_model = os.environ.get("LOCAL_LLM_MODEL", "openai/gpt-oss-20b:2")
     timeout = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "60"))
     max_iter = int(os.environ.get("MAX_ITERATIONS", "20"))
     return Settings(

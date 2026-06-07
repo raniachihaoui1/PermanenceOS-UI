@@ -405,115 +405,9 @@ def remove_element(layout_json_string: str, element_id: str) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-def add_beam(layout_str: str, col_id_a: str, col_id_b: str, material: str) -> str:
-    """Add a beam connecting two existing columns. No-op if beam already exists."""
-    import math
-    sec = DEFAULT_SECTIONS.get(material, DEFAULT_SECTIONS["RCC"])
-    layout = json.loads(layout_str)
-    structure = layout.get("structure", [])
-
-    col_a = next((e for e in structure if e["id"] == col_id_a and len(e.get("geometry", [])) == 1), None)
-    col_b = next((e for e in structure if e["id"] == col_id_b and len(e.get("geometry", [])) == 1), None)
-    if not col_a or not col_b:
-        return layout_str
-
-    p1, p2 = col_a["geometry"][0], col_b["geometry"][0]
-    length  = round(math.dist(p1, p2), 3)
-
-    # Reject duplicate: any beam whose endpoints match (either order)
-    for el in structure:
-        if len(el.get("geometry", [])) != 2:
-            continue
-        ep = el["geometry"]
-        if (_pt_eq(ep[0], p1) and _pt_eq(ep[1], p2)) or (_pt_eq(ep[0], p2) and _pt_eq(ep[1], p1)):
-            return layout_str
-
-    beam_id  = f"{col_id_a}-{col_id_b}"
-    existing = {e["id"] for e in structure}
-    if beam_id in existing:
-        beam_id = f"{col_id_a}-{col_id_b}_2"
-
-    is_steel = "STEEL" in material.upper()
-    attrs = {
-        "type": "internal",
-        "length": str(length),
-        "depth": str(sec["beam_depth_mm"]),
-        "width": str(sec["beam_width_mm"]),
-        "isWallAligned": "false",
-        "structuralRole": "primary",
-        "material": material,
-        "conflict": "None",
-    }
-    if is_steel and "beam_section" in sec:
-        attrs["section"] = sec["beam_section"]
-
-    structure.append({
-        "id": beam_id, "name": f"Beam_{beam_id}",
-        "geometry": [list(p1), list(p2)],
-        "attributes": attrs,
-    })
-    layout["structure"] = structure
-    return json.dumps(layout)
-
-
-def add_column(layout_str: str, x: float, y: float, material: str) -> str:
-    """Add a freestanding column at (x, y). No-op if a column already exists within 0.1 m."""
-    import math
-    import string as _string
-    sec = DEFAULT_SECTIONS.get(material, DEFAULT_SECTIONS["RCC"])
-    layout = json.loads(layout_str)
-    structure = layout.get("structure", [])
-    x, y = round(float(x), 3), round(float(y), 3)
-
-    for el in structure:
-        if len(el.get("geometry", [])) == 1:
-            ex, ey = float(el["geometry"][0][0]), float(el["geometry"][0][1])
-            if math.dist([x, y], [ex, ey]) < 0.1:
-                return layout_str
-
-    # Derive label from sorted grid of all column X / Y values
-    all_x = sorted(set(round(float(e["geometry"][0][0]), 3)
-                        for e in structure if len(e.get("geometry", [])) == 1))
-    all_y = sorted(set(round(float(e["geometry"][0][1]), 3)
-                        for e in structure if len(e.get("geometry", [])) == 1))
-    all_x_new = sorted(set(all_x + [x]))
-    all_y_new = sorted(set(all_y + [y]))
-    xi = all_x_new.index(x)
-    yi = all_y_new.index(y)
-    ltrs = _string.ascii_uppercase
-    x_lbl = ltrs[xi] if xi < 26 else ltrs[xi // 26 - 1] + ltrs[xi % 26]
-    col_id = f"{x_lbl}{yi + 1}"
-
-    existing = {e["id"] for e in structure}
-    base, sfx = col_id, 1
-    while col_id in existing:
-        col_id = f"{base}_{sfx}"; sfx += 1
-
-    is_steel = "STEEL" in material.upper()
-    attrs = {
-        "type": "internal",
-        "dimensions": sec["col_dims"],
-        "height": "3.5",
-        "isWallAligned": "false",
-        "structuralRole": "primary",
-        "material": material,
-        "conflict": "None",
-    }
-    if is_steel and "col_section" in sec:
-        attrs["section"] = sec["col_section"]
-
-    structure.append({
-        "id": col_id, "name": f"Column_{col_id}",
-        "geometry": [[x, y]],
-        "attributes": attrs,
-    })
-    layout["structure"] = structure
-    return json.dumps(layout)
-
-
 # ── Modify node ───────────────────────────────────────────────────────────────
 
-def build_modify_node(allowed_tools, edited_layout_path, evaluate_fn=None):
+def build_modify_node(mcp_client, allowed_tools, edited_layout_path, evaluate_fn=None):
 
     allowed_names = {t["name"] for t in allowed_tools if t.get("name")}
 
@@ -670,7 +564,7 @@ def build_modify_node(allowed_tools, edited_layout_path, evaluate_fn=None):
             write_tool_result(layout_str, edited_layout_path)
             return state
 
-        # ── Local tool calls from reason node ─────────────────────────────────
+        # ── GH MCP tool calls from reason node ───────────────────────────────
         last_tool = None
         for call in state["pending_tool_calls"]:
             state["iteration"] += 1
@@ -688,10 +582,9 @@ def build_modify_node(allowed_tools, edited_layout_path, evaluate_fn=None):
                 tool_args["layout_json"] = state["layout_json_string"]
 
             try:
-                print(f"[modify] Unsupported local tool '{tool_name}' — layout unchanged.")
-                tool_output = ""
+                tool_output = mcp_client.call_tool(tool_name, tool_args)
             except Exception as e:
-                print(f"[modify] Local tool failed ({type(e).__name__}) — treating as empty output.")
+                print(f"[modify] MCP call failed ({type(e).__name__}) — treating as empty output.")
                 tool_output = ""
 
             if not tool_output or not tool_output.strip():
