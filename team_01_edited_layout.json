@@ -592,8 +592,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -607,8 +608,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -622,8 +624,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -637,8 +640,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -652,8 +656,9 @@
       ],
       "attributes": {
         "type": "internal",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -667,8 +672,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -682,8 +688,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -697,8 +704,25 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
+      }
+    },
+    {
+      "id": "D2",
+      "name": "Col_D2",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -712,8 +736,9 @@
       ],
       "attributes": {
         "type": "internal",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -727,8 +752,9 @@
       ],
       "attributes": {
         "type": "internal",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -742,8 +768,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -757,8 +784,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -772,8 +800,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -787,23 +816,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
-      }
-    },
-    {
-      "id": "E3",
-      "name": "Col_E3",
-      "geometry": [
-        [
-          9.3,
-          1.75
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -817,8 +832,9 @@
       ],
       "attributes": {
         "type": "internal",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -832,8 +848,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -847,8 +864,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -862,8 +880,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -877,8 +896,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -892,8 +912,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -907,8 +928,9 @@
       ],
       "attributes": {
         "type": "perimeter",
-        "material": null,
-        "conflict": null
+        "material": "TIMBER",
+        "conflict": null,
+        "dimensions": "100x100"
       }
     },
     {
@@ -929,11 +951,10 @@
         "length": 3.75,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -954,11 +975,10 @@
         "length": 3.2,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -979,11 +999,10 @@
         "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1004,11 +1023,10 @@
         "length": 1.75,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1029,11 +1047,10 @@
         "length": 2.6,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1054,11 +1071,10 @@
         "length": 0.3,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1079,11 +1095,10 @@
         "length": 3.75,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1104,11 +1119,10 @@
         "length": 2.3,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1129,11 +1143,10 @@
         "length": 1.8,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1154,11 +1167,10 @@
         "length": 2.3,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1179,16 +1191,15 @@
         "length": 2.3,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
-      "id": "D1-D3",
-      "name": "Beam_D1-D3",
+      "id": "D1-D2",
+      "name": "Beam_D1-D2",
       "geometry": [
         [
           5.8,
@@ -1196,19 +1207,18 @@
         ],
         [
           5.8,
-          1.75
+          1.5
         ]
       ],
       "attributes": {
         "type": "internal",
-        "length": 1.75,
+        "length": 1.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1229,11 +1239,58 @@
         "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
+      }
+    },
+    {
+      "id": "D2-D3",
+      "name": "Beam_D2-D3",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ],
+        [
+          5.8,
+          1.75
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 0.25,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "TIMBER",
+        "conflict": null,
+        "depth": "240",
+        "width": "100"
+      }
+    },
+    {
+      "id": "D2-E2",
+      "name": "Beam_D2-E2",
+      "geometry": [
+        [
+          5.8,
+          1.5
+        ],
+        [
+          9.3,
+          1.5
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 3.5,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "TIMBER",
+        "conflict": null,
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1254,36 +1311,10 @@
         "length": 3.75,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
-      }
-    },
-    {
-      "id": "D3-E3",
-      "name": "Beam_D3-E3",
-      "geometry": [
-        [
-          5.8,
-          1.75
-        ],
-        [
-          9.3,
-          1.75
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 3.5,
-        "isWallAligned": null,
-        "structuralRole": null,
-        "material": null,
-        "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1304,11 +1335,10 @@
         "length": 0.75,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1329,11 +1359,10 @@
         "length": 1.05,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1354,11 +1383,10 @@
         "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1379,16 +1407,15 @@
         "length": 1.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
-      "id": "E2-E3",
-      "name": "Beam_E2-E3",
+      "id": "E2-E4",
+      "name": "Beam_E2-E4",
       "geometry": [
         [
           9.3,
@@ -1396,19 +1423,18 @@
         ],
         [
           9.3,
-          1.75
+          3.2
         ]
       ],
       "attributes": {
         "type": "internal",
-        "length": 0.25,
+        "length": 1.7,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1429,36 +1455,10 @@
         "length": 3.8,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
-      }
-    },
-    {
-      "id": "E3-E4",
-      "name": "Beam_E3-E4",
-      "geometry": [
-        [
-          9.3,
-          1.75
-        ],
-        [
-          9.3,
-          3.2
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 1.45,
-        "isWallAligned": null,
-        "structuralRole": null,
-        "material": null,
-        "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1479,11 +1479,10 @@
         "length": 3.05,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1504,11 +1503,10 @@
         "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1529,11 +1527,10 @@
         "length": 1.05,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1554,11 +1551,10 @@
         "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1579,11 +1575,10 @@
         "length": 4.1,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1604,11 +1599,10 @@
         "length": 0.3,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     },
     {
@@ -1629,16 +1623,15 @@
         "length": 1.7,
         "isWallAligned": null,
         "structuralRole": null,
-        "material": null,
+        "material": "TIMBER",
         "conflict": null,
-        "depth": null,
-        "width": null,
-        "section": null
+        "depth": "240",
+        "width": "100"
       }
     }
   ],
   "meta": {
-    "material": "RCC",
+    "material": "TIMBER",
     "SDL": 3.5,
     "LL": 2.0
   }

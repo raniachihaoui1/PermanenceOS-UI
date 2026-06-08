@@ -1507,6 +1507,7 @@ def _ensure_session() -> None:
         "output_log":      [],
         "selected_el":     "",
         "_last_sel_applied": "\x00",
+        "last_click_debug": {},
         "compare_mode":    False,
         "labels_on":       False,
         "auto_eval":       True,
@@ -1829,7 +1830,7 @@ body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
 st.markdown(f"<style>{_CSS}</style>", unsafe_allow_html=True)
 
 # ─── JS bridge ────────────────────────────────────────────────────────────────
-components.html("""
+st.html("""
 <script>
 (function(){
   if(window._selBridgeReady)return;window._selBridgeReady=true;
@@ -1856,7 +1857,7 @@ components.html("""
     }
   });
 })();
-</script>""", height=1)
+</script>""", unsafe_allow_javascript=True, width="content")
 
 
 # ─── layout data ──────────────────────────────────────────────────────────────
@@ -1922,7 +1923,7 @@ for _dh in st.session_state.get("history", [])[-3:]:
     _drawer_history_html += f'<div class="dq">You: {_dq}</div><div>{_da}</div>'
 _hist_js = json.dumps(_drawer_history_html)
 
-components.html(f"""<script>
+st.html(f"""<script>
 (function(){{
   var par = window.parent.document;
   var win = window.parent;
@@ -1985,7 +1986,7 @@ components.html(f"""<script>
     win.postMessage({{type:'agentQuery',text:txt}}, '*');
   }};
 }})();
-</script>""", height=1)
+</script>""", unsafe_allow_javascript=True, width="content")
 
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 prompt_input = ""
@@ -2053,7 +2054,7 @@ with st.sidebar:
                 f'<div class="sb-success">✓ Model loaded — press OK ▶ Apply & Render</div>',
                 unsafe_allow_html=True,
             )
-            if st.button("↺  Clear & Reset", use_container_width=True,
+            if st.button("↺  Clear & Reset", width="stretch",
                          key="btn_reset_layout"):
                 # Wipe everything — user must re-upload
                 for _rk, _rv in {
@@ -2117,7 +2118,7 @@ with st.sidebar:
         _ok_disabled = st.session_state.currentLayout is None
         if st.button(
             "OK  ▶  Apply & Render",
-            use_container_width=True, type="primary",
+            width="stretch", type="primary",
             key="btn_ok_apply", disabled=_ok_disabled,
         ):
             if st.session_state.currentLayout is not None:
@@ -2141,7 +2142,7 @@ with st.sidebar:
     )
     _gopts_sb  = st.session_state.grid_options
     _gate_off  = not st.session_state.get("setupDone", False)
-    if st.button("⊕  Generate Grid", use_container_width=True,
+    if st.button("⊕  Generate Grid", width="stretch",
                  type="primary", key="btn_gen_main", disabled=_gate_off):
         with st.spinner("Computing grid options…"):
             st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
@@ -2164,7 +2165,7 @@ with st.sidebar:
             with _obc:
                 if st.button(
                     f"Option {_bi+1}", key=f"sb_opt_{_bi}",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary" if _is_sel_sb else "secondary",
                 ):
                     _opt_layout = _gopt_sb.get("layout", {})
@@ -2213,7 +2214,7 @@ with st.sidebar:
             label_visibility="collapsed",
             height=130,
         )
-        submitted = st.form_submit_button("Ask Agent  ›", use_container_width=True)
+        submitted = st.form_submit_button("Ask Agent  ›", width="stretch")
 
     # ── AI Recommendations (shown in ANALYSIS tab) ────────────────────────────
     _alts_sb = st.session_state.eval_alts
@@ -2318,7 +2319,7 @@ with _hcols[0]:
     )
 with _hcols[1]:
     if st.button("Light" if not _is_light else "Dark",
-                 use_container_width=True, key="btn_theme"):
+                 width="stretch", key="btn_theme"):
         st.session_state.theme        = "light" if not _is_light else "dark"
         st.session_state.viewer_nonce += 1
         st.rerun()
@@ -2328,10 +2329,10 @@ with _hcols[2]:
         data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
         file_name="layout_export.json",
         mime="application/json",
-        use_container_width=True,
+        width="stretch",
     )
 with _hcols[3]:
-    with st.popover("⋮", use_container_width=True):
+    with st.popover("⋮", width="stretch"):
         st.markdown(
             f'<div style="font-size:.72rem;font-weight:700;color:#c8eeed;'
             f'margin-bottom:6px">PermanenceOS</div>'
@@ -2339,10 +2340,10 @@ with _hcols[3]:
             unsafe_allow_html=True,
         )
         st.divider()
-        if st.button("Rerun", key="btn_menu_rerun", use_container_width=True):
+        if st.button("Rerun", key="btn_menu_rerun", width="stretch"):
             st.rerun()
         _theme_lbl = "Switch to Light" if not _is_light else "Switch to Dark"
-        if st.button(_theme_lbl, key="btn_menu_theme", use_container_width=True):
+        if st.button(_theme_lbl, key="btn_menu_theme", width="stretch"):
             st.session_state.theme        = "light" if not _is_light else "dark"
             st.session_state.viewer_nonce += 1
             st.rerun()
@@ -2351,7 +2352,7 @@ with _hcols[3]:
             data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
             file_name="layout_export.json",
             mime="application/json",
-            use_container_width=True,
+            width="stretch",
             key="btn_menu_export",
         )
 
@@ -2420,13 +2421,13 @@ with tab_mod:
         with _run_col:
             _run_clicked = st.button(
                 "▶  Run Analysis",
-                type="primary", use_container_width=True, key="btn_run_analysis",
+                type="primary", width="stretch", key="btn_run_analysis",
                 disabled=not st.session_state.get("setupDone", False),
             )
         with _snap_col:
             _sn_n = len(st.session_state.snapshots) + 1
             _snap_clicked = st.button(
-                f"Snapshot #{_sn_n}", key="btn_snap", use_container_width=True,
+                f"Snapshot #{_sn_n}", key="btn_snap", width="stretch",
             )
 
     if _snap_clicked:
@@ -2513,7 +2514,7 @@ with tab_mod:
         _tb1, _tb2, _tb3, _tb4, _ = st.columns([0.55, 0.7, 0.6, 0.6, 4], gap="small")
         with _tb1:
             if st.button("3D" if _vm == "2D" else "2D",
-                         key="tb_vm_btn", use_container_width=True):
+                         key="tb_vm_btn", width="stretch"):
                 st.session_state["view_mode"] = "3D" if _vm == "2D" else "2D"
                 st.rerun()
         with _tb2:
@@ -2550,7 +2551,8 @@ with tab_mod:
             )
             _sel_ev = st.plotly_chart(
                 _fig2d, on_select="rerun",
-                use_container_width=True,
+                width="stretch",
+                selection_mode=("points",),
                 config=dict(
                     scrollZoom=True, displaylogo=False,
                     modeBarButtonsToRemove=["lasso2d", "select2d",
@@ -2563,18 +2565,42 @@ with tab_mod:
             # Streamlit's on_select returns dict-like point objects.
             if _sel_ev and _sel_ev.selection and _sel_ev.selection.points:
                 try:
-                    _pt0 = _sel_ev.selection.points[0]
-                    # Support both attribute-style and dict-style access.
-                    _cd = (
-                        _pt0.get("customdata") if isinstance(_pt0, dict)
-                        else getattr(_pt0, "customdata", None)
-                    )
-                    if _cd:
-                        _new_sel = str(_cd[0]) if isinstance(_cd, (list, tuple)) else str(_cd)
-                        if _new_sel != st.session_state.selected_el:
-                            st.session_state.selected_el = _new_sel
-                            st.session_state["_last_sel_applied"] = _new_sel
-                            st.rerun()
+                    _new_sel = ""
+                    _cand_dbg = []
+                    for _pt in _sel_ev.selection.points:
+                        # Support both attribute-style and dict-style access.
+                        _cd = (
+                            _pt.get("customdata") if isinstance(_pt, dict)
+                            else getattr(_pt, "customdata", None)
+                        )
+                        if not _cd:
+                            continue
+                        if isinstance(_cd, (list, tuple)):
+                            _cand = str(_cd[0]) if _cd else ""
+                            _kind = str(_cd[1]).lower() if len(_cd) > 1 else ""
+                            _cand_dbg.append(
+                                f"id={_cand or '-'} kind={_kind or '-'}"
+                            )
+                            if _cand and (_kind in ("beam", "column") or not _kind):
+                                _new_sel = _cand
+                                break
+                        else:
+                            _cand_dbg.append(f"id={str(_cd)} kind=-")
+                            _new_sel = str(_cd)
+                            break
+                    st.session_state["last_click_debug"] = {
+                        "selected_id": _new_sel,
+                        "points_count": len(_sel_ev.selection.points),
+                        "candidates": _cand_dbg,
+                        "raw_first_point": (
+                            _sel_ev.selection.points[0]
+                            if _sel_ev.selection.points else None
+                        ),
+                    }
+                    if _new_sel and _new_sel != st.session_state.selected_el:
+                        st.session_state.selected_el = _new_sel
+                        st.session_state["_last_sel_applied"] = _new_sel
+                        st.rerun()
                 except Exception:
                     pass
         else:
@@ -2596,7 +2622,7 @@ with tab_mod:
                     is_light=_is_light,
                     revision=st.session_state.get("currentVersion", 0),
                 )
-                st.plotly_chart(_fig2d_fb, use_container_width=True,
+                st.plotly_chart(_fig2d_fb, width="stretch",
                                 config=dict(scrollZoom=True, displaylogo=False),
                                 key="floor_plan_3d_fb")
 
@@ -2802,7 +2828,7 @@ with tab_mod:
                             with _bc1:
                                 if st.button(
                                     "Preview", key=f"rec_prev_{_ri}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     st.session_state["preview_alt"] = _alt
                                     st.session_state.viewer_nonce += 1
@@ -2810,7 +2836,7 @@ with tab_mod:
                             with _bc2:
                                 if st.button(
                                     "Apply Change", key=f"rec_apply_{_ri}",
-                                    use_container_width=True, type="primary",
+                                    width="stretch", type="primary",
                                 ):
                                     _new_ls, _new_ev = _apply_alternative(
                                         _alt, json.dumps(layout_obj),
@@ -2829,6 +2855,33 @@ with tab_mod:
             _sel_obj = next(
                 (e for e in layout_obj.get("structure", []) if e["id"] == _sel), None
             ) if _sel else None
+            _dbg = st.session_state.get("last_click_debug", {})
+
+            if _sel:
+                st.markdown(
+                    f'<div style="font-size:.64rem;color:{_MUT};margin:2px 0 8px 0">'
+                    f'Selected element ID: '
+                    f'<span style="color:{_TEXT};font-weight:700">{_sel}</span></div>',
+                    unsafe_allow_html=True,
+                )
+
+            if _dbg:
+                _dbg_id = _dbg.get("selected_id", "") or "(none)"
+                _dbg_pts = _dbg.get("points_count", 0)
+                _dbg_cands = _dbg.get("candidates", [])
+                _dbg_cands_txt = " | ".join(_dbg_cands) if _dbg_cands else "(none)"
+                st.markdown(
+                    f'<div style="font-size:.62rem;color:{_MUT};line-height:1.55;'
+                    f'border:1px dashed {_BORD};border-radius:8px;padding:8px;margin:0 0 8px 0">'
+                    f'<b style="color:{_TEXT}">Selection Debug</b><br>'
+                    f'points captured: <b style="color:{_TEXT}">{_dbg_pts}</b><br>'
+                    f'candidate(s): <span style="color:{_TEXT}">{_dbg_cands_txt}</span><br>'
+                    f'resolved selected_id: <b style="color:{_TEXT}">{_dbg_id}</b>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                with st.expander("Raw click payload", expanded=False):
+                    st.json(_dbg.get("raw_first_point", {}))
 
             if _sel_obj:
                 st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
@@ -2839,7 +2892,7 @@ with tab_mod:
 
                 with _act_cols[0]:
                     if st.button(f"✕  Remove", key="btn_direct_remove",
-                                 use_container_width=True):
+                                 width="stretch"):
                         try:
                             from nodes.modify import remove_element as _direct_rem
                             _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel))
@@ -2852,7 +2905,7 @@ with tab_mod:
                 if _sel_is_beam:
                     with _act_cols[1]:
                         if st.button("⊕  Add Mid-col", key="btn_direct_midcol",
-                                     use_container_width=True):
+                                     width="stretch"):
                             try:
                                 from nodes.modify import add_midspan_column as _direct_amc
                                 _new_layout = json.loads(_direct_amc(json.dumps(layout_obj), _sel))
@@ -3106,7 +3159,7 @@ with tab_cmp:
         )
     with _rp2:
         st.download_button(
-            "↓ Export JSON", use_container_width=True,
+            "↓ Export JSON", width="stretch",
             data=json.dumps(
                 {"baseline": layout_obj,
                  "options":  [{"label": s["label"],
@@ -3119,10 +3172,10 @@ with tab_cmp:
             key="cmp_export_json",
         )
     with _rp3:
-        st.button("↓ Export PDF", use_container_width=True, disabled=True,
+        st.button("↓ Export PDF", width="stretch", disabled=True,
                   key="cmp_export_pdf")
     with _rp4:
-        if st.button("✕ Reset", use_container_width=True, key="btn_reset_cmp"):
+        if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
             st.session_state.snapshots = []
             st.rerun()
 
@@ -3165,12 +3218,12 @@ with tab_cmp:
         )
         _vs1, _vs2 = st.columns(2, gap="small")
         with _vs1:
-            if st.button("2D", key="cmp_2d", use_container_width=True,
+            if st.button("2D", key="cmp_2d", width="stretch",
                          type="primary" if _cvm_now == "2D" else "secondary"):
                 st.session_state["compare_view_mode"] = "2D"
                 st.rerun()
         with _vs2:
-            if st.button("3D", key="cmp_3d", use_container_width=True,
+            if st.button("3D", key="cmp_3d", width="stretch",
                          type="primary" if _cvm_now == "3D" else "secondary"):
                 st.session_state["compare_view_mode"] = "3D"
                 st.rerun()
@@ -3215,7 +3268,7 @@ with tab_cmp:
         st.markdown(_leg_html, unsafe_allow_html=True)
 
         st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
-        if st.button("Reset View", key="cmp_reset_view", use_container_width=True):
+        if st.button("Reset View", key="cmp_reset_view", width="stretch"):
             st.session_state["compare_view_mode"] = "2D"
             st.session_state["cmp_labels"] = False
             st.session_state["cmp_eval"]   = True
@@ -3325,7 +3378,7 @@ with tab_cmp:
                             labels=_cmp_ids, height_px=_ph, is_light=_is_light,
                         )
                         st.plotly_chart(
-                            _fig_ci, use_container_width=True,
+                            _fig_ci, width="stretch",
                             config=dict(scrollZoom=True, displaylogo=False,
                                         modeBarButtonsToRemove=[
                                             "lasso2d", "select2d",
@@ -3347,7 +3400,7 @@ with tab_cmp:
                                 labels=_cmp_ids, height_px=_ph, is_light=_is_light,
                             )
                             st.plotly_chart(
-                                _fig_ci_fb, use_container_width=True,
+                                _fig_ci_fb, width="stretch",
                                 config=dict(scrollZoom=True, displaylogo=False),
                                 key=f"cmp_plan_{_ci}_fb",
                             )
@@ -3424,3 +3477,4 @@ with tab_cmp:
                 + '</div></div>',
                 unsafe_allow_html=True,
             )
+

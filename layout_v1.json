@@ -102,7 +102,7 @@
     },
     {
       "id": "Room-2",
-      "name": "Washrom-1",
+      "name": "Washroom-1",
       "geometry": [
         [
           3.2,
@@ -369,7 +369,7 @@
       ],
       "attributes": {
         "connectsRooms": [
-          "Washrom-1",
+          "Washroom-1",
           "Circulation-1"
         ]
       }
@@ -489,7 +489,7 @@
         ]
       ],
       "attributes": {
-        "roomID": "Washrom-1"
+        "roomID": "Washroom-1"
       }
     },
     {
@@ -710,12 +710,12 @@
       }
     },
     {
-      "id": "D2",
-      "name": "Col_D2",
+      "id": "D3",
+      "name": "Col_D3",
       "geometry": [
         [
           5.8,
-          1.5
+          1.75
         ]
       ],
       "attributes": {
@@ -726,12 +726,12 @@
       }
     },
     {
-      "id": "D3",
-      "name": "Col_D3",
+      "id": "D4",
+      "name": "Col_D4",
       "geometry": [
         [
           5.8,
-          1.75
+          3.2
         ]
       ],
       "attributes": {
@@ -1198,8 +1198,8 @@
       }
     },
     {
-      "id": "D1-D2",
-      "name": "Beam_D1-D2",
+      "id": "D1-D3",
+      "name": "Beam_D1-D3",
       "geometry": [
         [
           5.8,
@@ -1207,12 +1207,12 @@
         ],
         [
           5.8,
-          1.5
+          1.75
         ]
       ],
       "attributes": {
         "type": "internal",
-        "length": 1.5,
+        "length": 1.75,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",
@@ -1246,21 +1246,21 @@
       }
     },
     {
-      "id": "D2-D3",
-      "name": "Beam_D2-D3",
+      "id": "D3-D4",
+      "name": "Beam_D3-D4",
       "geometry": [
         [
           5.8,
-          1.5
+          1.75
         ],
         [
           5.8,
-          1.75
+          3.2
         ]
       ],
       "attributes": {
         "type": "internal",
-        "length": 0.25,
+        "length": 1.45,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",
@@ -1270,36 +1270,12 @@
       }
     },
     {
-      "id": "D2-E2",
-      "name": "Beam_D2-E2",
+      "id": "D4-D5",
+      "name": "Beam_D4-D5",
       "geometry": [
         [
           5.8,
-          1.5
-        ],
-        [
-          9.3,
-          1.5
-        ]
-      ],
-      "attributes": {
-        "type": "internal",
-        "length": 3.5,
-        "isWallAligned": null,
-        "structuralRole": null,
-        "material": "RCC",
-        "conflict": null,
-        "depth": "250",
-        "width": "175"
-      }
-    },
-    {
-      "id": "D3-D5",
-      "name": "Beam_D3-D5",
-      "geometry": [
-        [
-          5.8,
-          1.75
+          3.2
         ],
         [
           5.8,
@@ -1308,7 +1284,31 @@
       ],
       "attributes": {
         "type": "internal",
-        "length": 3.75,
+        "length": 2.3,
+        "isWallAligned": null,
+        "structuralRole": null,
+        "material": "RCC",
+        "conflict": null,
+        "depth": "250",
+        "width": "175"
+      }
+    },
+    {
+      "id": "D4-E4",
+      "name": "Beam_D4-E4",
+      "geometry": [
+        [
+          5.8,
+          3.2
+        ],
+        [
+          9.3,
+          3.2
+        ]
+      ],
+      "attributes": {
+        "type": "internal",
+        "length": 3.5,
         "isWallAligned": null,
         "structuralRole": null,
         "material": "RCC",
