@@ -40,10 +40,7 @@ st.set_page_config(
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
 
-if not EDITED_LAYOUT_PATH.exists() and DEFAULT_LAYOUT_PATH.exists():
-    EDITED_LAYOUT_PATH.write_text(
-        DEFAULT_LAYOUT_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-    )
+# No default layout — app starts empty until the user uploads a file.
 
 
 # ── JSON helpers ───────────────────────────────────────────────────────────────
@@ -54,6 +51,48 @@ def _read_json(path: Path) -> dict:
 
 def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _push_version(new_layout: dict) -> None:
+    """Commit a structural change:
+    - push currentLayout onto versionHistory
+    - make new_layout the new currentLayout
+    - persist to disk (for 3D viewer HTTP access)
+    - write a numbered version file
+    - clear selected_opt_bar_idx so 2D plan always reads currentLayout
+    """
+    prev = st.session_state.get("currentLayout") or {}
+    if prev:
+        hist = st.session_state.get("versionHistory", [])
+        hist.append(prev)
+        st.session_state.versionHistory = hist
+
+    v = st.session_state.get("currentVersion", 0) + 1
+    st.session_state.currentVersion = v
+    st.session_state.currentLayout  = new_layout
+    st.session_state["selected_opt_bar_idx"] = -1
+
+    _write_json(EDITED_LAYOUT_PATH, new_layout)
+    _write_json(REPO_ROOT / f"layout_v{v}.json", new_layout)
+    _sync_viewers()
+
+
+def _sync_viewers() -> None:
+    """Signal both viewers to re-read currentLayout on the next rerun."""
+    st.session_state.viewer_nonce = st.session_state.get("viewer_nonce", 0) + 1
+
+
+def _compute_diff(before: dict, after: dict) -> dict:
+    """Return sets of element IDs: added, removed, changed between two layouts."""
+    b_els = {el["id"]: el for el in before.get("structure", [])}
+    a_els = {el["id"]: el for el in after.get("structure", [])}
+    added   = set(a_els) - set(b_els)
+    removed = set(b_els) - set(a_els)
+    changed = {
+        eid for eid in (set(a_els) & set(b_els))
+        if json.dumps(a_els[eid], sort_keys=True) != json.dumps(b_els[eid], sort_keys=True)
+    }
+    return {"added": added, "removed": removed, "changed": changed}
 
 
 def _normalize_layout(payload: object) -> dict:
@@ -70,10 +109,9 @@ def _normalize_layout(payload: object) -> dict:
 
 
 def _load_working_layout() -> dict:
+    """Load the persisted working layout from disk. Returns {} if no file exists."""
     if EDITED_LAYOUT_PATH.exists():
         return _normalize_layout(_read_json(EDITED_LAYOUT_PATH))
-    if DEFAULT_LAYOUT_PATH.exists():
-        return _normalize_layout(_read_json(DEFAULT_LAYOUT_PATH))
     return {}
 
 
@@ -99,7 +137,7 @@ def _viewer_url(highlight: str = "", compare: bool = False,
     )
     if highlight:
         url += f"&highlight={highlight}"
-    if compare and BEFORE_LAYOUT_PATH.exists():
+    if compare and st.session_state.get("versionHistory"):
         url += "&mode=compare"
     if option_file:
         url += f"&optionFile={option_file}"
@@ -141,16 +179,20 @@ def _render_floor_plan_plotly(
     is_light: bool = False,
     diff_on: bool = False,
     before_layout: dict | None = None,
+    revision: int = 0,
 ):
     """Return a Plotly figure of the floor plan with clickable structural elements."""
+    import math as _hm
     if is_light:
         BG = "#f0f8f8"; ROOM_F = "rgba(218,234,234,0.80)"; ROOM_L = "#a0c8c8"
         FG = "#1a3535"; ACCENT = "#088a87"
         PASS_C = "#1a8050"; FAIL_C = "#cc2020"; SEL_C = "#c07800"; WIN_C = "#2060a0"
+        REM_C = "#cc2020"; ADD_C = "#1a8050"; MOD_C = "#c07800"
     else:
         BG = "#0c2020"; ROOM_F = "rgba(23,46,46,0.88)"; ROOM_L = "#1e4040"
         FG = "#c8eeed"; ACCENT = "#2ac0c0"
         PASS_C = "#40d090"; FAIL_C = "#ff5050"; SEL_C = "#ffd060"; WIN_C = "#4696dc"
+        REM_C = "#ff5050"; ADD_C = "#40d090"; MOD_C = "#ffd060"
 
     el_status: dict[str, str] = {}
     eval_map_b: dict = {}
@@ -164,6 +206,23 @@ def _render_floor_plan_plotly(
             ok = c["stress_PASS"] and c["buckling_PASS"]
             el_status[c["id"]] = "pass" if ok else "fail"
             eval_map_c[c["id"]] = c
+
+    # ── DIFF: compute added / removed / changed sets ───────────────────────────
+    _diff_removed: set[str] = set()
+    _diff_added:   set[str] = set()
+    _diff_changed: set[str] = set()
+    _before_el_map: dict = {}
+    if diff_on and before_layout:
+        _cur_map   = {el["id"]: el for el in layout.get("structure", [])}
+        _bef_map   = {el["id"]: el for el in before_layout.get("structure", [])}
+        _before_el_map = _bef_map
+        _diff_removed  = set(_bef_map) - set(_cur_map)
+        _diff_added    = set(_cur_map) - set(_bef_map)
+        for _eid in set(_cur_map) & set(_bef_map):
+            import json as _j
+            if _j.dumps(_cur_map[_eid].get("geometry"), sort_keys=True) != \
+               _j.dumps(_bef_map[_eid].get("geometry"), sort_keys=True):
+                _diff_changed.add(_eid)
 
     traces: list = []
     annotations: list = []
@@ -234,26 +293,62 @@ def _render_floor_plan_plotly(
     beams = [s for s in structure if len(s.get("geometry", [])) == 2]
     cols  = [s for s in structure if len(s.get("geometry", [])) == 1]
 
+    # ── DIFF: ghost removed elements at the back ───────────────────────────────
+    if diff_on and before_layout:
+        for _eid in _diff_removed:
+            _bel = _before_el_map[_eid]
+            _bg  = _bel.get("geometry", [])
+            if len(_bg) == 2:
+                traces.insert(0, go.Scatter(
+                    x=[_bg[0][0], _bg[1][0]], y=[_bg[0][1], _bg[1][1]],
+                    mode="lines", line=dict(color=REM_C, width=2.5, dash="dot"),
+                    opacity=0.65, showlegend=False,
+                    hovertemplate=f"<b>{_eid}</b><br><i>Removed</i><extra></extra>",
+                ))
+            elif len(_bg) == 1:
+                traces.insert(0, go.Scatter(
+                    x=[_bg[0][0]], y=[_bg[0][1]],
+                    mode="markers",
+                    marker=dict(color=REM_C, size=11, symbol="square-open",
+                                line=dict(color=REM_C, width=2.5), opacity=0.75),
+                    showlegend=False,
+                    hovertemplate=f"<b>{_eid}</b><br><i>Removed</i><extra></extra>",
+                ))
+
     # ── BEAMS ─────────────────────────────────────────────────────────────────
     for beam in beams:
-        eid = beam["id"]
-        geo = beam["geometry"]
+        eid   = beam["id"]
+        geo   = beam["geometry"]
         p1, p2 = geo[0], geo[1]
-        status = el_status.get(eid, "none")
-        clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
-        is_sel = eid == highlight
-        clr = SEL_C if is_sel else clr
-        lw = 4.5 if is_sel else 2.5
+        attrs = beam.get("attributes", {})
+        mat   = attrs.get("material") or "—"
+        sec   = (attrs.get("section") or
+                 (f"{attrs.get('width','')}×{attrs.get('depth','')}"
+                  if attrs.get("depth") else None) or "—")
+        span  = round(_hm.dist(p1, p2), 2)
 
-        bev = eval_map_b.get(eid, {})
+        status = el_status.get(eid, "none")
+        # Diff colour overrides evaluation colour
+        if diff_on and eid in _diff_added:
+            clr, lw = ADD_C, 3.0
+        elif diff_on and eid in _diff_changed:
+            clr, lw = MOD_C, 3.0
+        else:
+            clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+            lw  = 4.5 if eid == highlight else 2.5
+        if eid == highlight:
+            clr = SEL_C
+            lw  = 4.5
+
+        bev  = eval_map_b.get(eid, {})
         htxt = (
-            f"<b>{eid}</b><br>"
-            f"{beam.get('section_mm','?')} · {beam.get('material','?')}<br>"
-            f"Status: <b>{'✓' if status=='pass' else ('✗' if status=='fail' else '—')}</b>"
+            f"<b>{eid}</b>  BEAM<br>"
+            f"Mat: {mat} · Sec: {sec} · Span: {span} m<br>"
+            f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
         )
         if bev:
             htxt += (f"<br>σ = {bev.get('sigma_bend_MPa','?')} MPa"
-                     f"<br>δ = {bev.get('delta_total_mm','?')} mm")
+                     f"  δ = {bev.get('delta_total_mm','?')} mm")
 
         traces.append(go.Scatter(
             x=[p1[0], p2[0]], y=[p1[1], p2[1]],
@@ -263,16 +358,14 @@ def _render_floor_plan_plotly(
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        # Wide hit-area trace: dense markers along the beam so any click registers.
-        # Use opacity=0.001 (near-invisible but not excluded from browser hit-testing).
-        import math as _hm
-        _n = max(13, int(_hm.dist(p1, p2) * 3) + 2)
+        # Wide invisible hit-area: dense markers along the beam.
+        _n   = max(13, int(span * 3) + 2)
         _hxs = [p1[0] + (p2[0] - p1[0]) * i / (_n - 1) for i in range(_n)]
         _hys = [p1[1] + (p2[1] - p1[1]) * i / (_n - 1) for i in range(_n)]
         traces.append(go.Scatter(
             x=_hxs, y=_hys,
             mode="markers",
-            marker=dict(size=18, color=clr, opacity=0.001, symbol="circle"),
+            marker=dict(size=20, color=clr, opacity=0.001),
             customdata=[[eid, "beam"]] * _n,
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
@@ -286,23 +379,36 @@ def _render_floor_plan_plotly(
 
     # ── COLUMNS ───────────────────────────────────────────────────────────────
     for col_el in cols:
-        eid = col_el["id"]
-        geo = col_el["geometry"]
+        eid  = col_el["id"]
+        geo  = col_el["geometry"]
         cx, cy = geo[0][0], geo[0][1]
-        status = el_status.get(eid, "none")
-        clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
-        is_sel = eid == highlight
-        clr = SEL_C if is_sel else clr
-        sz = 16 if is_sel else 10
+        attrs = col_el.get("attributes", {})
+        mat   = attrs.get("material") or "—"
+        sec   = (attrs.get("section") or
+                 (f"{attrs.get('width','')}×{attrs.get('depth','')}"
+                  if attrs.get("depth") else None) or "—")
 
-        cev = eval_map_c.get(eid, {})
+        status = el_status.get(eid, "none")
+        if diff_on and eid in _diff_added:
+            clr, sz = ADD_C, 12
+        elif diff_on and eid in _diff_changed:
+            clr, sz = MOD_C, 12
+        else:
+            clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+            sz  = 16 if eid == highlight else 10
+        if eid == highlight:
+            clr = SEL_C
+            sz  = 16
+
+        cev  = eval_map_c.get(eid, {})
         htxt = (
-            f"<b>{eid}</b><br>"
-            f"{col_el.get('section_mm','?')} · {col_el.get('material','?')}<br>"
-            f"Status: <b>{'✓' if status=='pass' else ('✗' if status=='fail' else '—')}</b>"
+            f"<b>{eid}</b>  COL<br>"
+            f"Mat: {mat} · Sec: {sec}<br>"
+            f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
         )
         if cev:
-            htxt += f"<br>σ = {cev.get('sigma_comp_MPa','?')} MPa"
+            htxt += (f"<br>σ = {cev.get('sigma_comp_MPa','?')} MPa"
+                     f"  SF = {cev.get('SF_buckling','?')}")
 
         traces.append(go.Scatter(
             x=[cx], y=[cy],
@@ -313,39 +419,20 @@ def _render_floor_plan_plotly(
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        # Large invisible hit-area for columns so any nearby click registers.
+        # Large invisible hit-area for columns.
         traces.append(go.Scatter(
             x=[cx], y=[cy],
             mode="markers",
-            marker=dict(size=28, color=clr, opacity=0.001, symbol="circle"),
+            marker=dict(size=32, color=clr, opacity=0.001),
             customdata=[[eid, "column"]],
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
         if labels:
             annotations.append(dict(
-                x=cx, y=cy, text=eid, showarrow=False, yshift=-13,
+                x=cx, y=cy, text=eid, showarrow=False, yshift=-14,
                 font=dict(size=7, color=clr, family="monospace"),
             ))
-
-    # ── DIFF: ghost of before layout ──────────────────────────────────────────
-    if diff_on and before_layout:
-        _bf_struct = before_layout.get("structure", [])
-        for _bel in _bf_struct:
-            _bg = _bel.get("geometry", [])
-            if len(_bg) == 2:
-                traces.insert(0, go.Scatter(
-                    x=[_bg[0][0], _bg[1][0]], y=[_bg[0][1], _bg[1][1]],
-                    mode="lines", line=dict(color=ACCENT, width=1.5, dash="dot"),
-                    opacity=0.25, showlegend=False, hoverinfo="skip",
-                ))
-            elif len(_bg) == 1:
-                traces.insert(0, go.Scatter(
-                    x=[_bg[0][0]], y=[_bg[0][1]],
-                    mode="markers",
-                    marker=dict(color=ACCENT, size=8, symbol="square", opacity=0.25),
-                    showlegend=False, hoverinfo="skip",
-                ))
 
     # ── AXIS BOUNDS ───────────────────────────────────────────────────────────
     all_pts: list = list(layout.get("outline", []))
@@ -353,7 +440,7 @@ def _render_floor_plan_plotly(
         for _el in layout.get(_key, []):
             all_pts.extend(_el.get("geometry", []))
     if all_pts:
-        _axs = [p[0] for p in all_pts]; _ays = [p[1] for p in all_pts]
+        _axs  = [p[0] for p in all_pts]; _ays = [p[1] for p in all_pts]
         _span = max(max(_axs)-min(_axs), max(_ays)-min(_ays), 1)
         _pad  = _span * 0.06 + 0.3
         xr = [min(_axs)-_pad, max(_axs)+_pad]
@@ -371,10 +458,14 @@ def _render_floor_plan_plotly(
                    showgrid=False, zeroline=False, showticklabels=False),
         showlegend=False,
         hovermode="closest",
+        # "zoom" mode: single click fires the select event on a point.
+        # "select" mode requires a drag box — breaks individual click selection.
+        dragmode="zoom",
         clickmode="event+select",
-        dragmode="select",
         annotations=annotations,
-        uirevision=f"plan-{len(structure)}",
+        # uirevision: stable key preserves zoom/pan.
+        # Change it only when the layout version changes so zoom resets on new layouts.
+        uirevision=f"plan-v{revision}",
     )
     return fig
 
@@ -964,12 +1055,44 @@ def _run_evaluate(layout_json_str: str, sdl: float = 3.5, ll: float = 2.0) -> di
 
 
 def _run_grid_options(layout: dict, material: str) -> list[dict]:
+    import traceback as _tb
+
+    if not layout.get("rooms"):
+        st.error("Generate Grid failed: layout has no **rooms** key.")
+        return []
+    if not layout.get("outline"):
+        st.error("Generate Grid failed: layout has no **outline** key.")
+        return []
+
     try:
-        from nodes.tools import build_structural_grid_with_options
-        bundle = build_structural_grid_with_options(layout, "", material=material)
-        return bundle.get("options", [])
+        from nodes.tag_and_audit import generate_structure
+        raw = generate_structure(layout)
+
+        # generate_structure returns a list of full layout dicts on success,
+        # or the original unchanged dict when it cannot build a grid.
+        if not isinstance(raw, list) or len(raw) == 0:
+            st.warning(
+                "Generate Grid: no structural options were produced. "
+                f"generate_structure returned {type(raw).__name__} "
+                f"(rooms={len(layout.get('rooms', []))}, "
+                f"outline pts={len(layout.get('outline', []))})."
+            )
+            return []
+
+        # Wrap each layout dict into the UI's expected format and stamp material.
+        opts = []
+        for lay in raw:
+            lay_copy = dict(lay)
+            if "meta" not in lay_copy or not isinstance(lay_copy.get("meta"), dict):
+                lay_copy["meta"] = {}
+            lay_copy["meta"]["material"] = material
+            opts.append({"layout": lay_copy, "evaluation": None})
+
+        return opts
+
     except Exception as e:
-        st.warning(f"Grid options error: {e}")
+        st.error(f"Generate Grid error: **{e}**")
+        st.code(_tb.format_exc(), language="python")
         return []
 
 
@@ -1166,8 +1289,8 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
         from _runtime.bootstrap import bootstrap
         from _runtime.llm import call_llm
-        from nodes.reason import SYSTEM_PROMPT
         from nodes.tools import get_action_tools
+        SYSTEM_PROMPT = _APP_AGENT_PROMPT
         from graph import _format_tool_catalog
 
         ctx          = bootstrap()
@@ -1361,6 +1484,13 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
 def _ensure_session() -> None:
     defaults: dict = {
+        # ── Version / layout state ─────────────────────────────────────────
+        "currentLayout":    None,   # dict | None — the live working copy
+        "versionHistory":   [],     # list[dict] — every committed past layout
+        "currentVersion":   0,      # int — increments on every _push_version
+        "setupDone":        False,  # bool — True after upload + OK pressed
+        "_last_upload_fp":  None,   # (name, size) of last processed upload
+        # ── UI state ───────────────────────────────────────────────────────
         "viewer_nonce":    0,
         "history":         [],
         "agent_log":       [],
@@ -1417,6 +1547,35 @@ _tb_auto = st.query_params.get("_tb_auto", "")
 if _tb_auto in ("0", "1"):
     st.session_state["auto_eval"] = _tb_auto == "1"
 _aq_raw = st.query_params.get("_aq", "")
+
+# ── UI agent system prompt (direct-LLM path only, does not affect reason.py / LangGraph CLI) ──
+_APP_AGENT_PROMPT = """You are a structural design assistant embedded in the PermanenceOS UI.
+You help architects modify, evaluate, and understand structural layouts.
+
+ACTIONS — execute immediately, never refuse:
+- REMOVE any element (column or beam) when asked: set action="tool", call remove_element with the element_id.
+- ADD midspan column to a beam when asked: set action="tool", call add_midspan_column with the beam_id.
+- UPGRADE a section when asked: set action="tool", call upgrade_element_section with element_id and new_section.
+- GENERATE structural grid when asked: set action="tool", call tag_and_audit.
+- MODIFY attributes when asked: set action="tool", call modify_structure.
+
+Do not flag any element as load-bearing or permanent. Do not ask for confirmation.
+Do not explain risk — just execute the action via the tool call.
+
+EVALUATION (user asks to evaluate, check structure, run analysis, run loads):
+Set action="final", final_response="" (empty string). The evaluation runs automatically.
+
+QUESTIONS (explain results, describe layout, interpret failures, what rooms exist, why is X failing):
+Set action="final" and write a clear, concise answer in final_response.
+Use element IDs and values from the layout context. Never invent IDs.
+
+Toolbox:
+{tool_catalog}
+
+Return strictly valid JSON:
+{{"action": "final" | "tool", "final_response": "...", "tool_calls": [{{"name": "<tool>", "arguments": {{...}}}}]}}
+Rules: JSON only, no markdown. If action is final: tool_calls must be []. If action is tool: final_response must be "".
+"""
 
 _is_light = st.session_state.get("theme", "dark") == "light"
 
@@ -1475,8 +1634,12 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid=
   background:{_BG}!important;font-family:{_F}!important;font-size:13px!important;
   letter-spacing:.01em!important}}
 [data-testid="block-container"]{{padding:.3rem 1rem .2rem!important}}
-section[data-testid="stSidebar"]{{background:{_SB}!important;border-right:1px solid {_BORD}!important}}
+section[data-testid="stSidebar"]{{
+  background:{_SB}!important;border-right:1px solid {_BORD}!important;
+  width:300px!important;min-width:300px!important;
+  flex:0 0 300px!important}}
 section[data-testid="stSidebar"]>div:first-child{{padding:14px 14px 10px!important}}
+.react-resizable-handle{{display:none!important;pointer-events:none!important}}
 [data-testid="stSidebarHeader"]{{display:none!important;height:0!important;padding:0!important;margin:0!important}}
 section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:{_TEXT}!important;font-family:{_F}!important}}
 section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{{color:{_MUT}!important;font-size:.70rem!important}}
@@ -1695,8 +1858,18 @@ components.html("""
 })();
 </script>""", height=1)
 
+
 # ─── layout data ──────────────────────────────────────────────────────────────
-layout_obj      = _load_working_layout()
+# currentLayout in session state is the authoritative source.
+# On first load after a browser refresh we recover from disk (if the user had
+# previously uploaded) so they don't lose work on an accidental refresh.
+if st.session_state.currentLayout is None and EDITED_LAYOUT_PATH.exists():
+    _recovered = _load_working_layout()
+    if _recovered:
+        st.session_state.currentLayout = _recovered
+        st.session_state.setupDone = True   # disk file = previously committed
+
+layout_obj      = st.session_state.currentLayout or {}
 n_cols, n_beams = _count_elements(layout_obj)
 er              = st.session_state.eval_result
 _sm             = (er or {}).get("summary", {})
@@ -1717,33 +1890,23 @@ if _aq_raw.strip():
                 from nodes.modify import remove_element as _aq_rem
                 _aq_eid = _aq_ti.get("element_id", "")
                 if _aq_eid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_aq_rem(json.dumps(layout_obj), _aq_eid)))
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_aq_rem(json.dumps(layout_obj), _aq_eid)))
                     _aq_resp = f"Removed **{_aq_eid}** from the layout."
             elif _aq_tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _aq_amc
                 _aq_bid = _aq_ti.get("beam_id", "")
                 if _aq_bid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_aq_amc(json.dumps(layout_obj), _aq_bid)))
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_aq_amc(json.dumps(layout_obj), _aq_bid)))
                     _aq_resp = f"Added midspan column to **{_aq_bid}**."
             elif _aq_tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _aq_ups
                 _aq_uid = _aq_ti.get("element_id", "")
                 if _aq_uid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_aq_ups(json.dumps(layout_obj), _aq_uid)))
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_aq_ups(json.dumps(layout_obj), _aq_uid)))
                     _aq_resp = f"Upgraded section of **{_aq_uid}**."
         except Exception as _aq_tex:
             _aq_resp = f"Tool execution failed: {_aq_tex}"
     st.session_state.history.append({"prompt": _aq_raw, "response": _aq_resp})
-    st.session_state.viewer_nonce += 1
 
 _drawer_bg    = "#ffffff" if _is_light else "#0d2828"
 _drawer_bord  = "#c0d8d8" if _is_light else "#1a4040"
@@ -1857,39 +2020,55 @@ with st.sidebar:
         _upload = st.file_uploader(
             "layout", type=["json"], label_visibility="collapsed", key="sb_uploader"
         )
+        # Only process the file when it is genuinely new (name+size changed).
+        # Without this guard the handler runs on EVERY rerun while the file
+        # sits in the uploader, calling st.rerun() each time and preventing
+        # any other button (OK, agent, etc.) from executing.
         if _upload is not None:
-            try:
-                _loaded = _normalize_layout(json.loads(_upload.getvalue().decode("utf-8")))
-                _write_json(EDITED_LAYOUT_PATH, _loaded)
-                for _k in ("eval_result", "eval_alts", "agent_log", "grid_options",
-                           "selected_grid", "cost_flexibility", "last_comparison"):
-                    st.session_state[_k] = (
-                        [] if isinstance(st.session_state.get(_k), list) else None)
-                st.session_state.viewer_nonce += 1
-                st.rerun()
-            except Exception as _exc:
-                st.error(f"Invalid JSON: {_exc}")
+            _upload_fp = (_upload.name, _upload.size)
+            if _upload_fp != st.session_state.get("_last_upload_fp"):
+                try:
+                    _loaded = _normalize_layout(json.loads(_upload.getvalue().decode("utf-8")))
+                    # Reset all derived state — new file, clean slate
+                    for _k in ("eval_result", "eval_alts", "agent_log", "grid_options",
+                               "selected_grid", "cost_flexibility", "last_comparison",
+                               "history", "state_history", "output_log", "snapshots"):
+                        st.session_state[_k] = (
+                            [] if isinstance(st.session_state.get(_k), list) else None)
+                    st.session_state.currentLayout   = _loaded
+                    st.session_state.versionHistory  = []
+                    st.session_state.currentVersion  = 1
+                    st.session_state.setupDone       = False
+                    st.session_state.selected_el     = ""
+                    st.session_state["_last_upload_fp"]      = _upload_fp
+                    st.session_state["_last_sel_applied"]    = "\x00"
+                    st.session_state["selected_opt_bar_idx"] = -1
+                    _write_json(EDITED_LAYOUT_PATH, _loaded)
+                    st.rerun()
+                except Exception as _exc:
+                    st.error(f"Invalid JSON: {_exc}")
         if _lid:
             st.markdown(
                 f'<div class="sb-filename">{_lid}</div>'
-                f'<div class="sb-success">✓ Model loaded successfully</div>',
+                f'<div class="sb-success">✓ Model loaded — press OK ▶ Apply & Render</div>',
                 unsafe_allow_html=True,
             )
-            if st.button("↺ Reset to Default", use_container_width=True,
+            if st.button("↺  Clear & Reset", use_container_width=True,
                          key="btn_reset_layout"):
-                if DEFAULT_LAYOUT_PATH.exists():
-                    _write_json(EDITED_LAYOUT_PATH,
-                                _normalize_layout(_read_json(DEFAULT_LAYOUT_PATH)))
+                # Wipe everything — user must re-upload
                 for _rk, _rv in {
+                    "currentLayout": None, "versionHistory": [], "currentVersion": 0,
+                    "setupDone": False, "_last_upload_fp": None,
                     "eval_result": None, "eval_alts": [], "agent_log": [],
                     "grid_options": [], "selected_grid": None,
                     "cost_flexibility": None, "last_comparison": None,
                     "history": [], "state_history": [], "output_log": [],
-                    "snapshots": [], "selected_el": "", "compare_mode": False,
+                    "snapshots": [], "selected_el": "",
                     "_last_sel_applied": "\x00", "selected_opt_bar_idx": -1,
                 }.items():
                     st.session_state[_rk] = _rv
-                st.session_state.viewer_nonce += 1
+                if EDITED_LAYOUT_PATH.exists():
+                    EDITED_LAYOUT_PATH.unlink()
                 st.rerun()
 
         st.divider()
@@ -1932,31 +2111,49 @@ with st.sidebar:
         if mat_choice != _mat_now:
             st.session_state.material     = mat_choice
             st.session_state.grid_options = []
-            st.rerun()
+            st.session_state.setupDone    = False   # require OK again after material change
+
+        # ── OK button — commits loads/material into layout metadata and enables viewers
+        _ok_disabled = st.session_state.currentLayout is None
+        if st.button(
+            "OK  ▶  Apply & Render",
+            use_container_width=True, type="primary",
+            key="btn_ok_apply", disabled=_ok_disabled,
+        ):
+            if st.session_state.currentLayout is not None:
+                _cl = st.session_state.currentLayout
+                if "meta" not in _cl or not isinstance(_cl.get("meta"), dict):
+                    _cl["meta"] = {}
+                _cl["meta"]["material"] = mat_choice
+                _cl["meta"]["SDL"]      = st.session_state.sdl_kNm2
+                _cl["meta"]["LL"]       = st.session_state.live_load_kNm2
+                st.session_state.currentLayout = _cl
+                _write_json(EDITED_LAYOUT_PATH, _cl)
+                st.session_state.setupDone  = True
+                st.session_state.material   = mat_choice
+                _sync_viewers()
+                st.rerun()
 
     # ── Generate Grid + Options ───────────────────────────────────────────────
     st.markdown(
         f'<div style="margin:8px 0 6px;border-top:1px solid {_BORD}"></div>',
         unsafe_allow_html=True,
     )
-    _gopts_sb = st.session_state.grid_options
+    _gopts_sb  = st.session_state.grid_options
+    _gate_off  = not st.session_state.get("setupDone", False)
     if st.button("⊕  Generate Grid", use_container_width=True,
-                 type="primary", key="btn_gen_main"):
+                 type="primary", key="btn_gen_main", disabled=_gate_off):
         with st.spinner("Computing grid options…"):
             st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
         for _gi, _gopt_g in enumerate(st.session_state.grid_options, 1):
             (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
                 json.dumps(_gopt_g["layout"], indent=2, ensure_ascii=False),
                 encoding="utf-8")
-        # Auto-apply option 1 so the working layout has structure immediately.
+        # Auto-apply option 1 so structure is immediately available
         if st.session_state.grid_options:
             _auto_opt = st.session_state.grid_options[0].get("layout", {})
             if _auto_opt:
-                _auto_before = (EDITED_LAYOUT_PATH.read_text(encoding="utf-8")
-                                if EDITED_LAYOUT_PATH.exists()
-                                else json.dumps(layout_obj))
-                BEFORE_LAYOUT_PATH.write_text(_auto_before, encoding="utf-8")
-                _write_json(EDITED_LAYOUT_PATH, _auto_opt)
+                _push_version(_auto_opt)
         st.session_state["selected_opt_bar_idx"] = 0
         st.rerun()
 
@@ -1979,15 +2176,8 @@ with st.sidebar:
                                 sdl=_sdl_now, ll=_ll_now)
                         if _opt_ev:
                             st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
-                    # Apply selected option to the working layout file so the
-                    # agent and Run Structural Analysis see the generated structure.
                     if _opt_layout:
-                        _before_txt = (EDITED_LAYOUT_PATH.read_text(encoding="utf-8")
-                                       if EDITED_LAYOUT_PATH.exists()
-                                       else json.dumps(layout_obj))
-                        BEFORE_LAYOUT_PATH.write_text(_before_txt, encoding="utf-8")
-                        _write_json(EDITED_LAYOUT_PATH, _opt_layout)
-                        st.session_state.viewer_nonce += 1
+                        _push_version(_opt_layout)
                     st.session_state["selected_opt_bar_idx"] = _bi
                     st.session_state.eval_result = _opt_ev
                     st.session_state.eval_alts = _get_failure_alternatives(
@@ -2004,7 +2194,7 @@ with st.sidebar:
     _history = st.session_state.get("history", [])
     if _history:
         _bub = ""
-        for _msg in _history[-4:]:
+        for _msg in _history[-8:]:
             _q = _msg.get("prompt", "")
             _a = _msg.get("response", "")
             if _q:
@@ -2012,16 +2202,16 @@ with st.sidebar:
             if _a:
                 _bub += f'<div class="chat-a">{_a}</div>'
         st.markdown(
-            f'<div style="max-height:260px;overflow-y:auto;margin-bottom:6px">{_bub}</div>',
+            f'<div style="max-height:460px;overflow-y:auto;margin-bottom:8px">{_bub}</div>',
             unsafe_allow_html=True,
         )
 
     with st.form("agent_form", clear_on_submit=True):
         prompt_input = st.text_area(
             "Ask agent",
-            placeholder="Ask anything about your structure…\ne.g. reduce deflection in beam B1",
+            placeholder="Ask anything about your structure…\ne.g. remove column C4 / explain beam B1 failure",
             label_visibility="collapsed",
-            height=60,
+            height=130,
         )
         submitted = st.form_submit_button("Ask Agent  ›", use_container_width=True)
 
@@ -2056,8 +2246,7 @@ if submitted and prompt_input.strip():
         if st.session_state.grid_options:
             _ag_opt = st.session_state.grid_options[0].get("layout", {})
             if _ag_opt:
-                BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                _write_json(EDITED_LAYOUT_PATH, _ag_opt)
+                _push_version(_ag_opt)
                 st.session_state["selected_opt_bar_idx"] = 0
         _resp = f"Generated {len(st.session_state.grid_options)} grid option(s). Option 1 applied."
     elif _resp.startswith("APPLY_TOOL:"):
@@ -2068,41 +2257,26 @@ if submitted and prompt_input.strip():
                 from nodes.modify import remove_element as _rem_el
                 _eid = _ti.get("element_id", "")
                 if _eid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_rem_el(json.dumps(layout_obj), _eid)))
-                    st.session_state.viewer_nonce += 1
-                    # Drop option preview so the 2D/3D view reads the modified file
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_rem_el(json.dumps(layout_obj), _eid)))
                     _resp = f"Removed **{_eid}** from the layout."
             elif _tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _amc
                 _bid = _ti.get("beam_id", "")
                 if _bid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_amc(json.dumps(layout_obj), _bid)))
-                    st.session_state.viewer_nonce += 1
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_amc(json.dumps(layout_obj), _bid)))
                     _resp = f"Added midspan column to **{_bid}**."
             elif _tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _ups
                 _uid = _ti.get("element_id", "")
                 if _uid:
-                    BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-                    _write_json(EDITED_LAYOUT_PATH,
-                                json.loads(_ups(json.dumps(layout_obj), _uid)))
-                    st.session_state.viewer_nonce += 1
-                    st.session_state["selected_opt_bar_idx"] = -1
+                    _push_version(json.loads(_ups(json.dumps(layout_obj), _uid)))
                     _resp = f"Upgraded section of **{_uid}**."
         except Exception as _tex:
             _resp = f"Tool execution failed: {_tex}"
     elif _resp == "EVALUATE":
         from nodes.modify import apply_material_override
         _ls_ag = apply_material_override(json.dumps(layout_obj), _mat_now)
-        BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-        _write_json(EDITED_LAYOUT_PATH, json.loads(_ls_ag))
-        st.session_state.viewer_nonce += 1
+        _push_version(json.loads(_ls_ag))
         with st.spinner("Evaluating structure…"):
             _ev_ag = _run_evaluate(_ls_ag, sdl=_sdl_now, ll=_ll_now)
         if _ev_ag:
@@ -2182,6 +2356,24 @@ with _hcols[3]:
         )
 
 # ══════════════════════════════════════════════════════════════════════════════
+# EMPTY STATE GATE — nothing renders until upload + OK
+# ══════════════════════════════════════════════════════════════════════════════
+if not st.session_state.get("setupDone", False):
+    st.markdown(
+        f'<div style="display:flex;flex-direction:column;align-items:center;'
+        f'justify-content:center;min-height:60vh;gap:16px;text-align:center">'
+        f'<div style="font-size:2.5rem;opacity:.25">⬡</div>'
+        f'<div style="font-size:1.1rem;font-weight:700;color:{_TEXT}">'
+        f'No model loaded</div>'
+        f'<div style="font-size:.82rem;color:{_MUT};max-width:320px;line-height:1.6">'
+        f'Upload a JSON layout file in the sidebar, configure your loads and material, '
+        f'then press <b>OK ▶ Apply & Render</b> to begin.</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+# ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 tab_mod, tab_cmp = st.tabs(["  MODIFY WORK PLACE  ", "  COMPARE WORK PLACE  "])
@@ -2218,19 +2410,24 @@ with tab_mod:
             _sbar_html += '<span class="stp-arr">›</span>'
     _sbar_html += '</div>'
 
-    _sb_col, _run_col, _snap_col = st.columns([3.5, 1.5, 1.5], gap="small")
+    # Step bar in main area; Run Analysis + Save Snapshot aligned to right panel.
+    # Proportions match the main/right column split below (2.1 : 0.55).
+    _sb_col, _btn_area = st.columns([2.1, 0.55], gap="small")
     with _sb_col:
         st.markdown(_sbar_html, unsafe_allow_html=True)
-    with _run_col:
-        _run_clicked = st.button(
-            "▶  Run Structural Analysis",
-            type="primary", use_container_width=True, key="btn_run_analysis",
-        )
-    with _snap_col:
-        _sn_n = len(st.session_state.snapshots) + 1
-        _snap_clicked = st.button(
-            f"Save Snapshot #{_sn_n}", key="btn_snap", use_container_width=True,
-        )
+    with _btn_area:
+        _run_col, _snap_col = st.columns([1, 1], gap="small")
+        with _run_col:
+            _run_clicked = st.button(
+                "▶  Run Analysis",
+                type="primary", use_container_width=True, key="btn_run_analysis",
+                disabled=not st.session_state.get("setupDone", False),
+            )
+        with _snap_col:
+            _sn_n = len(st.session_state.snapshots) + 1
+            _snap_clicked = st.button(
+                f"Snapshot #{_sn_n}", key="btn_snap", use_container_width=True,
+            )
 
     if _snap_clicked:
         st.session_state.snapshots.append({
@@ -2238,9 +2435,11 @@ with tab_mod:
             "layout_json":      json.dumps(layout_obj),
             "eval_result":      er,
             "cost_flexibility": st.session_state.cost_flexibility,
-            "before_json":      (BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")
-                                 if BEFORE_LAYOUT_PATH.exists()
-                                 else json.dumps(layout_obj)),
+            "before_json":      json.dumps(
+                                    st.session_state.versionHistory[-1]
+                                    if st.session_state.get("versionHistory")
+                                    else layout_obj
+                                ),
         })
         st.rerun()
 
@@ -2255,9 +2454,7 @@ with tab_mod:
         else:
             from nodes.modify import apply_material_override
             _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
-            BEFORE_LAYOUT_PATH.write_text(json.dumps(layout_obj), encoding="utf-8")
-            _write_json(EDITED_LAYOUT_PATH, json.loads(_ls2))
-            st.session_state.viewer_nonce += 1
+            _push_version(json.loads(_ls2))
             with st.spinner("Evaluating structure…"):
                 _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
             if _ev2:
@@ -2304,26 +2501,12 @@ with tab_mod:
         )
         st.markdown(_pills, unsafe_allow_html=True)
 
-    # ── Option selection ──────────────────────────────────────────────────────
-    _gopts_bar = st.session_state.grid_options
-    _sel_opt_i = st.session_state.get("selected_opt_bar_idx", -1)
-
-    _preview_opt_file = ""
-    if _gopts_bar and 0 <= _sel_opt_i < len(_gopts_bar):
-        _preview_opt_file = f"team_01_option_{_sel_opt_i + 1}.json"
-
+    # currentLayout is always authoritative — _push_version keeps it in sync
+    # with EDITED_LAYOUT_PATH, so both viewers always read the same data.
     _plan_layout = layout_obj
-    if _preview_opt_file:
-        _opt_path = REPO_ROOT / _preview_opt_file
-        if _opt_path.exists():
-            try:
-                _plan_layout = _normalize_layout(
-                    json.loads(_opt_path.read_text(encoding="utf-8")))
-            except Exception:
-                pass
 
     # ── Main: floor plan | right panel ───────────────────────────────────────
-    _main_col, _right_col = st.columns([1.65, 0.75], gap="small")
+    _main_col, _right_col = st.columns([2.1, 0.55], gap="small")
 
     with _main_col:
         # Native toolbar (replaces the in-iframe JS bridge toolbar)
@@ -2351,10 +2534,9 @@ with tab_mod:
 
         if _vm == "2D":
             _before_lay = None
-            if st.session_state.compare_mode and BEFORE_LAYOUT_PATH.exists():
+            if st.session_state.compare_mode and st.session_state.get("versionHistory"):
                 try:
-                    _before_lay = _normalize_layout(
-                        json.loads(BEFORE_LAYOUT_PATH.read_text(encoding="utf-8")))
+                    _before_lay = st.session_state.versionHistory[-1]
                 except Exception:
                     pass
             _fig2d = _render_floor_plan_plotly(
@@ -2364,6 +2546,7 @@ with tab_mod:
                 height_px=510, is_light=_is_light,
                 diff_on=st.session_state.compare_mode,
                 before_layout=_before_lay,
+                revision=st.session_state.get("currentVersion", 0),
             )
             _sel_ev = st.plotly_chart(
                 _fig2d, on_select="rerun",
@@ -2376,15 +2559,21 @@ with tab_mod:
                 ),
                 key="floor_plan_plotly",
             )
-            # Handle element selection from click
-            if _sel_ev:
+            # Handle element selection from click.
+            # Streamlit's on_select returns dict-like point objects.
+            if _sel_ev and _sel_ev.selection and _sel_ev.selection.points:
                 try:
-                    _pts = _sel_ev.selection.points
-                    if _pts:
-                        _cd = getattr(_pts[0], "customdata", None)
-                        if _cd and str(_cd[0]) != st.session_state.selected_el:
-                            st.session_state.selected_el = str(_cd[0])
-                            st.session_state["_last_sel_applied"] = str(_cd[0])
+                    _pt0 = _sel_ev.selection.points[0]
+                    # Support both attribute-style and dict-style access.
+                    _cd = (
+                        _pt0.get("customdata") if isinstance(_pt0, dict)
+                        else getattr(_pt0, "customdata", None)
+                    )
+                    if _cd:
+                        _new_sel = str(_cd[0]) if isinstance(_cd, (list, tuple)) else str(_cd)
+                        if _new_sel != st.session_state.selected_el:
+                            st.session_state.selected_el = _new_sel
+                            st.session_state["_last_sel_applied"] = _new_sel
                             st.rerun()
                 except Exception:
                     pass
@@ -2395,7 +2584,6 @@ with tab_mod:
                         highlight=st.session_state.selected_el,
                         compare=st.session_state.compare_mode,
                         labels=st.session_state.labels_on,
-                        option_file=_preview_opt_file,
                     ),
                     height=512, scrolling=False,
                 )
@@ -2406,6 +2594,7 @@ with tab_mod:
                     highlight=st.session_state.selected_el,
                     labels=st.session_state.labels_on,
                     is_light=_is_light,
+                    revision=st.session_state.get("currentVersion", 0),
                 )
                 st.plotly_chart(_fig2d_fb, use_container_width=True,
                                 config=dict(scrollZoom=True, displaylogo=False),
@@ -2628,15 +2817,11 @@ with tab_mod:
                                         _mat_now, _sdl_now, _ll_now,
                                     )
                                     if _new_ev:
-                                        BEFORE_LAYOUT_PATH.write_text(
-                                            json.dumps(layout_obj), encoding="utf-8"
-                                        )
-                                        _write_json(EDITED_LAYOUT_PATH, json.loads(_new_ls))
+                                        _push_version(json.loads(_new_ls))
                                         st.session_state.eval_result = _new_ev
                                         st.session_state.eval_alts = _get_failure_alternatives(
                                             _new_ev, _mat_now
                                         )
-                                        st.session_state.viewer_nonce += 1
                                         st.rerun()
 
         with _rt2:
@@ -2647,6 +2832,38 @@ with tab_mod:
 
             if _sel_obj:
                 st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
+
+                # ── Direct action buttons (bypass agent) ──────────────────
+                _sel_is_beam = len(_sel_obj.get("geometry", [])) == 2
+                _act_cols = st.columns(2, gap="small") if _sel_is_beam else st.columns([1, 1], gap="small")
+
+                with _act_cols[0]:
+                    if st.button(f"✕  Remove", key="btn_direct_remove",
+                                 use_container_width=True):
+                        try:
+                            from nodes.modify import remove_element as _direct_rem
+                            _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel))
+                            _push_version(_new_layout)
+                            st.session_state.selected_el = ""
+                            st.rerun()
+                        except Exception as _re:
+                            st.error(f"Remove failed: {_re}")
+
+                if _sel_is_beam:
+                    with _act_cols[1]:
+                        if st.button("⊕  Add Mid-col", key="btn_direct_midcol",
+                                     use_container_width=True):
+                            try:
+                                from nodes.modify import add_midspan_column as _direct_amc
+                                _new_layout = json.loads(_direct_amc(json.dumps(layout_obj), _sel))
+                                _push_version(_new_layout)
+                                st.session_state.selected_el = ""
+                                st.rerun()
+                            except Exception as _me:
+                                st.error(f"Add midspan column failed: {_me}")
+
+                st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
+
             else:
                 st.markdown(
                     f'<div style="font-size:.70rem;color:{_MUT};padding:4px 0">'
@@ -2798,10 +3015,9 @@ with tab_mod:
                                 _s2.metric("Flex", f"{_scf.get('flexibility_score',0):.1f}/10")
                             if st.button(f"Restore {_sn['label']}",
                                          key=f"restore_{_sn['label']}"):
-                                _write_json(EDITED_LAYOUT_PATH, json.loads(_sn["layout_json"]))
-                                st.session_state.viewer_nonce += 1
-                                st.session_state.eval_result   = _sn.get("eval_result")
-                                st.session_state.eval_alts     = _get_failure_alternatives(
+                                _push_version(json.loads(_sn["layout_json"]))
+                                st.session_state.eval_result = _sn.get("eval_result")
+                                st.session_state.eval_alts   = _get_failure_alternatives(
                                     _sn.get("eval_result") or {}, _mat_now)
                                 st.rerun()
 
