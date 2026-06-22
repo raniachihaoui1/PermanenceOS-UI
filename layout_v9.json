@@ -1165,22 +1165,6 @@
           }
         },
         {
-          "id": "G6",
-          "name": "Col_G6",
-          "geometry": [
-            [
-              11.7,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
           "id": "G7",
           "name": "Col_G7",
           "geometry": [
@@ -2037,30 +2021,6 @@
           }
         },
         {
-          "id": "F6-G6",
-          "name": "Beam_F6-G6",
-          "geometry": [
-            [
-              7.85,
-              7.0
-            ],
-            [
-              11.7,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "F7-F8",
           "name": "Beam_F7-F8",
           "geometry": [
@@ -2076,6 +2036,30 @@
           "attributes": {
             "type": "internal",
             "length": 1.75,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F7-G7",
+          "name": "Beam_F7-G7",
+          "geometry": [
+            [
+              7.85,
+              8.25
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -2181,8 +2165,8 @@
           }
         },
         {
-          "id": "G5-G6",
-          "name": "Beam_G5-G6",
+          "id": "G5-G7",
+          "name": "Beam_G5-G7",
           "geometry": [
             [
               11.7,
@@ -2190,12 +2174,12 @@
             ],
             [
               11.7,
-              7.0
+              8.25
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 0.5,
+            "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -2220,30 +2204,6 @@
           "attributes": {
             "type": "internal",
             "length": 3.9,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G6-G7",
-          "name": "Beam_G6-G7",
-          "geometry": [
-            [
-              11.7,
-              7.0
-            ],
-            [
-              11.7,
-              8.25
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -3586,22 +3546,6 @@
           }
         },
         {
-          "id": "G6",
-          "name": "Col_G6",
-          "geometry": [
-            [
-              11.7,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
           "id": "G7",
           "name": "Col_G7",
           "geometry": [
@@ -4386,30 +4330,6 @@
           }
         },
         {
-          "id": "F6-G6",
-          "name": "Beam_F6-G6",
-          "geometry": [
-            [
-              7.85,
-              7.0
-            ],
-            [
-              11.7,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "F7-F8",
           "name": "Beam_F7-F8",
           "geometry": [
@@ -4425,6 +4345,30 @@
           "attributes": {
             "type": "internal",
             "length": 1.75,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F7-G7",
+          "name": "Beam_F7-G7",
+          "geometry": [
+            [
+              7.85,
+              8.25
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -4530,8 +4474,8 @@
           }
         },
         {
-          "id": "G5-G6",
-          "name": "Beam_G5-G6",
+          "id": "G5-G7",
+          "name": "Beam_G5-G7",
           "geometry": [
             [
               11.7,
@@ -4539,12 +4483,12 @@
             ],
             [
               11.7,
-              7.0
+              8.25
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 0.5,
+            "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -4569,30 +4513,6 @@
           "attributes": {
             "type": "internal",
             "length": 3.9,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G6-G7",
-          "name": "Beam_G6-G7",
-          "geometry": [
-            [
-              11.7,
-              7.0
-            ],
-            [
-              11.7,
-              8.25
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",

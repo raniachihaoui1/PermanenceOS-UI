@@ -777,7 +777,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -793,7 +793,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -809,7 +809,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -825,7 +825,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -841,7 +841,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -857,7 +857,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -873,7 +873,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -889,7 +889,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -905,7 +905,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -921,7 +921,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -937,7 +937,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -953,7 +953,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -969,7 +969,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -985,7 +985,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1001,7 +1001,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1017,7 +1017,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1033,7 +1033,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1049,7 +1049,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1065,7 +1065,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1081,7 +1081,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1097,7 +1097,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1113,7 +1113,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1129,7 +1129,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1145,7 +1145,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1161,7 +1161,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1177,7 +1177,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1193,7 +1193,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1209,7 +1209,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1225,7 +1225,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1241,7 +1241,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1257,7 +1257,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -1280,8 +1280,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1304,8 +1304,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1328,8 +1328,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1352,8 +1352,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1376,8 +1376,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1400,8 +1400,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1424,8 +1424,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1448,8 +1448,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1472,8 +1472,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1496,8 +1496,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1520,8 +1520,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1544,8 +1544,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1568,8 +1568,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1592,8 +1592,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1616,8 +1616,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1640,8 +1640,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1664,8 +1664,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1688,8 +1688,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1712,8 +1712,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1736,8 +1736,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1760,8 +1760,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1784,8 +1784,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1808,8 +1808,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1832,8 +1832,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1856,8 +1856,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1880,8 +1880,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1904,8 +1904,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1928,8 +1928,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1952,8 +1952,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -1976,8 +1976,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2000,16 +2000,40 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
-          "id": "G3-I3",
-          "name": "Beam_G3-I3",
+          "id": "G3-I3a",
+          "name": "Beam_G3-I3a",
           "geometry": [
             [
               11.7,
+              2.85
+            ],
+            [
+              13.65,
+              2.85
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 3.9,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "300",
+            "width": "200"
+          }
+        },
+        {
+          "id": "G3-I3b",
+          "name": "Beam_G3-I3b",
+          "geometry": [
+            [
+              13.65,
               2.85
             ],
             [
@@ -2024,8 +2048,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2048,8 +2072,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2072,8 +2096,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2096,8 +2120,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2120,8 +2144,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2144,8 +2168,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2168,8 +2192,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2192,8 +2216,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2216,8 +2240,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2240,8 +2264,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -2264,16 +2288,40 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
-          "id": "E8-F8",
-          "name": "Beam_E8-F8",
+          "id": "E8-F8a",
+          "name": "Beam_E8-F8a",
           "geometry": [
             [
               5.25,
+              10.0
+            ],
+            [
+              8.475,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 6.45,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "300",
+            "width": "200"
+          }
+        },
+        {
+          "id": "E8-F8b",
+          "name": "Beam_E8-F8b",
+          "geometry": [
+            [
+              8.475,
               10.0
             ],
             [
@@ -2288,8 +2336,46 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
+          }
+        },
+        {
+          "id": "E8-F8_M",
+          "name": "Column_E8-F8_M",
+          "geometry": [
+            [
+              8.475,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "200x200",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "RCC",
+            "conflict": "None"
+          }
+        },
+        {
+          "id": "G3-I3_M",
+          "name": "Column_G3-I3_M",
+          "geometry": [
+            [
+              13.65,
+              2.85
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "200x200",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "RCC",
+            "conflict": "None"
           }
         }
       ]
@@ -3070,7 +3156,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3086,7 +3172,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3102,7 +3188,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3118,7 +3204,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3134,7 +3220,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3150,7 +3236,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3166,7 +3252,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3182,7 +3268,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3198,7 +3284,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3214,7 +3300,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3230,7 +3316,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3246,7 +3332,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3262,7 +3348,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3278,7 +3364,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3294,7 +3380,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3310,7 +3396,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3326,7 +3412,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3342,7 +3428,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3358,7 +3444,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3374,7 +3460,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3390,23 +3476,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "F8",
-          "name": "Col_F8",
-          "geometry": [
-            [
-              7.85,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3422,7 +3492,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3438,7 +3508,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3454,7 +3524,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3470,7 +3540,7 @@
             "type": "internal",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3486,7 +3556,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3502,7 +3572,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3518,7 +3588,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3534,7 +3604,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3550,7 +3620,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3566,7 +3636,7 @@
             "type": "perimeter",
             "material": "RCC",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "200x200"
           }
         },
         {
@@ -3589,8 +3659,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3613,8 +3683,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3637,8 +3707,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3661,8 +3731,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3685,8 +3755,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3709,8 +3779,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3733,8 +3803,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3757,8 +3827,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3781,8 +3851,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3805,8 +3875,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3829,8 +3899,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3853,8 +3923,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3877,8 +3947,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3901,8 +3971,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3925,8 +3995,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3949,8 +4019,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3973,8 +4043,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -3997,8 +4067,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4021,8 +4091,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4045,8 +4115,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4069,20 +4139,20 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
-          "id": "E8-F8",
-          "name": "Beam_E8-F8",
+          "id": "E8-F8a",
+          "name": "Beam_E8-F8a",
           "geometry": [
             [
               5.25,
               10.0
             ],
             [
-              7.85,
+              6.55,
               10.0
             ]
           ],
@@ -4093,8 +4163,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4117,8 +4187,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4141,8 +4211,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4165,8 +4235,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4189,8 +4259,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4213,8 +4283,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4237,32 +4307,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F7-F8",
-          "name": "Beam_F7-F8",
-          "geometry": [
-            [
-              7.85,
-              8.25
-            ],
-            [
-              7.85,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.75,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4285,32 +4331,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F8-G8",
-          "name": "Beam_F8-G8",
-          "geometry": [
-            [
-              7.85,
-              10.0
-            ],
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4333,8 +4355,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4357,8 +4379,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4381,8 +4403,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4405,8 +4427,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4429,8 +4451,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4453,8 +4475,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4477,8 +4499,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4501,8 +4523,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4525,8 +4547,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4549,8 +4571,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4573,8 +4595,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4597,8 +4619,51 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
+          }
+        },
+        {
+          "id": "E8-F8_M",
+          "name": "Column_E8-F8_M",
+          "geometry": [
+            [
+              6.55,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "200x200",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "RCC",
+            "conflict": "None"
+          }
+        },
+        {
+          "id": "E8-F8b",
+          "name": "Beam_E8-F8b",
+          "geometry": [
+            [
+              6.55,
+              10.0
+            ],
+            [
+              11.7,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 5.15,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "300",
+            "width": "200"
           }
         }
       ]

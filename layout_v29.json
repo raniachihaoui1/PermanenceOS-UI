@@ -775,9 +775,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -791,9 +792,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -807,9 +809,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -823,9 +826,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -839,9 +843,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -855,9 +860,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -871,9 +877,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -887,9 +894,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -903,9 +911,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -919,9 +928,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -935,9 +945,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -951,9 +962,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -967,9 +979,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -983,9 +996,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -999,9 +1013,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1015,9 +1030,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1031,9 +1047,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1047,9 +1064,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1063,9 +1081,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1079,9 +1098,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1095,9 +1115,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1111,9 +1132,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1127,9 +1149,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1143,9 +1166,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1159,9 +1183,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1175,9 +1200,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1191,9 +1217,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1207,9 +1234,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1223,9 +1251,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1239,9 +1268,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1255,9 +1285,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -1278,10 +1309,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1302,10 +1334,11 @@
             "length": 0.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1326,10 +1359,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1350,10 +1384,11 @@
             "length": 0.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1374,10 +1409,11 @@
             "length": 2.95,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1398,10 +1434,11 @@
             "length": 4.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1422,10 +1459,11 @@
             "length": 3.8,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1446,10 +1484,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1470,10 +1509,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1494,10 +1534,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1518,10 +1559,11 @@
             "length": 0.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1542,10 +1584,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1566,10 +1609,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1590,10 +1634,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1614,10 +1659,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1638,10 +1684,11 @@
             "length": 2.1,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1662,10 +1709,11 @@
             "length": 2.4,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1686,10 +1734,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1710,10 +1759,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1734,10 +1784,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1758,10 +1809,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1782,10 +1834,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1806,10 +1859,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1830,10 +1884,11 @@
             "length": 0.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1854,10 +1909,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1878,10 +1934,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1902,10 +1959,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1926,10 +1984,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1950,10 +2009,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1974,10 +2034,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -1998,18 +2059,44 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
-          "id": "G3-I3",
-          "name": "Beam_G3-I3",
+          "id": "G3-I3a",
+          "name": "Beam_G3-I3a",
           "geometry": [
             [
               11.7,
+              2.85
+            ],
+            [
+              13.65,
+              2.85
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 3.9,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "STEEL",
+            "conflict": null,
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
+          }
+        },
+        {
+          "id": "G3-I3b",
+          "name": "Beam_G3-I3b",
+          "geometry": [
+            [
+              13.65,
               2.85
             ],
             [
@@ -2022,10 +2109,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2046,10 +2134,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2070,10 +2159,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2094,10 +2184,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2118,10 +2209,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2142,10 +2234,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2166,10 +2259,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2190,10 +2284,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2214,10 +2309,11 @@
             "length": 1.35,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2238,10 +2334,11 @@
             "length": 3.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -2262,18 +2359,44 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
-          "id": "E8-F8",
-          "name": "Beam_E8-F8",
+          "id": "E8-F8a",
+          "name": "Beam_E8-F8a",
           "geometry": [
             [
               5.25,
+              10.0
+            ],
+            [
+              8.475,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 6.45,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "STEEL",
+            "conflict": null,
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
+          }
+        },
+        {
+          "id": "E8-F8b",
+          "name": "Beam_E8-F8b",
+          "geometry": [
+            [
+              8.475,
               10.0
             ],
             [
@@ -2286,10 +2409,51 @@
             "length": 6.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
+          }
+        },
+        {
+          "id": "E8-F8_M",
+          "name": "Column_E8-F8_M",
+          "geometry": [
+            [
+              8.475,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "100x100",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "STEEL",
+            "conflict": "None",
+            "section": "HSS100x100x6"
+          }
+        },
+        {
+          "id": "G3-I3_M",
+          "name": "Column_G3-I3_M",
+          "geometry": [
+            [
+              13.65,
+              2.85
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "100x100",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "STEEL",
+            "conflict": "None",
+            "section": "HSS100x100x6"
           }
         }
       ]
@@ -3068,9 +3232,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3084,9 +3249,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3100,9 +3266,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3116,9 +3283,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3132,9 +3300,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3148,9 +3317,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3164,9 +3334,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3180,9 +3351,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3196,9 +3368,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3212,9 +3385,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3228,9 +3402,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3244,9 +3419,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3260,9 +3436,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3276,9 +3453,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3292,9 +3470,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3308,9 +3487,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3324,9 +3504,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3340,9 +3521,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3356,9 +3538,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3372,9 +3555,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3388,25 +3572,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "F8",
-          "name": "Col_F8",
-          "geometry": [
-            [
-              7.85,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3420,9 +3589,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3436,9 +3606,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3452,9 +3623,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3468,9 +3640,10 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3484,9 +3657,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3500,9 +3674,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3516,9 +3691,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3532,9 +3708,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3548,9 +3725,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3564,9 +3742,10 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "dimensions": "175x175"
+            "dimensions": "100x100",
+            "section": "HSS100x100x6"
           }
         },
         {
@@ -3587,10 +3766,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3611,10 +3791,11 @@
             "length": 0.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3635,10 +3816,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3659,10 +3841,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3683,10 +3866,11 @@
             "length": 0.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3707,10 +3891,11 @@
             "length": 2.95,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3731,10 +3916,11 @@
             "length": 4.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3755,10 +3941,11 @@
             "length": 3.8,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3779,10 +3966,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3803,10 +3991,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3827,10 +4016,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3851,10 +4041,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3875,10 +4066,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3899,10 +4091,11 @@
             "length": 2.1,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3923,10 +4116,11 @@
             "length": 2.4,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3947,10 +4141,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3971,10 +4166,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -3995,10 +4191,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4019,10 +4216,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4043,10 +4241,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4067,22 +4266,23 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
-          "id": "E8-F8",
-          "name": "Beam_E8-F8",
+          "id": "E8-F8a",
+          "name": "Beam_E8-F8a",
           "geometry": [
             [
               5.25,
               10.0
             ],
             [
-              7.85,
+              6.55,
               10.0
             ]
           ],
@@ -4091,10 +4291,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4115,10 +4316,11 @@
             "length": 0.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4139,10 +4341,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4163,10 +4366,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4187,10 +4391,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4211,10 +4416,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4235,34 +4441,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F7-F8",
-          "name": "Beam_F7-F8",
-          "geometry": [
-            [
-              7.85,
-              8.25
-            ],
-            [
-              7.85,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.75,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4283,34 +4466,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F8-G8",
-          "name": "Beam_F8-G8",
-          "geometry": [
-            [
-              7.85,
-              10.0
-            ],
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4331,10 +4491,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4355,10 +4516,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4379,10 +4541,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4403,10 +4566,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4427,10 +4591,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4451,10 +4616,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4475,10 +4641,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4499,10 +4666,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4523,10 +4691,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4547,10 +4716,11 @@
             "length": 1.35,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4571,10 +4741,11 @@
             "length": 3.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         },
         {
@@ -4595,10 +4766,56 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": "STEEL",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
+          }
+        },
+        {
+          "id": "E8-F8_M",
+          "name": "Column_E8-F8_M",
+          "geometry": [
+            [
+              6.55,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "dimensions": "100x100",
+            "height": "3.5",
+            "isWallAligned": "false",
+            "structuralRole": "primary",
+            "material": "STEEL",
+            "conflict": "None",
+            "section": "HSS100x100x6"
+          }
+        },
+        {
+          "id": "E8-F8b",
+          "name": "Beam_E8-F8b",
+          "geometry": [
+            [
+              6.55,
+              10.0
+            ],
+            [
+              11.7,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 5.15,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "STEEL",
+            "conflict": null,
+            "depth": "160",
+            "width": "82",
+            "section": "IPE160"
           }
         }
       ]
