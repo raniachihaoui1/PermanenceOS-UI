@@ -40,6 +40,18 @@ st.set_page_config(
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
 
+from nodes._layout import (
+    find_element_in_layout,
+    get_all_rooms,
+    get_level_count,
+    get_level_keys,
+    get_outline,
+    get_rooms,
+    get_structure,
+    is_multilevel,
+    iter_all_structure,
+)
+
 # No default layout — app starts empty until the user uploads a file.
 
 
@@ -84,8 +96,8 @@ def _sync_viewers() -> None:
 
 def _compute_diff(before: dict, after: dict) -> dict:
     """Return sets of element IDs: added, removed, changed between two layouts."""
-    b_els = {el["id"]: el for el in before.get("structure", [])}
-    a_els = {el["id"]: el for el in after.get("structure", [])}
+    b_els = {el["id"]: el for el in get_structure(before)}
+    a_els = {el["id"]: el for el in get_structure(after)}
     added   = set(a_els) - set(b_els)
     removed = set(b_els) - set(a_els)
     changed = {
@@ -106,6 +118,19 @@ def _normalize_layout(payload: object) -> dict:
             return first.get("layout", first) if isinstance(first.get("layout"), dict) else first
         raise ValueError("First list item must be a layout object")
     raise ValueError("Layout JSON must be an object or a non-empty list")
+
+
+def _strip_structure(layout: dict) -> dict:
+    """Remove all structural elements from a layout so the user starts with a blank grid.
+    Works for both flat (structure key) and multilevel (levels.*.structure) formats."""
+    import copy
+    layout = copy.deepcopy(layout)
+    if isinstance(layout.get("levels"), dict):
+        for lk in layout["levels"]:
+            layout["levels"][lk]["structure"] = []
+    else:
+        layout["structure"] = []
+    return layout
 
 
 def _load_working_layout() -> dict:
@@ -170,10 +195,21 @@ def _door_swing_points(a, b, fy_fn, n=12):
     return " ".join(f"{x},{y}" for x, y in pts)
 
 
+def _get_level_payload(layout: dict, level_key: str | None = None) -> dict:
+    if not is_multilevel(layout):
+        return layout
+    keys = get_level_keys(layout)
+    if not keys:
+        return {}
+    lk = level_key if level_key in keys else keys[0]
+    return layout.get("levels", {}).get(lk, {})
+
+
 def _render_floor_plan_plotly(
     layout: dict,
     eval_result: dict | None = None,
     highlight: str = "",
+    level_key: str | None = None,
     labels: bool = False,
     height_px: int = 510,
     is_light: bool = False,
@@ -194,6 +230,15 @@ def _render_floor_plan_plotly(
         PASS_C = "#40d090"; FAIL_C = "#ff5050"; SEL_C = "#ffd060"; WIN_C = "#4696dc"
         REM_C = "#ff5050"; ADD_C = "#40d090"; MOD_C = "#ffd060"
 
+    level_keys = get_level_keys(layout)
+    active_level = level_key if level_key in level_keys else (level_keys[0] if level_keys else "level_01")
+    level_payload = _get_level_payload(layout, active_level)
+    active_rooms = get_rooms(layout, active_level)
+    active_outline = get_outline(layout, active_level)
+    active_doors = level_payload.get("doors", []) if is_multilevel(layout) else layout.get("doors", [])
+    active_windows = level_payload.get("windows", []) if is_multilevel(layout) else layout.get("windows", [])
+    active_furniture = level_payload.get("furniture", []) if is_multilevel(layout) else layout.get("furniture", [])
+
     el_status: dict[str, str] = {}
     eval_map_b: dict = {}
     eval_map_c: dict = {}
@@ -213,8 +258,8 @@ def _render_floor_plan_plotly(
     _diff_changed: set[str] = set()
     _before_el_map: dict = {}
     if diff_on and before_layout:
-        _cur_map   = {el["id"]: el for el in layout.get("structure", [])}
-        _bef_map   = {el["id"]: el for el in before_layout.get("structure", [])}
+        _cur_map   = {el["id"]: el for el in get_structure(layout)}
+        _bef_map   = {el["id"]: el for el in get_structure(before_layout)}
         _before_el_map = _bef_map
         _diff_removed  = set(_bef_map) - set(_cur_map)
         _diff_added    = set(_cur_map) - set(_bef_map)
@@ -228,7 +273,7 @@ def _render_floor_plan_plotly(
     annotations: list = []
 
     # ── ROOMS ─────────────────────────────────────────────────────────────────
-    for room in layout.get("rooms", []):
+    for room in active_rooms:
         geo = room.get("geometry", [])
         if len(geo) < 3:
             continue
@@ -258,7 +303,7 @@ def _render_floor_plan_plotly(
             ))
 
     # ── OUTLINE ───────────────────────────────────────────────────────────────
-    outline = layout.get("outline", [])
+    outline = active_outline
     if len(outline) > 1:
         traces.append(go.Scatter(
             x=[p[0] for p in outline], y=[p[1] for p in outline],
@@ -267,7 +312,7 @@ def _render_floor_plan_plotly(
         ))
 
     # ── WINDOWS ───────────────────────────────────────────────────────────────
-    for win in layout.get("windows", []):
+    for win in active_windows:
         geo = win.get("geometry", [])
         if len(geo) >= 2:
             traces.append(go.Scatter(
@@ -277,7 +322,7 @@ def _render_floor_plan_plotly(
             ))
 
     # ── FURNITURE ─────────────────────────────────────────────────────────────
-    for furn in layout.get("furniture", []):
+    for furn in active_furniture:
         geo = furn.get("geometry", [])
         if len(geo) >= 3:
             fxs = [p[0] for p in geo] + [geo[0][0]]
@@ -289,9 +334,9 @@ def _render_floor_plan_plotly(
                 mode="lines", showlegend=False, hoverinfo="skip",
             ))
 
-    structure = layout.get("structure", [])
-    beams = [s for s in structure if len(s.get("geometry", [])) == 2]
-    cols  = [s for s in structure if len(s.get("geometry", [])) == 1]
+    all_structure = list(iter_all_structure(layout))
+    beams = [(lk, s) for lk, s in all_structure if len(s.get("geometry", [])) == 2]
+    cols  = [(lk, s) for lk, s in all_structure if len(s.get("geometry", [])) == 1]
 
     # ── DIFF: ghost removed elements at the back ───────────────────────────────
     if diff_on and before_layout:
@@ -316,7 +361,7 @@ def _render_floor_plan_plotly(
                 ))
 
     # ── BEAMS ─────────────────────────────────────────────────────────────────
-    for beam in beams:
+    for beam_level, beam in beams:
         eid   = beam["id"]
         geo   = beam["geometry"]
         p1, p2 = geo[0], geo[1]
@@ -329,7 +374,9 @@ def _render_floor_plan_plotly(
 
         status = el_status.get(eid, "none")
         # Diff colour overrides evaluation colour
-        if diff_on and eid in _diff_added:
+        if beam_level != active_level:
+            clr, lw = ACCENT, 1.2
+        elif diff_on and eid in _diff_added:
             clr, lw = ADD_C, 3.0
         elif diff_on and eid in _diff_changed:
             clr, lw = MOD_C, 3.0
@@ -339,10 +386,12 @@ def _render_floor_plan_plotly(
         if eid == highlight:
             clr = SEL_C
             lw  = 4.5
+        _opacity = 0.28 if beam_level != active_level else 1.0
 
         bev  = eval_map_b.get(eid, {})
         htxt = (
             f"<b>{eid}</b>  BEAM<br>"
+            f"Level: {beam_level}<br>"
             f"Mat: {mat} · Sec: {sec} · Span: {span} m<br>"
             f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
         )
@@ -354,7 +403,8 @@ def _render_floor_plan_plotly(
             x=[p1[0], p2[0]], y=[p1[1], p2[1]],
             mode="lines",
             line=dict(color=clr, width=lw),
-            customdata=[[eid, "beam"], [eid, "beam"]],
+            opacity=_opacity,
+            customdata=[[eid, "beam", beam_level], [eid, "beam", beam_level]],
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
@@ -366,11 +416,11 @@ def _render_floor_plan_plotly(
             x=_hxs, y=_hys,
             mode="markers",
             marker=dict(size=20, color=clr, opacity=0.001),
-            customdata=[[eid, "beam"]] * _n,
+            customdata=[[eid, "beam", beam_level]] * _n,
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        if labels:
+        if labels and beam_level == active_level:
             mx, my = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
             annotations.append(dict(
                 x=mx, y=my, text=eid, showarrow=False, yshift=7,
@@ -378,7 +428,7 @@ def _render_floor_plan_plotly(
             ))
 
     # ── COLUMNS ───────────────────────────────────────────────────────────────
-    for col_el in cols:
+    for col_level, col_el in cols:
         eid  = col_el["id"]
         geo  = col_el["geometry"]
         cx, cy = geo[0][0], geo[0][1]
@@ -389,7 +439,9 @@ def _render_floor_plan_plotly(
                   if attrs.get("depth") else None) or "—")
 
         status = el_status.get(eid, "none")
-        if diff_on and eid in _diff_added:
+        if col_level != active_level:
+            clr, sz = ACCENT, 8
+        elif diff_on and eid in _diff_added:
             clr, sz = ADD_C, 12
         elif diff_on and eid in _diff_changed:
             clr, sz = MOD_C, 12
@@ -399,10 +451,12 @@ def _render_floor_plan_plotly(
         if eid == highlight:
             clr = SEL_C
             sz  = 16
+        _opacity = 0.26 if col_level != active_level else 1.0
 
         cev  = eval_map_c.get(eid, {})
         htxt = (
             f"<b>{eid}</b>  COL<br>"
+            f"Level: {col_level}<br>"
             f"Mat: {mat} · Sec: {sec}<br>"
             f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
         )
@@ -415,7 +469,8 @@ def _render_floor_plan_plotly(
             mode="markers",
             marker=dict(color=clr, size=sz, symbol="square",
                         line=dict(color=BG, width=1.5)),
-            customdata=[[eid, "column"]],
+            opacity=_opacity,
+            customdata=[[eid, "column", col_level]],
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
@@ -424,21 +479,23 @@ def _render_floor_plan_plotly(
             x=[cx], y=[cy],
             mode="markers",
             marker=dict(size=32, color=clr, opacity=0.001),
-            customdata=[[eid, "column"]],
+            customdata=[[eid, "column", col_level]],
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        if labels:
+        if labels and col_level == active_level:
             annotations.append(dict(
                 x=cx, y=cy, text=eid, showarrow=False, yshift=-14,
                 font=dict(size=7, color=clr, family="monospace"),
             ))
 
     # ── AXIS BOUNDS ───────────────────────────────────────────────────────────
-    all_pts: list = list(layout.get("outline", []))
-    for _key in ("rooms", "doors", "windows", "furniture", "structure"):
-        for _el in layout.get(_key, []):
+    all_pts: list = list(active_outline)
+    for _key in ("rooms", "doors", "windows", "furniture"):
+        for _el in level_payload.get(_key, []):
             all_pts.extend(_el.get("geometry", []))
+    for _, _el in all_structure:
+        all_pts.extend(_el.get("geometry", []))
     if all_pts:
         _axs  = [p[0] for p in all_pts]; _ays = [p[1] for p in all_pts]
         _span = max(max(_axs)-min(_axs), max(_ays)-min(_ays), 1)
@@ -474,6 +531,7 @@ def _render_floor_plan_html(
     layout: dict,
     eval_result: dict | None = None,
     highlight: str = "",
+    level_key: str | None = None,
     labels: bool = False,
     height_px: int = 380,
     is_light: bool = False,
@@ -500,12 +558,13 @@ def _render_floor_plan_html(
         SEL_C  = "#ffd060"
         WIN_C  = "#4696dc"
 
-    all_pts: list = list(layout.get("outline", []))
-    for r in layout.get("rooms",     []): all_pts.extend(r.get("geometry", []))
-    for d in layout.get("doors",     []): all_pts.extend(d.get("geometry", []))
-    for w in layout.get("windows",   []): all_pts.extend(w.get("geometry", []))
-    for f in layout.get("furniture", []): all_pts.extend(f.get("geometry", []))
-    for s in layout.get("structure", []): all_pts.extend(s.get("geometry", []))
+    _level_payload = _get_level_payload(layout, level_key)
+    all_pts: list = list(get_outline(layout, level_key))
+    for r in get_rooms(layout, level_key): all_pts.extend(r.get("geometry", []))
+    for d in _level_payload.get("doors", []): all_pts.extend(d.get("geometry", []))
+    for w in _level_payload.get("windows", []): all_pts.extend(w.get("geometry", []))
+    for f in _level_payload.get("furniture", []): all_pts.extend(f.get("geometry", []))
+    for s in get_structure(layout): all_pts.extend(s.get("geometry", []))
 
     if not all_pts:
         return (
@@ -537,12 +596,12 @@ def _render_floor_plan_html(
             el_status[c["id"]] = "pass" if ok else "fail"
 
     # Needed for score badges — define before the room loop
-    _all_structure = layout.get("structure", [])
+    _all_structure = get_structure(layout)
 
     parts: list[str] = []
 
     # ── ROOMS ──────────────────────────────────────────────────────────────────
-    for room in layout.get("rooms", []):
+    for room in get_rooms(layout, level_key):
         geo = room.get("geometry", [])
         if len(geo) < 3:
             continue
@@ -602,7 +661,7 @@ def _render_floor_plan_html(
                 )
 
     # ── OUTLINE ────────────────────────────────────────────────────────────────
-    outline = layout.get("outline", [])
+    outline = get_outline(layout, level_key)
     if len(outline) > 1:
         parts.append(
             f'<polyline points="{_svg_poly_points(outline, fy)}" fill="none" '
@@ -944,9 +1003,355 @@ svg.panning {{ cursor:grabbing }}
 </body></html>"""
 
 
+def _render_3d_viewport(
+        layout: dict,
+        eval_result: dict | None,
+        selected_el: str,
+        active_level: str,
+        is_light: bool,
+        height: int = 512,
+) -> str:
+        level_keys = get_level_keys(layout)
+        if not level_keys:
+                level_keys = ["level_01"]
+
+        status_by_id: dict[str, str] = {}
+        if eval_result:
+                for b in eval_result.get("beams", []):
+                        b_ok = b.get("bend_PASS") and b.get("shear_PASS") and b.get("defl_TL_PASS") and b.get("defl_LL_PASS")
+                        status_by_id[b.get("id", "")] = "pass" if b_ok else "fail"
+                for c in eval_result.get("columns", []):
+                        c_ok = c.get("stress_PASS") and c.get("buckling_PASS")
+                        status_by_id[c.get("id", "")] = "pass" if c_ok else "fail"
+
+        levels_payload: list[dict] = []
+        for lk in level_keys:
+                lvl_obj = _get_level_payload(layout, lk)
+                levels_payload.append(
+                        {
+                                "key": lk,
+                                "outline": get_outline(layout, lk),
+                                "structure": get_structure(layout, lk),
+                                "doors": lvl_obj.get("doors", []),
+                                "windows": lvl_obj.get("windows", []),
+                                "furniture": lvl_obj.get("furniture", []),
+                        }
+                )
+
+        payload = {
+                "levels": levels_payload,
+                "activeLevel": active_level,
+                "selected": selected_el or "",
+                "statusById": status_by_id,
+                "isLight": is_light,
+        }
+        data_json = json.dumps(payload)
+
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=\"utf-8\" />
+    <style>
+        html, body {{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:{'#f0f7f7' if is_light else '#071a1a'}; }}
+        #root {{ position:relative; width:100%; height:{height}px; border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; border-radius:8px; overflow:hidden; }}
+        #cnv {{ width:100%; height:100%; display:block; }}
+        #hud {{ position:absolute; top:10px; left:10px; z-index:5; color:{'#1a2a30' if is_light else '#c8eeed'}; font:600 11px/1.3 'Inter', 'Segoe UI', sans-serif; background:{'rgba(255,255,255,0.86)' if is_light else 'rgba(7,26,26,0.82)'}; border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; border-radius:6px; padding:6px 8px; }}
+        #cube {{ position:absolute; top:10px; right:10px; z-index:6; display:grid; grid-template-columns:1fr 1fr; gap:4px; }}
+        .cube-btn {{ border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; background:{'rgba(255,255,255,0.9)' if is_light else 'rgba(13,40,40,0.9)'}; color:{'#1a2a30' if is_light else '#c8eeed'}; border-radius:4px; padding:4px 7px; font:700 10px/1 'Inter', sans-serif; cursor:pointer; }}
+        #err {{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:{'#c02020' if is_light else '#ff8080'}; font:600 12px/1.4 'Inter', sans-serif; background:{'rgba(255,255,255,0.92)' if is_light else 'rgba(7,26,26,0.95)'}; padding:20px; text-align:center; }}
+    </style>
+    <script type=\"importmap\">{{
+        \"imports\": {{
+            \"three\": \"https://unpkg.com/three@0.166.1/build/three.module.js\",
+            \"three/addons/\": \"https://unpkg.com/three@0.166.1/examples/jsm/\"
+        }}
+    }}</script>
+</head>
+<body>
+    <div id=\"root\">
+        <canvas id=\"cnv\"></canvas>
+        <div id=\"hud\">3D BIM View<br/>Click element to inspect</div>
+        <div id=\"cube\">
+            <button class=\"cube-btn\" data-view=\"top\">TOP</button>
+            <button class=\"cube-btn\" data-view=\"front\">FRONT</button>
+            <button class=\"cube-btn\" data-view=\"right\">RIGHT</button>
+            <button class=\"cube-btn\" data-view=\"iso\">ISO</button>
+        </div>
+        <div id=\"err\"></div>
+    </div>
+    <script type=\"module\">
+        import * as THREE from 'three';
+        import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+
+        const DATA = {data_json};
+        const STOREY_H = 3.0;
+
+        function showError(msg) {{
+            const el = document.getElementById('err');
+            el.textContent = msg;
+            el.style.display = 'flex';
+        }}
+
+        try {{
+            const root = document.getElementById('root');
+            const canvas = document.getElementById('cnv');
+            const renderer = new THREE.WebGLRenderer({{ canvas, antialias:true, alpha:true }});
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.setSize(root.clientWidth, root.clientHeight, false);
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(DATA.isLight ? 0xf0f7f7 : 0x071a1a);
+
+            const camera = new THREE.PerspectiveCamera(50, root.clientWidth / root.clientHeight, 0.01, 2000);
+            camera.position.set(16, 14, 16);
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.95));
+            const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+            dir.position.set(12, 20, 10);
+            scene.add(dir);
+
+            const grid = new THREE.GridHelper(80, 80, DATA.isLight ? 0x9cb3b3 : 0x264848, DATA.isLight ? 0xd3e3e3 : 0x163737);
+            scene.add(grid);
+
+            const pickables = [];
+            const box = new THREE.Box3();
+            const statusById = DATA.statusById || {{}};
+
+            function statusColor(id) {{
+                const s = statusById[id] || 'none';
+                if (s === 'pass') return 0x40d090;
+                if (s === 'fail') return 0xff5050;
+                return 0x6aa6ff;
+            }}
+
+            function levelOpacity(level) {{
+                return level === DATA.activeLevel ? 0.95 : 0.28;
+            }}
+
+            function addSlab(level, idx, outline) {{
+                if (!Array.isArray(outline) || outline.length < 3) return;
+                const shape = new THREE.Shape();
+                shape.moveTo(outline[0][0], outline[0][1]);
+                for (let i = 1; i < outline.length; i++) shape.lineTo(outline[i][0], outline[i][1]);
+                const geo = new THREE.ExtrudeGeometry(shape, {{ depth: 0.18, bevelEnabled: false }});
+                const mat = new THREE.MeshStandardMaterial({{
+                    color: DATA.isLight ? 0xe8efef : 0x0f2f2f,
+                    metalness: 0.05,
+                    roughness: 0.86,
+                    transparent: true,
+                    opacity: levelOpacity(level),
+                }});
+                const slab = new THREE.Mesh(geo, mat);
+                slab.rotation.x = -Math.PI / 2;
+                slab.position.y = idx * STOREY_H;
+                scene.add(slab);
+                box.expandByObject(slab);
+            }}
+
+            function addColumn(level, idx, el) {{
+                const pt = (el.geometry || [])[0];
+                if (!pt) return;
+                const geo = new THREE.BoxGeometry(0.32, STOREY_H, 0.32);
+                const mat = new THREE.MeshStandardMaterial({{
+                    color: statusColor(el.id),
+                    transparent: true,
+                    opacity: levelOpacity(level),
+                    emissive: 0x000000,
+                }});
+                const m = new THREE.Mesh(geo, mat);
+                m.position.set(pt[0], idx * STOREY_H + STOREY_H * 0.5, pt[1]);
+                m.userData = {{ id: el.id, level, type: 'column' }};
+                scene.add(m);
+                pickables.push(m);
+                box.expandByObject(m);
+            }}
+
+            function addBeam(level, idx, el) {{
+                const g = el.geometry || [];
+                if (g.length < 2) return;
+                const p1 = new THREE.Vector3(g[0][0], 0, g[0][1]);
+                const p2 = new THREE.Vector3(g[1][0], 0, g[1][1]);
+                const span = p1.distanceTo(p2);
+                if (span <= 0.001) return;
+                const geo = new THREE.BoxGeometry(span, 0.28, 0.22);
+                const mat = new THREE.MeshStandardMaterial({{
+                    color: statusColor(el.id),
+                    transparent: true,
+                    opacity: levelOpacity(level),
+                    emissive: 0x000000,
+                }});
+                const m = new THREE.Mesh(geo, mat);
+                const mid = p1.clone().add(p2).multiplyScalar(0.5);
+                m.position.set(mid.x, idx * STOREY_H + (STOREY_H - 0.25), mid.z);
+                m.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+                m.userData = {{ id: el.id, level, type: 'beam' }};
+                scene.add(m);
+                pickables.push(m);
+                box.expandByObject(m);
+            }}
+
+            (DATA.levels || []).forEach((lvl, idx) => {{
+                addSlab(lvl.key, idx, lvl.outline || []);
+                (lvl.structure || []).forEach((el) => {{
+                    const g = el.geometry || [];
+                    if (g.length === 1) addColumn(lvl.key, idx, el);
+                    if (g.length === 2) addBeam(lvl.key, idx, el);
+                }});
+            }});
+
+            const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
+            const size = box.isEmpty() ? new THREE.Vector3(10, 10, 10) : box.getSize(new THREE.Vector3());
+            const radius = Math.max(size.x, size.y, size.z, 10);
+            controls.target.copy(center);
+            camera.position.set(center.x + radius * 0.9, center.y + radius * 0.7, center.z + radius * 0.9);
+            controls.update();
+
+            const ray = new THREE.Raycaster();
+            const ptr = new THREE.Vector2();
+            let hovered = null;
+
+            function setHover(obj) {{
+                if (hovered && hovered.material) hovered.material.emissive.setHex(0x000000);
+                hovered = obj;
+                if (hovered && hovered.material) hovered.material.emissive.setHex(0x4f46e5);
+            }}
+
+            function pointerToNdc(evt) {{
+                const rect = renderer.domElement.getBoundingClientRect();
+                ptr.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                ptr.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+            }}
+
+            renderer.domElement.addEventListener('pointermove', (evt) => {{
+                pointerToNdc(evt);
+                ray.setFromCamera(ptr, camera);
+                const hit = ray.intersectObjects(pickables, false)[0];
+                setHover(hit ? hit.object : null);
+            }});
+
+            renderer.domElement.addEventListener('click', (evt) => {{
+                pointerToNdc(evt);
+                ray.setFromCamera(ptr, camera);
+                const hit = ray.intersectObjects(pickables, false)[0];
+                if (!hit) {{
+                    window.parent.postMessage({{ type:'selectElement', elementId:'', level:'' }}, '*');
+                    return;
+                }}
+                const id = hit.object.userData?.id || '';
+                const level = hit.object.userData?.level || '';
+                window.parent.postMessage({{ type:'selectElement', elementId:id, level }}, '*');
+            }});
+
+            function lookFrom(v) {{
+                const start = camera.position.clone();
+                const end = center.clone().add(v.clone().multiplyScalar(radius * 1.25));
+                const t0 = performance.now();
+                const ms = 260;
+                function step(t) {{
+                    const k = Math.min((t - t0) / ms, 1);
+                    const e = 1 - Math.pow(1 - k, 3);
+                    camera.position.lerpVectors(start, end, e);
+                    controls.target.copy(center);
+                    controls.update();
+                    if (k < 1) requestAnimationFrame(step);
+                }}
+                requestAnimationFrame(step);
+            }}
+
+            document.querySelectorAll('.cube-btn').forEach((btn) => {{
+                btn.addEventListener('click', () => {{
+                    const v = btn.getAttribute('data-view');
+                    if (v === 'top') lookFrom(new THREE.Vector3(0, 1, 0.001));
+                    if (v === 'front') lookFrom(new THREE.Vector3(0, 0.1, 1));
+                    if (v === 'right') lookFrom(new THREE.Vector3(1, 0.1, 0));
+                    if (v === 'iso') lookFrom(new THREE.Vector3(1, 0.7, 1));
+                }});
+            }});
+
+            const selected = (DATA.selected || '').trim();
+            if (selected) {{
+                const target = pickables.find((m) => (m.userData?.id || '') === selected);
+                if (target && target.material) target.material.emissive.setHex(0x4f46e5);
+            }}
+
+            function onResize() {{
+                const w = root.clientWidth;
+                const h = root.clientHeight;
+                camera.aspect = w / Math.max(h, 1);
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h, false);
+            }}
+            window.addEventListener('resize', onResize);
+
+            function animate() {{
+                controls.update();
+                renderer.render(scene, camera);
+                requestAnimationFrame(animate);
+            }}
+            animate();
+        }} catch (err) {{
+            showError('3D viewer failed to load. Check internet/CDN access for Three.js.');
+            console.error(err);
+        }}
+    </script>
+</body>
+</html>"""
+
+
+def _grid_option_kpis(layout_dict: dict) -> dict:
+    """Compute KPIs for a generated grid option to show in the option card."""
+    import math as _m
+    structure = get_structure(layout_dict)
+    cols  = [el for el in structure if len(el.get("geometry", [])) == 1]
+    beams = [el for el in structure if len(el.get("geometry", [])) == 2]
+    spans = []
+    for bm in beams:
+        g = bm.get("geometry", [])
+        if len(g) == 2:
+            spans.append(round(_m.dist(g[0], g[1]), 2))
+    perimeter_cols = sum(1 for c in cols if (c.get("attributes") or {}).get("type") == "perimeter")
+    internal_cols  = len(cols) - perimeter_cols
+    max_span       = max(spans) if spans else 0.0
+    avg_span       = round(sum(spans) / len(spans), 2) if spans else 0.0
+    mat_set = {(el.get("attributes") or {}).get("material") for el in structure}
+    mat_set.discard(None)
+    mat_str = ", ".join(sorted(mat_set)) if mat_set else "—"
+    return {
+        "n_cols": len(cols), "n_beams": len(beams),
+        "perimeter_cols": perimeter_cols, "internal_cols": internal_cols,
+        "max_span": max_span, "avg_span": avg_span,
+        "n_spans": len(spans), "material": mat_str,
+    }
+
+
+def _grid_option_description(idx: int, kpis: dict) -> str:
+    """Return a 1-sentence description of a structural grid option based on its KPIs."""
+    if kpis["n_cols"] == 0:
+        return "No structural elements placed."
+    ratio = kpis["n_beams"] / max(kpis["n_cols"], 1)
+    if kpis["max_span"] > 6.0:
+        style = "long-span open grid"
+    elif kpis["internal_cols"] == 0:
+        style = "perimeter-only frame"
+    elif ratio > 3:
+        style = "dense beam network"
+    else:
+        style = "regular structural grid"
+    return (
+        f"Option {idx+1}: {style} — {kpis['n_cols']} col / {kpis['n_beams']} beam, "
+        f"max span {kpis['max_span']}m (avg {kpis['avg_span']}m)."
+    )
+
+
+
 def _count_elements(layout: dict) -> tuple[int, int]:
-    cols  = sum(1 for el in layout.get("structure", []) if len(el.get("geometry", [])) == 1)
-    beams = sum(1 for el in layout.get("structure", []) if len(el.get("geometry", [])) == 2)
+    structure = get_structure(layout)
+    cols  = sum(1 for el in structure if len(el.get("geometry", [])) == 1)
+    beams = sum(1 for el in structure if len(el.get("geometry", [])) == 2)
     return cols, beams
 
 
@@ -1057,10 +1462,14 @@ def _run_evaluate(layout_json_str: str, sdl: float = 3.5, ll: float = 2.0) -> di
 def _run_grid_options(layout: dict, material: str) -> list[dict]:
     import traceback as _tb
 
-    if not layout.get("rooms"):
+    _rooms = get_all_rooms(layout)
+    _level_keys = get_level_keys(layout)
+    _outline = get_outline(layout, _level_keys[0] if _level_keys else None)
+
+    if not _rooms:
         st.error("Generate Grid failed: layout has no **rooms** key.")
         return []
-    if not layout.get("outline"):
+    if not _outline:
         st.error("Generate Grid failed: layout has no **outline** key.")
         return []
 
@@ -1074,8 +1483,8 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
             st.warning(
                 "Generate Grid: no structural options were produced. "
                 f"generate_structure returned {type(raw).__name__} "
-                f"(rooms={len(layout.get('rooms', []))}, "
-                f"outline pts={len(layout.get('outline', []))})."
+                f"(rooms={len(_rooms)}, "
+                f"outline pts={len(_outline)})."
             )
             return []
 
@@ -1295,7 +1704,7 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
         ctx          = bootstrap()
         tool_catalog = _format_tool_catalog(get_action_tools())
-        structure    = layout.get("structure", [])
+        structure    = get_structure(layout)
         beams        = [el for el in structure if len(el.get("geometry", [])) == 2]
         cols         = [el for el in structure if len(el.get("geometry", [])) == 1]
         sdl          = st.session_state.get("sdl_kNm2", 3.5)
@@ -1356,8 +1765,10 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
+            # Advisory text from the agent (explanation + alternatives)
+            _advisory = result.get("final_response", "").strip()
             if any(c.get("name") == "tag_and_audit" for c in calls):
-                return "GENERATE_GRID"
+                return "GENERATE_GRID" + (f"\n{_advisory}" if _advisory else "")
             for _c in calls:
                 _cname  = _c.get("name", "")
                 _cinput = _c.get("input", _c.get("arguments", {}))
@@ -1375,7 +1786,8 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                     return "EVALUATE"
                 elif _cname in {"remove_element", "add_midspan_column",
                                 "upgrade_element_section"}:
-                    return f"APPLY_TOOL:{json.dumps({'name': _cname, 'input': _cinput})}"
+                    _tool_payload = {"name": _cname, "input": _cinput, "advisory": _advisory}
+                    return f"APPLY_TOOL:{json.dumps(_tool_payload)}"
             if calls:
                 first = calls[0]
                 return (
@@ -1506,7 +1918,11 @@ def _ensure_session() -> None:
         "selected_grid":   None,
         "output_log":      [],
         "selected_el":     "",
+        "active_level":    "level_01",
+        "active_element_level": "",
         "_last_sel_applied": "\x00",
+        "_last_lvl_applied": "\x00",
+        "cmp_sel_indices": [],      # indices into snapshots list for compare tab
         "last_click_debug": {},
         "compare_mode":    False,
         "labels_on":       False,
@@ -1530,6 +1946,12 @@ _pending_sel = st.query_params.get("_sel", "")
 if _pending_sel != st.session_state.get("_last_sel_applied", "\x00"):
     st.session_state.selected_el = _pending_sel
     st.session_state["_last_sel_applied"] = _pending_sel
+_pending_lvl = st.query_params.get("_lvl", "")
+if _pending_lvl != st.session_state.get("_last_lvl_applied", "\x00"):
+    st.session_state.active_element_level = _pending_lvl
+    if _pending_lvl:
+        st.session_state.active_level = _pending_lvl
+    st.session_state["_last_lvl_applied"] = _pending_lvl
 
 # Toolbar state via query params (set by JS bridge when overlay buttons are clicked)
 _tb_vm = st.query_params.get("_tb_vm", "")
@@ -1553,20 +1975,33 @@ _aq_raw = st.query_params.get("_aq", "")
 _APP_AGENT_PROMPT = """You are a structural design assistant embedded in the PermanenceOS UI.
 You help architects modify, evaluate, and understand structural layouts.
 
-ACTIONS — execute immediately, never refuse:
-- REMOVE any element (column or beam) when asked: set action="tool", call remove_element with the element_id.
-- ADD midspan column to a beam when asked: set action="tool", call add_midspan_column with the beam_id.
-- UPGRADE a section when asked: set action="tool", call upgrade_element_section with element_id and new_section.
-- GENERATE structural grid when asked: set action="tool", call tag_and_audit.
-- MODIFY attributes when asked: set action="tool", call modify_structure.
+ADVISORY-FIRST RULE — for every action that modifies the structure, you MUST:
+1. In final_response: briefly explain what this change will do (1-2 sentences), name 1-2 alternatives, then confirm you are executing.
+2. Set action="tool" with the correct tool call.
+Both final_response and tool_calls MUST be filled simultaneously when executing.
 
-Do not flag any element as load-bearing or permanent. Do not ask for confirmation.
-Do not explain risk — just execute the action via the tool call.
+Example format for a remove action:
+{{
+  "action": "tool",
+  "final_response": "Removing column C4. This will merge the beams on either side into a longer span — check that the resulting beam span is within limits. Alternative: you could add a midspan support instead, or simply leave it in place if span limits are already tight. Executing now.",
+  "tool_calls": [{{"name": "remove_element", "arguments": {{"element_id": "C4"}}}}]
+}}
+
+PERIMETER / NOT-ALLOWED ELEMENTS:
+If the element type is "perimeter" or it defines the building envelope, do NOT call a tool.
+Set action="final" and explain: why it can't be removed, what the structural risk is, and offer 2 concrete alternatives the architect can actually do (e.g. upgrade sections, add internal support, redesign the span).
+
+ACTIONS:
+- REMOVE any element: set action="tool", call remove_element. Include advisory in final_response.
+- ADD midspan column: set action="tool", call add_midspan_column. Include advisory in final_response.
+- UPGRADE a section: set action="tool", call upgrade_element_section. Include advisory in final_response.
+- GENERATE structural grid: set action="tool", call tag_and_audit. Include advisory in final_response.
+- MODIFY attributes: set action="tool", call modify_structure. Include advisory in final_response.
 
 EVALUATION (user asks to evaluate, check structure, run analysis, run loads):
 Set action="final", final_response="" (empty string). The evaluation runs automatically.
 
-QUESTIONS (explain results, describe layout, interpret failures, what rooms exist, why is X failing):
+QUESTIONS (explain results, describe layout, interpret failures):
 Set action="final" and write a clear, concise answer in final_response.
 Use element IDs and values from the layout context. Never invent IDs.
 
@@ -1575,7 +2010,7 @@ Toolbox:
 
 Return strictly valid JSON:
 {{"action": "final" | "tool", "final_response": "...", "tool_calls": [{{"name": "<tool>", "arguments": {{...}}}}]}}
-Rules: JSON only, no markdown. If action is final: tool_calls must be []. If action is tool: final_response must be "".
+Rules: JSON only, no markdown. If action is final: tool_calls must be []. If action is tool: BOTH final_response AND tool_calls must be filled.
 """
 
 _is_light = st.session_state.get("theme", "dark") == "light"
@@ -1816,15 +2251,9 @@ section[data-testid="stSidebar"]>div:first-child{{
   padding:1px 6px!important;min-height:unset!important;font-size:.70rem!important;
   background:transparent!important;border:1px solid {_BORD}!important;
   color:{_MUT}!important;border-radius:4px!important;line-height:1.4!important;font-family:{_F}!important}}
-/* ── Compare tab: hide sidebar when 2nd tab is active (CSS :has) ─ */
+/* ── Compare tab: slightly narrower sidebar to give more room ─────── */
 body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
-  section[data-testid="stSidebar"]{{display:none!important}}
-body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
-  [data-testid="stSidebarCollapsedControl"],
-body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
-  [data-testid="collapsedControl"]{{display:none!important}}
-body:has([role="tablist"] [role="tab"]:nth-child(2)[aria-selected="true"])
-  [data-testid="stMainBlockContainer"]{{padding-left:.8rem!important;max-width:100%!important}}
+  [data-testid="stMainBlockContainer"]{{padding-left:.4rem!important;max-width:100%!important}}
 """
 
 st.markdown(f"<style>{_CSS}</style>", unsafe_allow_html=True)
@@ -1844,9 +2273,12 @@ st.html("""
     var url=new URL(window.parent.location.href);
     if(ev.data.type==='selectElement'){
       var eid=ev.data.elementId||'';
+            var lvl=ev.data.level||'';
       var prev=url.searchParams.get('_sel')||'';
-      if(eid===prev)return;
+            var prevLvl=url.searchParams.get('_lvl')||'';
+            if(eid===prev && lvl===prevLvl)return;
       if(eid){url.searchParams.set('_sel',eid);}else{url.searchParams.delete('_sel');}
+            if(lvl){url.searchParams.set('_lvl',lvl);}else{url.searchParams.delete('_lvl');}
       _rerun(url);
     } else if(ev.data.type==='toolbar'){
       url.searchParams.set('_tb_'+ev.data.key, ev.data.val);
@@ -1871,6 +2303,9 @@ if st.session_state.currentLayout is None and EDITED_LAYOUT_PATH.exists():
         st.session_state.setupDone = True   # disk file = previously committed
 
 layout_obj      = st.session_state.currentLayout or {}
+_level_keys_now = get_level_keys(layout_obj) if layout_obj else ["level_01"]
+if st.session_state.get("active_level") not in _level_keys_now:
+    st.session_state.active_level = _level_keys_now[0] if _level_keys_now else "level_01"
 n_cols, n_beams = _count_elements(layout_obj)
 er              = st.session_state.eval_result
 _sm             = (er or {}).get("summary", {})
@@ -2030,6 +2465,9 @@ with st.sidebar:
             if _upload_fp != st.session_state.get("_last_upload_fp"):
                 try:
                     _loaded = _normalize_layout(json.loads(_upload.getvalue().decode("utf-8")))
+                    # Strip any pre-built structure from the JSON so the user always
+                    # starts with a blank design and must press "Generate Grid" explicitly.
+                    _loaded = _strip_structure(_loaded)
                     # Reset all derived state — new file, clean slate
                     for _k in ("eval_result", "eval_alts", "agent_log", "grid_options",
                                "selected_grid", "cost_flexibility", "last_comparison",
@@ -2041,8 +2479,11 @@ with st.sidebar:
                     st.session_state.currentVersion  = 1
                     st.session_state.setupDone       = False
                     st.session_state.selected_el     = ""
+                    st.session_state.active_level    = "level_01"
+                    st.session_state.active_element_level = ""
                     st.session_state["_last_upload_fp"]      = _upload_fp
                     st.session_state["_last_sel_applied"]    = "\x00"
+                    st.session_state["_last_lvl_applied"]    = "\x00"
                     st.session_state["selected_opt_bar_idx"] = -1
                     _write_json(EDITED_LAYOUT_PATH, _loaded)
                     st.rerun()
@@ -2065,7 +2506,9 @@ with st.sidebar:
                     "cost_flexibility": None, "last_comparison": None,
                     "history": [], "state_history": [], "output_log": [],
                     "snapshots": [], "selected_el": "",
+                    "active_level": "level_01", "active_element_level": "",
                     "_last_sel_applied": "\x00", "selected_opt_bar_idx": -1,
+                    "_last_lvl_applied": "\x00",
                 }.items():
                     st.session_state[_rk] = _rv
                 if EDITED_LAYOUT_PATH.exists():
@@ -2159,31 +2602,48 @@ with st.sidebar:
         st.rerun()
 
     if _gopts_sb:
-        _ob1, _ob2, _ob3 = st.columns(3, gap="small")
-        for _bi, (_obc, _gopt_sb) in enumerate(zip([_ob1, _ob2, _ob3], _gopts_sb[:3])):
+        for _bi, _gopt_sb in enumerate(_gopts_sb[:3]):
             _is_sel_sb = st.session_state.get("selected_opt_bar_idx", -1) == _bi
-            with _obc:
-                if st.button(
-                    f"Option {_bi+1}", key=f"sb_opt_{_bi}",
-                    width="stretch",
-                    type="primary" if _is_sel_sb else "secondary",
-                ):
-                    _opt_layout = _gopt_sb.get("layout", {})
-                    _opt_ev = _gopt_sb.get("evaluation")
-                    if _opt_ev is None:
-                        with st.spinner(f"Evaluating Option {_bi+1}…"):
-                            _opt_ev = _run_evaluate(
-                                json.dumps(_opt_layout),
-                                sdl=_sdl_now, ll=_ll_now)
-                        if _opt_ev:
-                            st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
-                    if _opt_layout:
-                        _push_version(_opt_layout)
-                    st.session_state["selected_opt_bar_idx"] = _bi
-                    st.session_state.eval_result = _opt_ev
-                    st.session_state.eval_alts = _get_failure_alternatives(
-                        _opt_ev or {}, _mat_now)
-                    st.rerun()
+            _kpis = _grid_option_kpis(_gopt_sb.get("layout", {}))
+            _desc  = _grid_option_description(_bi, _kpis)
+            _bcard_bg  = f"background:{'rgba(42,192,192,0.10)' if _is_sel_sb else _CARD}"
+            _bcard_brd = f"border:1px solid {_ACC if _is_sel_sb else _BORD}"
+            st.markdown(
+                f'<div style="{_bcard_bg};{_bcard_brd};border-radius:8px;'
+                f'padding:8px 10px;margin-bottom:6px">'
+                f'<div style="font-size:.63rem;font-weight:700;color:{"#2ac0c0" if _is_sel_sb else _TEXT};'
+                f'margin-bottom:4px">Option {_bi+1}'
+                f'{"  ✓ Active" if _is_sel_sb else ""}</div>'
+                f'<div style="font-size:.60rem;color:{_MUT};line-height:1.55;margin-bottom:6px">{_desc}</div>'
+                f'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+                f'<span style="font-size:.60rem;color:{_TEXT}">⬛ {_kpis["n_cols"]} col</span>'
+                f'<span style="font-size:.60rem;color:{_TEXT}">— {_kpis["n_beams"]} beam</span>'
+                f'<span style="font-size:.60rem;color:{_TEXT}">↔ max {_kpis["max_span"]}m</span>'
+                f'<span style="font-size:.60rem;color:{_TEXT}">avg {_kpis["avg_span"]}m</span>'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                f"Apply Option {_bi+1}", key=f"sb_opt_{_bi}",
+                width="stretch",
+                type="primary" if _is_sel_sb else "secondary",
+            ):
+                _opt_layout = _gopt_sb.get("layout", {})
+                _opt_ev = _gopt_sb.get("evaluation")
+                if _opt_ev is None:
+                    with st.spinner(f"Evaluating Option {_bi+1}…"):
+                        _opt_ev = _run_evaluate(
+                            json.dumps(_opt_layout),
+                            sdl=_sdl_now, ll=_ll_now)
+                    if _opt_ev:
+                        st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
+                if _opt_layout:
+                    _push_version(_opt_layout)
+                st.session_state["selected_opt_bar_idx"] = _bi
+                st.session_state.eval_result = _opt_ev
+                st.session_state.eval_alts = _get_failure_alternatives(
+                    _opt_ev or {}, _mat_now)
+                st.rerun()
 
     # ── AI AGENT ──────────────────────────────────────────────────────────────
     st.markdown(
@@ -2237,7 +2697,8 @@ if submitted and prompt_input.strip():
     with st.spinner("Agent reasoning…"):
         _resp = _run_agent_chat(prompt_input.strip(), layout_obj, er)
 
-    if _resp == "GENERATE_GRID":
+    if _resp == "GENERATE_GRID" or _resp.startswith("GENERATE_GRID\n"):
+        _gen_advisory = _resp[len("GENERATE_GRID"):].strip()
         with st.spinner("Generating structural grid options…"):
             st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
         for _gi, _gopt in enumerate(st.session_state.grid_options, 1):
@@ -2249,29 +2710,30 @@ if submitted and prompt_input.strip():
             if _ag_opt:
                 _push_version(_ag_opt)
                 st.session_state["selected_opt_bar_idx"] = 0
-        _resp = f"Generated {len(st.session_state.grid_options)} grid option(s). Option 1 applied."
+        _resp = (f"{_gen_advisory}\n\n" if _gen_advisory else "") + f"Generated {len(st.session_state.grid_options)} grid option(s). Option 1 applied."
     elif _resp.startswith("APPLY_TOOL:"):
         try:
             _td = json.loads(_resp[len("APPLY_TOOL:"):])
             _tn, _ti = _td.get("name", ""), _td.get("input", {})
+            _advisory_txt = _td.get("advisory", "")
             if _tn == "remove_element":
                 from nodes.modify import remove_element as _rem_el
                 _eid = _ti.get("element_id", "")
                 if _eid:
                     _push_version(json.loads(_rem_el(json.dumps(layout_obj), _eid)))
-                    _resp = f"Removed **{_eid}** from the layout."
+                    _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Removed **{_eid}** from the layout."
             elif _tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _amc
                 _bid = _ti.get("beam_id", "")
                 if _bid:
                     _push_version(json.loads(_amc(json.dumps(layout_obj), _bid)))
-                    _resp = f"Added midspan column to **{_bid}**."
+                    _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Added midspan column to **{_bid}**."
             elif _tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _ups
                 _uid = _ti.get("element_id", "")
                 if _uid:
                     _push_version(json.loads(_ups(json.dumps(layout_obj), _uid)))
-                    _resp = f"Upgraded section of **{_uid}**."
+                    _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Upgraded section of **{_uid}**."
         except Exception as _tex:
             _resp = f"Tool execution failed: {_tex}"
     elif _resp == "EVALUATE":
@@ -2445,7 +2907,7 @@ with tab_mod:
         st.rerun()
 
     if _run_clicked:
-        _struct_els = layout_obj.get("structure", [])
+        _struct_els = get_structure(layout_obj)
         if not _struct_els:
             st.warning(
                 "No structural elements found. "
@@ -2511,12 +2973,32 @@ with tab_mod:
 
     with _main_col:
         # Native toolbar (replaces the in-iframe JS bridge toolbar)
-        _tb1, _tb2, _tb3, _tb4, _ = st.columns([0.55, 0.7, 0.6, 0.6, 4], gap="small")
+        _is_ml = is_multilevel(_plan_layout)
+        _tb_cols = [0.55, 0.9, 0.7, 0.6, 0.6, 3.6] if _is_ml else [0.55, 0.7, 0.6, 0.6, 4]
+        _tb = st.columns(_tb_cols, gap="small")
+        _tb1 = _tb[0]
+        _tb_lvl = _tb[1] if _is_ml else None
+        _tb2 = _tb[2] if _is_ml else _tb[1]
+        _tb3 = _tb[3] if _is_ml else _tb[2]
+        _tb4 = _tb[4] if _is_ml else _tb[3]
         with _tb1:
             if st.button("3D" if _vm == "2D" else "2D",
                          key="tb_vm_btn", width="stretch"):
                 st.session_state["view_mode"] = "3D" if _vm == "2D" else "2D"
                 st.rerun()
+        if _is_ml and _tb_lvl is not None:
+            with _tb_lvl:
+                _lvl_keys = get_level_keys(_plan_layout)
+                _lvl_idx = _lvl_keys.index(st.session_state.active_level) if st.session_state.active_level in _lvl_keys else 0
+                _new_level = st.selectbox(
+                    "Level",
+                    _lvl_keys,
+                    index=_lvl_idx,
+                    label_visibility="collapsed",
+                    key="tb_active_level",
+                )
+                if _new_level != st.session_state.active_level:
+                    st.session_state.active_level = _new_level
         with _tb2:
             _new_lab = st.toggle("Labels", value=st.session_state.labels_on,
                                  key="tb_lab_tog")
@@ -2543,6 +3025,7 @@ with tab_mod:
             _fig2d = _render_floor_plan_plotly(
                 _plan_layout, eval_result=er,
                 highlight=st.session_state.selected_el,
+                level_key=st.session_state.active_level,
                 labels=st.session_state.labels_on,
                 height_px=510, is_light=_is_light,
                 diff_on=st.session_state.compare_mode,
@@ -2566,6 +3049,7 @@ with tab_mod:
             if _sel_ev and _sel_ev.selection and _sel_ev.selection.points:
                 try:
                     _new_sel = ""
+                    _lvl_changed = False
                     _cand_dbg = []
                     for _pt in _sel_ev.selection.points:
                         # Support both attribute-style and dict-style access.
@@ -2578,11 +3062,18 @@ with tab_mod:
                         if isinstance(_cd, (list, tuple)):
                             _cand = str(_cd[0]) if _cd else ""
                             _kind = str(_cd[1]).lower() if len(_cd) > 1 else ""
+                            _lvl = str(_cd[2]) if len(_cd) > 2 else ""
                             _cand_dbg.append(
-                                f"id={_cand or '-'} kind={_kind or '-'}"
+                                f"id={_cand or '-'} kind={_kind or '-'} lvl={_lvl or '-'}"
                             )
                             if _cand and (_kind in ("beam", "column") or not _kind):
                                 _new_sel = _cand
+                                if _lvl and _lvl != st.session_state.get("active_element_level", ""):
+                                    _lvl_changed = True
+                                if _lvl:
+                                    st.session_state.active_element_level = _lvl
+                                    st.session_state.active_level = _lvl
+                                    st.session_state["_last_lvl_applied"] = _lvl
                                 break
                         else:
                             _cand_dbg.append(f"id={str(_cd)} kind=-")
@@ -2597,34 +3088,28 @@ with tab_mod:
                             if _sel_ev.selection.points else None
                         ),
                     }
-                    if _new_sel and _new_sel != st.session_state.selected_el:
+                    if _new_sel and (
+                        _new_sel != st.session_state.selected_el
+                        or _lvl_changed
+                    ):
                         st.session_state.selected_el = _new_sel
                         st.session_state["_last_sel_applied"] = _new_sel
                         st.rerun()
                 except Exception:
                     pass
         else:
-            if _viewer_is_reachable():
-                components.iframe(
-                    _viewer_url(
-                        highlight=st.session_state.selected_el,
-                        compare=st.session_state.compare_mode,
-                        labels=st.session_state.labels_on,
-                    ),
-                    height=512, scrolling=False,
-                )
-            else:
-                st.info("3D viewer requires `python -m http.server 8000` from the repo root.")
-                _fig2d_fb = _render_floor_plan_plotly(
-                    _plan_layout, eval_result=er,
-                    highlight=st.session_state.selected_el,
-                    labels=st.session_state.labels_on,
+            components.html(
+                _render_3d_viewport(
+                    _plan_layout,
+                    eval_result=er,
+                    selected_el=st.session_state.selected_el,
+                    active_level=st.session_state.active_level,
                     is_light=_is_light,
-                    revision=st.session_state.get("currentVersion", 0),
-                )
-                st.plotly_chart(_fig2d_fb, width="stretch",
-                                config=dict(scrollZoom=True, displaylogo=False),
-                                key="floor_plan_3d_fb")
+                    height=512,
+                ),
+                height=520,
+                scrolling=False,
+            )
 
         st.markdown(
             '<div class="plan-legend">'
@@ -2852,16 +3337,21 @@ with tab_mod:
 
         with _rt2:
             _sel     = st.session_state.selected_el
-            _sel_obj = next(
-                (e for e in layout_obj.get("structure", []) if e["id"] == _sel), None
-            ) if _sel else None
+            _sel_level = st.session_state.get("active_element_level", "")
+            _found_level, _found_el = find_element_in_layout(layout_obj, _sel) if _sel else (None, None)
+            _sel_obj = _found_el
+            if _found_level:
+                _sel_level = _found_level
+                st.session_state.active_element_level = _found_level
             _dbg = st.session_state.get("last_click_debug", {})
 
             if _sel:
                 st.markdown(
                     f'<div style="font-size:.64rem;color:{_MUT};margin:2px 0 8px 0">'
                     f'Selected element ID: '
-                    f'<span style="color:{_TEXT};font-weight:700">{_sel}</span></div>',
+                    f'<span style="color:{_TEXT};font-weight:700">{_sel}</span>'
+                    f'{f" <span style=\"color:{_MUT};font-weight:600\">({_sel_level})</span>" if _sel_level else ""}'
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -2898,6 +3388,7 @@ with tab_mod:
                             _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel))
                             _push_version(_new_layout)
                             st.session_state.selected_el = ""
+                            st.session_state.active_element_level = ""
                             st.rerun()
                         except Exception as _re:
                             st.error(f"Remove failed: {_re}")
@@ -2911,6 +3402,7 @@ with tab_mod:
                                 _new_layout = json.loads(_direct_amc(json.dumps(layout_obj), _sel))
                                 _push_version(_new_layout)
                                 st.session_state.selected_el = ""
+                                st.session_state.active_element_level = ""
                                 st.rerun()
                             except Exception as _me:
                                 st.error(f"Add midspan column failed: {_me}")
@@ -2937,6 +3429,7 @@ with tab_mod:
                     )
                     _crit_html = ""
                     for _b in _fbeams[:4]:
+                        _b_lvl, _ = find_element_in_layout(layout_obj, _b["id"])
                         _chks = [k for k, f in [
                             ("bend",  not _b.get("bend_PASS")),
                             ("shear", not _b.get("shear_PASS")),
@@ -2945,11 +3438,12 @@ with tab_mod:
                         _crit_html += (
                             f'<div class="crit-item" '
                             f'onclick="window.parent.postMessage({{type:\'selectElement\','
-                            f'elementId:\'{_b["id"]}\'}},\'*\')">'
+                            f'elementId:\'{_b["id"]}\',level:\'{_b_lvl or ""}\'}},\'*\')">'
                             f'<b>{_b["id"]}</b> {_b.get("span_m",0):.1f}m'
                             f'<span style="float:right;color:{_FAIL}">{", ".join(_chks)}</span></div>'
                         )
                     for _c in _fcols[:2]:
+                        _c_lvl, _ = find_element_in_layout(layout_obj, _c["id"])
                         _chks = [k for k, f in [
                             ("stress", not _c.get("stress_PASS")),
                             ("buck",   not _c.get("buckling_PASS")),
@@ -2957,7 +3451,7 @@ with tab_mod:
                         _crit_html += (
                             f'<div class="crit-item" '
                             f'onclick="window.parent.postMessage({{type:\'selectElement\','
-                            f'elementId:\'{_c["id"]}\'}},\'*\')">'
+                            f'elementId:\'{_c["id"]}\',level:\'{_c_lvl or ""}\'}},\'*\')">'
                             f'<b>{_c["id"]}</b>'
                             f'<span style="float:right;color:{_FAIL}">{", ".join(_chks)}</span></div>'
                         )
@@ -3082,6 +3576,64 @@ with tab_mod:
                         unsafe_allow_html=True,
                     )
 
+            # ── Inline agent chat in Design Details ───────────────────────────
+            st.markdown(
+                f'<div style="border-top:1px solid {_BORD};margin-top:10px;padding-top:8px">'
+                f'<div style="font-size:.63rem;font-weight:700;color:{_ACC};'
+                f'letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">'
+                f'Ask Agent</div>',
+                unsafe_allow_html=True,
+            )
+            _dd_history = st.session_state.get("history", [])
+            if _dd_history:
+                _dd_bub = ""
+                for _dmsg in _dd_history[-4:]:
+                    _dq = _dmsg.get("prompt", "")
+                    _da = _dmsg.get("response", "")
+                    if _dq:
+                        _dd_bub += f'<div class="chat-q" style="font-size:.68rem">{_dq[:120]}{"…" if len(_dq)>120 else ""}</div>'
+                    if _da:
+                        _dd_bub += f'<div class="chat-a" style="font-size:.68rem">{_da[:200]}{"…" if len(_da)>200 else ""}</div>'
+                st.markdown(
+                    f'<div style="max-height:200px;overflow-y:auto;margin-bottom:6px">{_dd_bub}</div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+            with st.form("agent_form_dd", clear_on_submit=True):
+                _dd_prompt = st.text_area(
+                    "Ask about selected element or layout",
+                    placeholder="e.g. why is this beam failing? / what section should I use?",
+                    label_visibility="collapsed",
+                    height=70,
+                    key="dd_agent_input",
+                )
+                _dd_submitted = st.form_submit_button("Ask  ›", width="stretch")
+            if _dd_submitted and _dd_prompt.strip():
+                with st.spinner("Thinking…"):
+                    _dd_resp = _run_agent_chat(_dd_prompt.strip(), layout_obj, er)
+                if _dd_resp.startswith("APPLY_TOOL:"):
+                    try:
+                        _dd_td = json.loads(_dd_resp[len("APPLY_TOOL:"):])
+                        _dd_tn, _dd_ti = _dd_td.get("name", ""), _dd_td.get("input", {})
+                        _dd_adv = _dd_td.get("advisory", "")
+                        if _dd_tn == "remove_element":
+                            from nodes.modify import remove_element as _dd_rem
+                            _dd_eid = _dd_ti.get("element_id", "")
+                            if _dd_eid:
+                                _push_version(json.loads(_dd_rem(json.dumps(layout_obj), _dd_eid)))
+                                _dd_resp = (f"{_dd_adv}\n\n" if _dd_adv else "") + f"Removed **{_dd_eid}**."
+                        elif _dd_tn == "upgrade_element_section":
+                            from nodes.modify import upgrade_element_section as _dd_ups
+                            _dd_uid = _dd_ti.get("element_id", "")
+                            if _dd_uid:
+                                _push_version(json.loads(_dd_ups(json.dumps(layout_obj), _dd_uid)))
+                                _dd_resp = (f"{_dd_adv}\n\n" if _dd_adv else "") + f"Upgraded **{_dd_uid}**."
+                    except Exception as _ddte:
+                        _dd_resp = f"Error: {_ddte}"
+                st.session_state.history.append({"prompt": _dd_prompt.strip(), "response": _dd_resp})
+                st.session_state.output_log.append(_dd_resp)
+                st.rerun()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 2 — COMPARE
@@ -3093,25 +3645,368 @@ with tab_cmp:
     _cvm_now = st.session_state.get("compare_view_mode", "2D")
     _cmp_ids = st.session_state.get("cmp_labels", False)
     _cmp_ev  = st.session_state.get("cmp_eval",   True)
-    _DOT_C   = [_ACC, _ACC2, "#ffd060"]
+    _DOT_C   = [_ACC, _ACC2, "#ffd060", "#ff8080", "#88d088", "#c0a0ff"]
 
     def _snap_fails(s):
         _ev_ = (s.get("eval_result") or {}).get("summary", {})
         return _ev_.get("beam_failures", 0) + _ev_.get("column_failures", 0)
 
+    # ── Validate cmp_sel_indices against current snapshots ─────────────────────
+    _all_snap_labels = [s["label"] for s in _snaps_c]
+    _sel_idx_raw = st.session_state.get("cmp_sel_indices", [])
+    _sel_idx = [i for i in _sel_idx_raw if i < len(_snaps_c)]
+    if _sel_idx != _sel_idx_raw:
+        st.session_state.cmp_sel_indices = _sel_idx
+
+    # Always include baseline + selected snapshots
     _cmp_opts = [
         {"label": "Baseline", "sub": "Current design",
          "layout_json": json.dumps(layout_obj),
-         "eval_result": er, "cost_flexibility": st.session_state.cost_flexibility}
+         "eval_result": er, "cost_flexibility": st.session_state.cost_flexibility,
+         "dot": _DOT_C[0]}
     ] + [
-        {"label": s["label"],
-         "sub":   "Pass" if _snap_fails(s) == 0 else f"{_snap_fails(s)} fail",
-         "layout_json":      s["layout_json"],
-         "eval_result":      s.get("eval_result"),
-         "cost_flexibility": s.get("cost_flexibility")}
-        for s in _snaps_c[:2]
+        {"label": _snaps_c[i]["label"],
+         "sub":   "Pass" if _snap_fails(_snaps_c[i]) == 0 else f"{_snap_fails(_snaps_c[i])} fail",
+         "layout_json":      _snaps_c[i]["layout_json"],
+         "eval_result":      _snaps_c[i].get("eval_result"),
+         "cost_flexibility": _snaps_c[i].get("cost_flexibility"),
+         "dot": _DOT_C[min(_j + 1, len(_DOT_C)-1)]}
+        for _j, i in enumerate(_sel_idx)
     ]
     _n_opts = len(_cmp_opts)
+
+    # ── Metric helpers ────────────────────────────────────────────────────────
+    def _co_weight(co):
+        return _eval_weight_cost(co.get("eval_result") or {})[0]
+
+    def _co_cost(co):
+        cf = co.get("cost_flexibility") or {}
+        if cf.get("net_cost_usd") is not None:
+            return float(cf["net_cost_usd"])
+        return _eval_weight_cost(co.get("eval_result") or {})[1]
+
+    def _co_max_defl(co):
+        bs = (co.get("eval_result") or {}).get("beams", [])
+        return max((b.get("delta_total_mm", 0) for b in bs), default=None) if bs else None
+
+    def _co_max_util(co):
+        ev  = co.get("eval_result") or {}
+        rat = []
+        for b in ev.get("beams", []):
+            if b.get("allow_bend_MPa"):
+                rat.append(b["sigma_bend_MPa"] / b["allow_bend_MPa"])
+            if b.get("allow_shear_MPa"):
+                rat.append(b["tau_MPa"] / b["allow_shear_MPa"])
+            if b.get("limit_TL_mm"):
+                rat.append(b["delta_total_mm"] / b["limit_TL_mm"])
+        for c in ev.get("columns", []):
+            if c.get("allow_comp_MPa"):
+                rat.append(c["sigma_comp_MPa"] / c["allow_comp_MPa"])
+        return round(max(rat) * 100, 1) if rat else None
+
+    def _best_from(pairs, lower=True):
+        valid = [(l, v) for l, v in pairs if isinstance(v, (int, float))]
+        if not valid:
+            return "—", None
+        return (min if lower else max)(valid, key=lambda x: x[1])
+
+    # ── Report options bar ────────────────────────────────────────────────────
+    _rp1, _rp2, _rp3, _rp4 = st.columns([3.5, 0.9, 0.9, 0.7], gap="small")
+    with _rp1:
+        st.markdown(
+            f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
+            f'text-transform:uppercase;letter-spacing:1px;padding:6px 0">'
+            f'Compare Options</div>',
+            unsafe_allow_html=True,
+        )
+    with _rp2:
+        st.download_button(
+            "↓ Export JSON", width="stretch",
+            data=json.dumps(
+                {"baseline": layout_obj,
+                 "options":  [{"label": s["label"],
+                               "layout": json.loads(s["layout_json"])}
+                              for s in _snaps_c]},
+                indent=2, ensure_ascii=False,
+            ),
+            file_name="comparison_report.json",
+            mime="application/json",
+            key="cmp_export_json",
+        )
+    with _rp3:
+        st.button("↓ Export PDF", width="stretch", disabled=True,
+                  key="cmp_export_pdf")
+    with _rp4:
+        if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
+            st.session_state.snapshots = []
+            st.session_state.cmp_sel_indices = []
+            st.rerun()
+
+    # ── 2-column layout: left = View Settings + Legend; right = Comparison Set ─
+    _lcol, _rcol = st.columns([1.3, 1.6], gap="small")
+
+    # ── LEFT: View Settings + Legend ─────────────────────────────────────────
+    with _lcol:
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:4px">View Settings</div>',
+            unsafe_allow_html=True,
+        )
+        _vs1, _vs2 = st.columns(2, gap="small")
+        with _vs1:
+            if st.button("2D", key="cmp_2d", width="stretch",
+                         type="primary" if _cvm_now == "2D" else "secondary"):
+                st.session_state["compare_view_mode"] = "2D"
+                st.rerun()
+        with _vs2:
+            if st.button("3D", key="cmp_3d", width="stretch",
+                         type="primary" if _cvm_now == "3D" else "secondary"):
+                st.session_state["compare_view_mode"] = "3D"
+                st.rerun()
+        _cmp_ids = st.toggle("Overlay IDs",  value=_cmp_ids, key="cmp_labels")
+        _cmp_ev  = st.toggle("Eval overlay", value=_cmp_ev,  key="cmp_eval")
+
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:10px">Legend</div>',
+            unsafe_allow_html=True,
+        )
+        _legend_items = [
+            ("#7cb2ff", "Rooms"), ("#9b7cff", "Furniture / MEP"),
+            ("#3a70e0", "Columns"), ("#ffd36a", "Beams / Walls"),
+            ("#ff8a7a", "Doors"),  ("#8ad4ff", "Windows"),
+        ]
+        _leg_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;margin-top:2px">'
+        for _lc, _ll in _legend_items:
+            _leg_html += (
+                f'<div style="display:flex;align-items:center;gap:4px;font-size:.60rem;color:{_MUT}">'
+                f'<span style="width:8px;height:8px;border-radius:50%;background:{_lc};flex-shrink:0;display:inline-block"></span>'
+                f'{_ll}</div>'
+            )
+        _leg_html += '</div>'
+        st.markdown(_leg_html, unsafe_allow_html=True)
+
+        st.markdown('<div style="margin-top:10px"></div>', unsafe_allow_html=True)
+        if st.button("Reset View", key="cmp_reset_view", width="stretch"):
+            st.session_state["compare_view_mode"] = "2D"
+            st.session_state["cmp_labels"] = False
+            st.session_state["cmp_eval"]   = True
+            st.rerun()
+
+    # ── RIGHT: Comparison Set (snapshot picker + add) ──────────────────────
+    with _rcol:
+        st.markdown(
+            f'<div class="sb-section" style="margin-top:4px">Comparison Set</div>',
+            unsafe_allow_html=True,
+        )
+        # Baseline always shown
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:7px;padding:4px 6px;'
+            f'border-radius:5px;background:{"#eef7f7" if _is_light else "#0d2828"};margin-bottom:3px">'
+            f'<span style="width:8px;height:8px;border-radius:50%;background:{_DOT_C[0]};flex-shrink:0;display:inline-block"></span>'
+            f'<span style="font-size:.70rem;font-weight:700;color:{_TEXT}">Baseline (Current)</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if _snaps_c:
+            for _si, _sn in enumerate(_snaps_c):
+                _in_cmp = _si in _sel_idx
+                _dot_c  = _DOT_C[min(_sel_idx.index(_si)+1 if _in_cmp else 0, len(_DOT_C)-1)]
+                _s_fails = _snap_fails(_sn)
+                _s_sub  = "Pass" if _s_fails == 0 else f"{_s_fails} fail"
+                _s_bg   = f"{'rgba(42,192,192,0.08)' if _in_cmp else 'transparent'}"
+                _s_brd  = f"border:1px solid {_ACC if _in_cmp else _BORD}"
+                _c1, _c2 = st.columns([4, 1], gap="small")
+                with _c1:
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;'
+                        f'border-radius:5px;background:{_s_bg};{_s_brd};margin-bottom:2px">'
+                        f'<span style="width:8px;height:8px;border-radius:50%;background:{_dot_c if _in_cmp else _MUT};flex-shrink:0;display:inline-block"></span>'
+                        f'<div style="min-width:0"><div style="font-size:.70rem;font-weight:{"700" if _in_cmp else "400"};color:{_TEXT if _in_cmp else _MUT};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_sn["label"]}</div>'
+                        f'<div style="font-size:.58rem;color:{_MUT}">{_s_sub}</div></div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                with _c2:
+                    if _in_cmp:
+                        if st.button("✕", key=f"cmp_rm_{_si}", width="stretch"):
+                            _new_idx = [i for i in _sel_idx if i != _si]
+                            st.session_state.cmp_sel_indices = _new_idx
+                            st.rerun()
+                    else:
+                        if st.button("+", key=f"cmp_add_{_si}", width="stretch"):
+                            st.session_state.cmp_sel_indices = _sel_idx + [_si]
+                            st.rerun()
+        else:
+            st.markdown(
+                f'<div style="font-size:.60rem;color:{_MUT};padding:6px 4px;'
+                f'border:1px dashed {_BORD};border-radius:6px;margin-top:3px">'
+                f'Save snapshots in the Modify tab to compare options here.</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── FULL WIDTH: Comparison plans area ─────────────────────────────────────
+    st.markdown(f'<div style="margin-top:10px;border-top:1px solid {_BORD}"></div>',
+                unsafe_allow_html=True)
+
+    if _n_opts < 2:
+        st.markdown(
+            f'<div style="font-size:.70rem;color:{_MUT};padding:20px 8px;'
+            f'text-align:center;line-height:1.9">'
+            f'Select at least one snapshot using <b>+</b> in the Comparison Set above.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        # ── Inline Insights row above plans ───────────────────────────────────
+        _wl, _wv = _best_from([(c["label"], _co_weight(c))   for c in _cmp_opts])
+        _cl, _cv = _best_from([(c["label"], _co_cost(c))     for c in _cmp_opts])
+        _dl, _dv = _best_from([(c["label"], _co_max_defl(c)) for c in _cmp_opts])
+        _ul, _uv = _best_from([(c["label"], _co_max_util(c)) for c in _cmp_opts])
+        _base_w = _co_weight(_cmp_opts[0]) or 1
+        _base_c = _co_cost(_cmp_opts[0])   or 1
+        _base_d = _co_max_defl(_cmp_opts[0]) or 1
+        _base_u = _co_max_util(_cmp_opts[0]) or 1
+
+        def _pct_str(v, base):
+            if v is None or base is None: return "No data"
+            return f"{abs((v - base) / base * 100):.1f}%"
+
+        _insights_chips = [
+            (f"🏆 {_wl} — lightest, {_pct_str(_wv, _base_w)} vs baseline"),
+            (f"💰 {_cl} — lowest cost, {_pct_str(_cv, _base_c)} saving"),
+            (f"🛡 {_dl} — best deflection, {_pct_str(_dv, _base_d)} better"),
+            (f"✅ {_ul} — lowest utilization, {_pct_str(_uv, _base_u)} lower"),
+        ]
+        _chips_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
+        for _chip in _insights_chips:
+            _chips_html += (
+                f'<div style="background:{_CARD};border:1px solid {_BORD};border-radius:16px;'
+                f'padding:3px 10px;font-size:.60rem;color:{_MUT}">{_chip}</div>'
+            )
+        _chips_html += '</div>'
+        st.markdown(_chips_html, unsafe_allow_html=True)
+
+        # ── Metric row ─────────────────────────────────────────────────────────
+        def _delta_badge(val, base, lower_good=True):
+            if val is None or base is None or abs(base) < 0.001:
+                return ""
+            d    = (val - base) / abs(base) * 100
+            good = (d < 0) if lower_good else (d > 0)
+            clr  = _PASS_C if good else _FAIL
+            arr  = "↓" if d < 0 else "↑"
+            return (f'<span style="font-size:.58rem;font-weight:700;'
+                    f'color:{clr};margin-left:3px">{arr}&nbsp;{abs(d):.1f}%</span>')
+
+        def _met_card(title, unit, vals, fmt=".1f", lower_good=True):
+            base = vals[0]
+            html = (
+                f'<div style="flex:1;border:1px solid {_BORD};border-radius:8px;'
+                f'padding:8px 10px;background:{_CARD};min-width:0">'
+                f'<div style="font-size:.58rem;font-weight:700;color:{_MUT};'
+                f'text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">'
+                f'{title}</div>'
+                f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:6px">({unit})</div>'
+                f'<div style="display:flex;gap:6px">'
+            )
+            for _i, (_co, _v) in enumerate(zip(_cmp_opts, vals)):
+                _vstr = (f'{_v:{fmt}}' if isinstance(_v, (int, float)) else "—")
+                _dlta = "" if _i == 0 else _delta_badge(_v, base, lower_good)
+                _lbl_clr = _MUT if _i == 0 else (
+                    (_PASS_C if (isinstance(_v, (int, float)) and isinstance(base, (int, float))
+                                 and ((_v < base) if lower_good else (_v > base)))
+                     else _TEXT)
+                )
+                html += (
+                    f'<div style="flex:1;min-width:0;text-align:center">'
+                    f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:2px;'
+                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                    f'{_co["label"]}</div>'
+                    f'<div style="font-size:.75rem;font-weight:800;color:{_lbl_clr}">'
+                    f'{_vstr}</div>'
+                    f'{_dlta}</div>'
+                )
+            html += '</div></div>'
+            return html
+
+        _wvals = [_co_weight(c)   for c in _cmp_opts]
+        _cvals = [_co_cost(c)     for c in _cmp_opts]
+        _dvals = [_co_max_defl(c) for c in _cmp_opts]
+        _uvals = [_co_max_util(c) for c in _cmp_opts]
+
+        st.markdown(
+            f'<div style="display:flex;gap:8px;margin-bottom:12px">'
+            + _met_card("Total Weight",    "kN",  _wvals, ".1f")
+            + _met_card("Total Cost",      "USD", _cvals, ".0f")
+            + _met_card("Max Deflection",  "mm",  _dvals, ".1f")
+            + _met_card("Max Utilization", "%",   _uvals, ".1f")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Floor plan columns ─────────────────────────────────────────────────
+        _pcols = st.columns(_n_opts, gap="small")
+        for _ci, (_pcol, _co) in enumerate(zip(_pcols, _cmp_opts)):
+            with _pcol:
+                _dc = _co.get("dot", _DOT_C[min(_ci, len(_DOT_C)-1)])
+                _badge = (
+                    '<span class="badge-curr">Current Design</span>'
+                    if _ci == 0 else
+                    f'<span class="badge-opt">Applied Changes ({_ci})</span>'
+                )
+                st.markdown(
+                    f'<div class="cmp-card-hdr">'
+                    f'<span style="display:flex;align-items:center;gap:6px">'
+                    f'<span style="width:8px;height:8px;border-radius:50%;'
+                    f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
+                    f'<span class="cmp-title">{_co["label"]}</span></span>'
+                    f'{_badge}</div>',
+                    unsafe_allow_html=True,
+                )
+                _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
+                _ph = max(220, 300 - (_n_opts - 2) * 20)
+                if _cvm_now == "2D":
+                    _fig_ci = _render_floor_plan_plotly(
+                        _plan_ci,
+                        eval_result=_co["eval_result"] if _cmp_ev else None,
+                        level_key=st.session_state.get("active_level", "level_01"),
+                        labels=_cmp_ids, height_px=_ph, is_light=_is_light,
+                    )
+                    st.plotly_chart(
+                        _fig_ci, width="stretch",
+                        config=dict(scrollZoom=True, displaylogo=False,
+                                    modeBarButtonsToRemove=[
+                                        "lasso2d", "select2d",
+                                        "zoomIn2d", "zoomOut2d", "autoScale2d",
+                                    ]),
+                        key=f"cmp_plan_{_ci}",
+                    )
+                else:
+                    components.html(
+                        _render_3d_viewport(
+                            _plan_ci,
+                            eval_result=_co["eval_result"] if _cmp_ev else None,
+                            selected_el="",
+                            active_level=st.session_state.get("active_level", "level_01"),
+                            is_light=_is_light,
+                            height=_ph,
+                        ),
+                        height=_ph + 8,
+                        scrolling=False,
+                    )
+                # Per-plan footer metrics
+                _fw = _co_weight(_co)
+                _fc = _co_cost(_co)
+                _fd = _co_max_defl(_co)
+                _fu = _co_max_util(_co)
+                _fparts = []
+                if _fw is not None: _fparts.append(f"Weight: {_fw:.1f} kN")
+                if _fc is not None: _fparts.append(f"Cost: ${_fc:,.0f}")
+                if _fd is not None: _fparts.append(f"Max Defl: {_fd:.1f} mm")
+                if _fu is not None: _fparts.append(f"Util: {_fu:.0f}%")
+                st.markdown(
+                    f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
+                    f'padding:4px 2px;border-top:1px solid {_BORD};line-height:1.6">'
+                    + " &nbsp;·&nbsp; ".join(_fparts) + '</div>',
+                    unsafe_allow_html=True,
+                )
 
     # ── Metric helpers ────────────────────────────────────────────────────────
     def _co_weight(co):
@@ -3179,302 +4074,6 @@ with tab_cmp:
             st.session_state.snapshots = []
             st.rerun()
 
-    # ── 3-column layout ───────────────────────────────────────────────────────
-    _lcol, _ccol, _rcol = st.columns([1.6, 5.5, 2.0], gap="small")
-
-    # ── LEFT: Comparison Set + View Settings ──────────────────────────────────
-    with _lcol:
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:4px">Comparison Set</div>',
-            unsafe_allow_html=True,
-        )
-        for _ci, _co in enumerate(_cmp_opts):
-            _dc = _DOT_C[min(_ci, 2)]
-            st.markdown(
-                f'<div style="display:flex;align-items:center;gap:7px;'
-                f'padding:5px 8px;margin-bottom:3px;border-radius:6px;'
-                f'background:{"#eef7f7" if _is_light else "#0d2828"}">'
-                f'<span style="width:8px;height:8px;border-radius:50%;'
-                f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
-                f'<div>'
-                f'<div style="font-size:.70rem;font-weight:700;color:{_TEXT}">'
-                f'{_co["label"]}</div>'
-                f'<div style="font-size:.58rem;color:{_MUT}">{_co["sub"]}</div>'
-                f'</div></div>',
-                unsafe_allow_html=True,
-            )
-        if len(_snaps_c) < 2:
-            st.markdown(
-                f'<div style="font-size:.60rem;color:{_MUT};'
-                f'padding:4px 8px;border:1px dashed {_BORD};'
-                f'border-radius:6px;margin-top:3px">'
-                f'+ Add Option — save a snapshot in Modify tab</div>',
-                unsafe_allow_html=True,
-            )
-
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:12px">View Settings</div>',
-            unsafe_allow_html=True,
-        )
-        _vs1, _vs2 = st.columns(2, gap="small")
-        with _vs1:
-            if st.button("2D", key="cmp_2d", width="stretch",
-                         type="primary" if _cvm_now == "2D" else "secondary"):
-                st.session_state["compare_view_mode"] = "2D"
-                st.rerun()
-        with _vs2:
-            if st.button("3D", key="cmp_3d", width="stretch",
-                         type="primary" if _cvm_now == "3D" else "secondary"):
-                st.session_state["compare_view_mode"] = "3D"
-                st.rerun()
-        _cmp_ids = st.toggle("Overlay IDs",   value=_cmp_ids, key="cmp_labels")
-        _cmp_ev  = st.toggle("Eval overlay",  value=_cmp_ev,  key="cmp_eval")
-
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:12px">Display</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div style="font-size:.63rem;color:{_TEXT};line-height:2.0">'
-            f'<span style="margin-right:10px">☑ Columns</span>'
-            f'<span>☑ Beams</span><br>'
-            f'<span style="margin-right:18px">☑ Walls</span>'
-            f'<span>☑ Supports</span></div>',
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:12px">Legend</div>',
-            unsafe_allow_html=True,
-        )
-        _legend_items = [
-            ("#7cb2ff", "Rooms"),
-            ("#9b7cff", "Furniture / MEP"),
-            ("#3a70e0", "Columns"),
-            ("#ffd36a", "Beams / Walls"),
-            ("#ff8a7a", "Doors"),
-            ("#8ad4ff", "Windows"),
-        ]
-        _leg_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 8px;margin-top:2px">'
-        for _lc, _ll in _legend_items:
-            _leg_html += (
-                f'<div style="display:flex;align-items:center;gap:5px;'
-                f'font-size:.60rem;color:{_MUT}">'
-                f'<span style="width:8px;height:8px;border-radius:50%;'
-                f'background:{_lc};flex-shrink:0;display:inline-block"></span>'
-                f'{_ll}</div>'
-            )
-        _leg_html += '</div>'
-        st.markdown(_leg_html, unsafe_allow_html=True)
-
-        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
-        if st.button("Reset View", key="cmp_reset_view", width="stretch"):
-            st.session_state["compare_view_mode"] = "2D"
-            st.session_state["cmp_labels"] = False
-            st.session_state["cmp_eval"]   = True
-            st.rerun()
-
-    # ── CENTER: Summary Metrics + Floor Plans ─────────────────────────────────
-    with _ccol:
-        if _n_opts < 2:
-            st.markdown(
-                f'<div style="font-size:.70rem;color:{_MUT};padding:40px 8px;'
-                f'text-align:center;line-height:1.9">'
-                f'Save at least one snapshot in the <b>Modify tab</b> '
-                f'to start comparing options.</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            # ── Summary Metrics row ────────────────────────────────────────────
-            st.markdown(
-                f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
-                f'text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">'
-                f'Summary Metrics</div>',
-                unsafe_allow_html=True,
-            )
-
-            def _delta_badge(val, base, lower_good=True):
-                if val is None or base is None or abs(base) < 0.001:
-                    return ""
-                d    = (val - base) / abs(base) * 100
-                good = (d < 0) if lower_good else (d > 0)
-                clr  = _PASS_C if good else _FAIL
-                arr  = "↓" if d < 0 else "↑"
-                return (f'<span style="font-size:.58rem;font-weight:700;'
-                        f'color:{clr};margin-left:3px">{arr}&nbsp;{abs(d):.1f}%</span>')
-
-            def _met_card(title, unit, vals, fmt=".1f", lower_good=True):
-                base = vals[0]
-                html = (
-                    f'<div style="flex:1;border:1px solid {_BORD};border-radius:8px;'
-                    f'padding:10px 12px;background:{_CARD};min-width:0">'
-                    f'<div style="font-size:.58rem;font-weight:700;color:{_MUT};'
-                    f'text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">'
-                    f'{title}</div>'
-                    f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:8px">'
-                    f'({unit})</div>'
-                    f'<div style="display:flex;gap:6px">'
-                )
-                for _i, (_co, _v) in enumerate(zip(_cmp_opts, vals)):
-                    _vstr = (f'{_v:{fmt}}' if isinstance(_v, (int, float)) else "—")
-                    _dlta = "" if _i == 0 else _delta_badge(_v, base, lower_good)
-                    _lbl_clr = _MUT if _i == 0 else (
-                        (_PASS_C if (isinstance(_v, (int, float)) and isinstance(base, (int, float))
-                                     and ((_v < base) if lower_good else (_v > base)))
-                         else _TEXT)
-                    )
-                    html += (
-                        f'<div style="flex:1;min-width:0;text-align:center">'
-                        f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:2px;'
-                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-                        f'{_co["label"]}</div>'
-                        f'<div style="font-size:.75rem;font-weight:800;color:{_lbl_clr}">'
-                        f'{_vstr}</div>'
-                        f'{_dlta}</div>'
-                    )
-                html += '</div></div>'
-                return html
-
-            _wvals = [_co_weight(c)   for c in _cmp_opts]
-            _cvals = [_co_cost(c)     for c in _cmp_opts]
-            _dvals = [_co_max_defl(c) for c in _cmp_opts]
-            _uvals = [_co_max_util(c) for c in _cmp_opts]
-
-            st.markdown(
-                f'<div style="display:flex;gap:8px;margin-bottom:14px">'
-                + _met_card("Total Weight",    "kN",  _wvals, ".1f")
-                + _met_card("Total Cost",      "USD", _cvals, ".0f")
-                + _met_card("Max Deflection",  "mm",  _dvals, ".1f")
-                + _met_card("Max Utilization", "%",   _uvals, ".1f")
-                + '</div>',
-                unsafe_allow_html=True,
-            )
-
-            # ── Floor plan columns ─────────────────────────────────────────────
-            _pcols = st.columns(_n_opts, gap="small")
-            for _ci, (_pcol, _co) in enumerate(zip(_pcols, _cmp_opts)):
-                with _pcol:
-                    _dc = _DOT_C[min(_ci, 2)]
-                    _badge = (
-                        '<span class="badge-curr">Current Design</span>'
-                        if _ci == 0 else
-                        f'<span class="badge-opt">Applied Changes ({_ci})</span>'
-                    )
-                    st.markdown(
-                        f'<div class="cmp-card-hdr">'
-                        f'<span style="display:flex;align-items:center;gap:6px">'
-                        f'<span style="width:8px;height:8px;border-radius:50%;'
-                        f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
-                        f'<span class="cmp-title">{_co["label"]}</span></span>'
-                        f'{_badge}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
-                    _ph = 300 if _n_opts == 3 else 360
-                    if _cvm_now == "2D":
-                        _fig_ci = _render_floor_plan_plotly(
-                            _plan_ci,
-                            eval_result=_co["eval_result"] if _cmp_ev else None,
-                            labels=_cmp_ids, height_px=_ph, is_light=_is_light,
-                        )
-                        st.plotly_chart(
-                            _fig_ci, width="stretch",
-                            config=dict(scrollZoom=True, displaylogo=False,
-                                        modeBarButtonsToRemove=[
-                                            "lasso2d", "select2d",
-                                            "zoomIn2d", "zoomOut2d", "autoScale2d",
-                                        ]),
-                            key=f"cmp_plan_{_ci}",
-                        )
-                    else:
-                        if _viewer_is_reachable():
-                            _of = f"team_01_option_{_ci}.json" if _ci > 0 else ""
-                            components.iframe(
-                                _viewer_url(labels=_cmp_ids, option_file=_of),
-                                height=_ph + 2, scrolling=False,
-                            )
-                        else:
-                            _fig_ci_fb = _render_floor_plan_plotly(
-                                _plan_ci,
-                                eval_result=_co["eval_result"] if _cmp_ev else None,
-                                labels=_cmp_ids, height_px=_ph, is_light=_is_light,
-                            )
-                            st.plotly_chart(
-                                _fig_ci_fb, width="stretch",
-                                config=dict(scrollZoom=True, displaylogo=False),
-                                key=f"cmp_plan_{_ci}_fb",
-                            )
-                    # Per-plan footer metrics
-                    _fw = _co_weight(_co)
-                    _fc = _co_cost(_co)
-                    _fd = _co_max_defl(_co)
-                    _fu = _co_max_util(_co)
-                    _fparts = []
-                    if _fw is not None: _fparts.append(f"Weight: {_fw:.1f} kN")
-                    if _fc is not None: _fparts.append(f"Cost: ${_fc:,.0f}")
-                    if _fd is not None: _fparts.append(f"Max Defl: {_fd:.1f} mm")
-                    if _fu is not None: _fparts.append(f"Util: {_fu:.0f}%")
-                    st.markdown(
-                        f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
-                        f'padding:4px 2px;border-top:1px solid {_BORD};line-height:1.6">'
-                        + " &nbsp;·&nbsp; ".join(_fparts) + '</div>',
-                        unsafe_allow_html=True,
-                    )
-
-    # ── RIGHT: Comparison Insights ────────────────────────────────────────────
-    with _rcol:
-        if _n_opts >= 2:
-            st.markdown(
-                '<div class="panel-hdr" style="margin-top:4px">Comparison Insights</div>',
-                unsafe_allow_html=True,
-            )
-            _wl, _wv = _best_from([(c["label"], _co_weight(c))   for c in _cmp_opts])
-            _cl, _cv = _best_from([(c["label"], _co_cost(c))     for c in _cmp_opts])
-            _dl, _dv = _best_from([(c["label"], _co_max_defl(c)) for c in _cmp_opts])
-            _ul, _uv = _best_from([(c["label"], _co_max_util(c)) for c in _cmp_opts])
-
-            _base_w = _co_weight(_cmp_opts[0]) or 1
-            _base_c = _co_cost(_cmp_opts[0])   or 1
-            _base_d = _co_max_defl(_cmp_opts[0]) or 1
-            _base_u = _co_max_util(_cmp_opts[0]) or 1
-
-            def _pct_str(v, base):
-                if v is None or base is None: return "No data"
-                return f"{abs((v - base) / base * 100):.1f}%"
-
-            _insights = [
-                ("🏆", "Best Weight",
-                 _wl, _pct_str(_wv, _base_w) + " lighter than baseline"),
-                ("💰", "Best Cost",
-                 _cl, _pct_str(_cv, _base_c) + " cost saving"),
-                ("🛡", "Best Deflection",
-                 _dl, _pct_str(_dv, _base_d) + " better deflection"),
-                ("✅", "Best Utilization",
-                 _ul, _pct_str(_uv, _base_u) + " lower utilization"),
-            ]
-            _ins_html = ""
-            for _ico, _lbl, _opt, _det in _insights:
-                _ins_html += (
-                    f'<div class="insight-card">'
-                    f'<span class="insight-ico">{_ico}</span>'
-                    f'<div style="min-width:0">'
-                    f'<div class="insight-lbl">{_lbl}</div>'
-                    f'<div class="insight-opt">{_opt}</div>'
-                    f'<div class="insight-det">{_det}</div>'
-                    f'</div></div>'
-                )
-            st.markdown(_ins_html, unsafe_allow_html=True)
-
-            # Recommended option box
-            _rec_lbl = _wl if _wl != "—" else (_cl if _cl != "—" else "Baseline")
-            _last     = st.session_state.get("last_comparison", "")
-            st.markdown(
-                f'<div class="rec-box" style="margin-top:10px">'
-                f'<div class="rec-box-lbl">Recommended Option</div>'
-                f'<div class="rec-box-txt"><b>{_rec_lbl}</b> provides the best overall '
-                f'balance of weight, cost, and structural performance.'
-                + (f' {_last[:160]}{"…" if len(_last)>160 else ""}' if _last else "")
-                + '</div></div>',
-                unsafe_allow_html=True,
-            )
+    # (old 3-column compare layout removed — new layout is above)
+    # ── end compare tab
 
