@@ -75,6 +75,18 @@ def get_action_tools() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "set_material",
+            "description": "Change the structural material of the whole layout (all beams and columns). Use this for requests like 'switch to timber', 'change material to concrete/RCC', 'make it steel'.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "material": {"type": "string", "enum": ["RCC", "STEEL", "TIMBER"],
+                                  "description": "Target material for the whole structure."},
+                },
+                "required": ["material"],
+            },
+        },
+        {
             "name": "evaluate_structure",
             "description": "Run a full structural evaluation (bending, shear, deflection, buckling) on all elements in the current layout.",
             "inputSchema": {

@@ -1325,6 +1325,30 @@
           }
         },
         {
+          "id": "A8-D8",
+          "name": "Beam_A8-D8",
+          "geometry": [
+            [
+              0.45,
+              10.0
+            ],
+            [
+              3.95,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 3.5,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
           "id": "B4-B5",
           "name": "Beam_B4-B5",
           "geometry": [

@@ -1069,6 +1069,22 @@
           }
         },
         {
+          "id": "F5",
+          "name": "Col_F5",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
+          }
+        },
+        {
           "id": "F6",
           "name": "Col_F6",
           "geometry": [
@@ -1159,22 +1175,6 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "G8",
-          "name": "Col_G8",
-          "geometry": [
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
             "material": "RCC",
             "conflict": null,
             "dimensions": "175x175"
@@ -1300,6 +1300,30 @@
           "attributes": {
             "type": "perimeter",
             "length": 0.55,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "A8-D8",
+          "name": "Beam_A8-D8",
+          "geometry": [
+            [
+              0.45,
+              10.0
+            ],
+            [
+              3.95,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -1885,8 +1909,8 @@
           }
         },
         {
-          "id": "F4-F6",
-          "name": "Beam_F4-F6",
+          "id": "F4-F5",
+          "name": "Beam_F4-F5",
           "geometry": [
             [
               7.85,
@@ -1894,12 +1918,12 @@
             ],
             [
               7.85,
-              7.0
+              6.5
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.5,
+            "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -1919,6 +1943,54 @@
             [
               11.7,
               4.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-F6",
+          "name": "Beam_F5-F6",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ],
+            [
+              7.85,
+              7.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 0.5,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-G5",
+          "name": "Beam_F5-G5",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ],
+            [
+              11.7,
+              6.5
             ]
           ],
           "attributes": {
@@ -1957,30 +2029,6 @@
           }
         },
         {
-          "id": "F7-G7",
-          "name": "Beam_F7-G7",
-          "geometry": [
-            [
-              7.85,
-              8.25
-            ],
-            [
-              11.7,
-              8.25
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "G3-G4",
           "name": "Beam_G3-G4",
           "geometry": [
@@ -2005,35 +2053,11 @@
           }
         },
         {
-          "id": "G3-I3a",
-          "name": "Beam_G3-I3a",
+          "id": "G3-I3",
+          "name": "Beam_G3-I3",
           "geometry": [
             [
               11.7,
-              2.85
-            ],
-            [
-              13.65,
-              2.85
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 3.9,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G3-I3b",
-          "name": "Beam_G3-I3b",
-          "geometry": [
-            [
-              13.65,
               2.85
             ],
             [
@@ -2125,30 +2149,6 @@
           }
         },
         {
-          "id": "G7-G8",
-          "name": "Beam_G7-G8",
-          "geometry": [
-            [
-              11.7,
-              8.25
-            ],
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.75,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "G7-H7",
           "name": "Beam_G7-H7",
           "geometry": [
@@ -2163,30 +2163,6 @@
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.55,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G8-H8",
-          "name": "Beam_G8-H8",
-          "geometry": [
-            [
-              11.7,
-              10.0
-            ],
-            [
-              14.25,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
@@ -2293,59 +2269,35 @@
           }
         },
         {
-          "id": "E8-F8a",
-          "name": "Beam_E8-F8a",
+          "id": "F8-G8b",
+          "name": "Beam_F8-G8b",
           "geometry": [
             [
-              5.25,
+              11.05,
               10.0
             ],
             [
-              8.475,
+              14.25,
               10.0
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "length": 6.45,
+            "length": 6.4,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
-          "id": "E8-F8b",
-          "name": "Beam_E8-F8b",
+          "id": "F8-G8_M",
+          "name": "Column_F8-G8_M",
           "geometry": [
             [
-              8.475,
-              10.0
-            ],
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 6.45,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "E8-F8_M",
-          "name": "Column_E8-F8_M",
-          "geometry": [
-            [
-              8.475,
+              11.05,
               10.0
             ]
           ],
@@ -2360,12 +2312,60 @@
           }
         },
         {
-          "id": "G3-I3_M",
-          "name": "Column_G3-I3_M",
+          "id": "E8-F8a",
+          "name": "Beam_E8-F8a",
           "geometry": [
             [
-              13.65,
-              2.85
+              5.25,
+              10.0
+            ],
+            [
+              8.15,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 5.8,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "E8-F8b",
+          "name": "Beam_E8-F8b",
+          "geometry": [
+            [
+              8.15,
+              10.0
+            ],
+            [
+              11.05,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 5.8,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "E8-F8_M",
+          "name": "Column_E8-F8_M",
+          "geometry": [
+            [
+              8.15,
+              10.0
             ]
           ],
           "attributes": {
@@ -3448,6 +3448,22 @@
           }
         },
         {
+          "id": "F5",
+          "name": "Col_F5",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
+          }
+        },
+        {
           "id": "F6",
           "name": "Col_F6",
           "geometry": [
@@ -4160,35 +4176,11 @@
           }
         },
         {
-          "id": "E8-F8a",
-          "name": "Beam_E8-F8a",
+          "id": "E8-F8",
+          "name": "Beam_E8-F8",
           "geometry": [
             [
               5.25,
-              10.0
-            ],
-            [
-              6.55,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 2.6,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "E8-F8b",
-          "name": "Beam_E8-F8b",
-          "geometry": [
-            [
-              6.55,
               10.0
             ],
             [
@@ -4280,8 +4272,8 @@
           }
         },
         {
-          "id": "F4-F6",
-          "name": "Beam_F4-F6",
+          "id": "F4-F5",
+          "name": "Beam_F4-F5",
           "geometry": [
             [
               7.85,
@@ -4289,12 +4281,12 @@
             ],
             [
               7.85,
-              7.0
+              6.5
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.5,
+            "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -4314,6 +4306,54 @@
             [
               11.7,
               4.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-F6",
+          "name": "Beam_F5-F6",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ],
+            [
+              7.85,
+              7.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 0.5,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-G5",
+          "name": "Beam_F5-G5",
+          "geometry": [
+            [
+              7.85,
+              6.5
+            ],
+            [
+              11.7,
+              6.5
             ]
           ],
           "attributes": {
@@ -4376,30 +4416,6 @@
           }
         },
         {
-          "id": "F7-G7",
-          "name": "Beam_F7-G7",
-          "geometry": [
-            [
-              7.85,
-              8.25
-            ],
-            [
-              11.7,
-              8.25
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "F8-G8",
           "name": "Beam_F8-G8",
           "geometry": [
@@ -4419,8 +4435,8 @@
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": "300",
+            "width": "200"
           }
         },
         {
@@ -4709,25 +4725,6 @@
             "conflict": null,
             "depth": "250",
             "width": "175"
-          }
-        },
-        {
-          "id": "E8-F8_M",
-          "name": "Column_E8-F8_M",
-          "geometry": [
-            [
-              6.55,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "dimensions": "175x175",
-            "height": "3.5",
-            "isWallAligned": "false",
-            "structuralRole": "primary",
-            "material": "RCC",
-            "conflict": "None"
           }
         }
       ]

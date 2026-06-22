@@ -1560,6 +1560,299 @@ def _material_legend_html(layout: dict, is_light: bool, mut: str) -> str:
     return html
 
 
+def _structural_summary_text(layout: dict, eval_result: dict | None) -> str:
+    """Deterministic structural summary — used as the report body when the LLM is offline."""
+    cols = beams = 0
+    mats: dict[str, int] = {}
+    for _l, e in iter_all_structure(layout):
+        n = len(e.get("geometry", []))
+        if n == 1:
+            cols += 1
+        elif n == 2:
+            beams += 1
+        m = (e.get("attributes") or {}).get("material")
+        if m:
+            mats[str(m)] = mats.get(str(m), 0) + 1
+    lines = [
+        f"Layout {layout.get('layoutId', '?')} — {get_level_count(layout)} level(s).",
+        f"{cols} columns and {beams} beams.",
+        "Materials: " + (", ".join(f"{k} x{v}" for k, v in mats.items()) or "not yet assigned") + ".",
+    ]
+    if eval_result:
+        s = eval_result.get("summary", {})
+        lines.append(f"Evaluation: {'PASS' if s.get('overall_PASS') else 'FAIL'} — "
+                     f"{s.get('beam_failures', 0)} beam and {s.get('column_failures', 0)} column failures.")
+        fails = [b["id"] for b in eval_result.get("beams", [])
+                 if not (b.get("bend_PASS") and b.get("shear_PASS")
+                         and b.get("defl_TL_PASS") and b.get("defl_LL_PASS"))]
+        if fails:
+            lines.append("Failing beams: " + ", ".join(fails[:24]) + ".")
+            lines.append("Suggested fixes: upgrade the failing beam sections, add a midspan "
+                         "column to halve the span, or switch those members to a stiffer material.")
+    return "\n".join(lines)
+
+
+def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
+                                project: str, material: str,
+                                revisions: list | None = None,
+                                show_labels: bool = False,
+                                report_text: str | None = None) -> bytes:
+    """Render the live layout as a Revit-style structural plan sheet (A3 landscape,
+    one page per level) with plan view + title block + schedule. Returns PDF bytes.
+
+    show_labels  — draw element ids on the plan.
+    report_text  — when set, prepend a written explanation page and append
+                   shear/moment diagram pages (used for the Compare AI report)."""
+    import io as _io
+    import datetime as _dt
+    import textwrap as _tw
+    import numpy as _np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as _plt
+    from matplotlib.backends.backend_pdf import PdfPages as _PdfPages
+
+    status: dict[str, bool] = {}
+    if eval_result:
+        for _b in eval_result.get("beams", []):
+            status[_b.get("id", "")] = bool(_b.get("bend_PASS") and _b.get("shear_PASS")
+                                            and _b.get("defl_TL_PASS") and _b.get("defl_LL_PASS"))
+        for _c in eval_result.get("columns", []):
+            status[_c.get("id", "")] = bool(_c.get("stress_PASS") and _c.get("buckling_PASS"))
+
+    levels = get_level_keys(layout) or ["level_01"]
+    n_levels = len(levels)
+    layout_id = layout.get("layoutId", "—")
+    today = _dt.date.today().isoformat()
+    summary = (eval_result or {}).get("summary", {})
+    buf = _io.BytesIO()
+
+    with _PdfPages(buf) as pdf:
+        # ── Report cover / explanation page (AI report only) ──
+        if report_text:
+            cfig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")
+            cfig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
+                                           ec="#222", lw=2, transform=cfig.transFigure))
+            cax = cfig.add_axes([0.06, 0.05, 0.88, 0.9]); cax.axis("off")
+            cax.text(0.0, 1.0, "STRUCTURAL REPORT", fontsize=22, fontweight="bold",
+                     color="#111", va="top", transform=cax.transAxes)
+            cax.text(0.0, 0.955, f"{project}   ·   {layout_id}   ·   {today}",
+                     fontsize=11, color="#555", va="top", transform=cax.transAxes)
+            cax.plot([0, 1], [0.93, 0.93], color="#222", lw=1, transform=cax.transAxes)
+            _wrapped = "\n".join(_tw.fill(_ln, 108) if _ln.strip() else ""
+                                 for _ln in report_text.splitlines())
+            cax.text(0.0, 0.89, _wrapped, fontsize=9.5, color="#222", va="top",
+                     transform=cax.transAxes, family="monospace", linespacing=1.5)
+            pdf.savefig(cfig, facecolor="white")
+            _plt.close(cfig)
+
+        for si, lk in enumerate(levels, 1):
+            outline   = get_outline(layout, lk)
+            structure = get_structure(layout, lk)
+            rooms     = get_rooms(layout, lk)
+            cols  = [e for e in structure if len(e.get("geometry", [])) == 1]
+            beams = [e for e in structure if len(e.get("geometry", [])) == 2]
+
+            fig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")  # A3 landscape
+            fig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
+                                          ec="#222", lw=2, transform=fig.transFigure))
+            ax = fig.add_axes([0.05, 0.07, 0.60, 0.88]); ax.set_facecolor("white")
+
+            for r in rooms:
+                g = r.get("geometry", [])
+                if len(g) >= 3:
+                    ax.fill([p[0] for p in g], [p[1] for p in g],
+                            color="#f2f2f2", ec="#dcdcdc", lw=0.6, zorder=1)
+                    if r.get("name"):
+                        ax.text(sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g),
+                                r["name"], ha="center", va="center", fontsize=6, color="#b0b0b0", zorder=2)
+            if len(outline) >= 2:
+                ax.plot([p[0] for p in outline] + [outline[0][0]],
+                        [p[1] for p in outline] + [outline[0][1]],
+                        color="#111", lw=2.4, zorder=4)
+            for b in beams:
+                g = b.get("geometry", [])
+                if len(g) < 2:
+                    continue
+                _c = "#cc2020" if status.get(b.get("id")) is False else \
+                     _material_color((b.get("attributes") or {}).get("material"), True)
+                ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=_c, lw=2.4,
+                        zorder=5, solid_capstyle="round")
+            for c in cols:
+                g = c.get("geometry", [])
+                if not g:
+                    continue
+                _c = "#cc2020" if status.get(c.get("id")) is False else \
+                     _material_color((c.get("attributes") or {}).get("material"), True)
+                ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
+                                            facecolor=_c, edgecolor="#111", lw=0.7, zorder=6))
+            if show_labels:
+                for b in beams:
+                    g = b.get("geometry", [])
+                    if len(g) >= 2:
+                        ax.text((g[0][0] + g[1][0]) / 2, (g[0][1] + g[1][1]) / 2,
+                                b.get("id", ""), fontsize=4.5, color="#3a3a3a",
+                                ha="center", va="center", zorder=8)
+                for c in cols:
+                    g = c.get("geometry", [])
+                    if g:
+                        ax.text(g[0][0], g[0][1] - 0.34, c.get("id", ""), fontsize=4.5,
+                                color="#111", ha="center", va="top", zorder=8)
+            ax.set_aspect("equal")
+            ax.grid(True, color="#eee", lw=0.5)
+            ax.set_title(f"STRUCTURAL FRAMING PLAN — {lk.upper()}", fontsize=12,
+                         fontweight="bold", color="#111", loc="left", pad=10)
+            ax.tick_params(labelsize=6, colors="#999")
+
+            # ── Title block + schedule (right) ──
+            tb = fig.add_axes([0.67, 0.07, 0.30, 0.88]); tb.axis("off")
+            tb.add_patch(_plt.Rectangle((0, 0), 1, 1, transform=tb.transAxes,
+                                        fill=False, ec="#222", lw=1.4))
+            tb.plot([0, 1], [0.93, 0.93], transform=tb.transAxes, color="#222", lw=1.0)
+            tb.text(0.5, 0.975, "PermanenceOS — Structural Sheet", ha="center", va="top",
+                    fontsize=11, fontweight="bold", transform=tb.transAxes)
+
+            rows = [("Project", project), ("Layout ID", layout_id), ("Level", lk),
+                    ("Date", today), ("Default material", material),
+                    ("Columns", str(len(cols))), ("Beams", str(len(beams)))]
+            if eval_result:
+                rows += [("Overall", "PASS" if summary.get("overall_PASS") else "FAIL"),
+                         ("Beam failures", str(summary.get("beam_failures", 0))),
+                         ("Column failures", str(summary.get("column_failures", 0)))]
+            y = 0.88
+            for k, v in rows:
+                tb.text(0.04, y, k.upper(), fontsize=7, color="#888",
+                        transform=tb.transAxes, va="top")
+                tb.text(0.96, y, str(v), fontsize=8, color="#111", ha="right",
+                        fontweight="bold", transform=tb.transAxes, va="top")
+                y -= 0.045
+            if revisions:
+                y -= 0.01
+                tb.text(0.04, y, "REVISIONS", fontsize=7, color="#888",
+                        transform=tb.transAxes, va="top"); y -= 0.04
+                for rv in list(revisions)[-7:]:
+                    tb.text(0.04, y, f"• {str(rv)[:46]}", fontsize=6.5, color="#555",
+                            transform=tb.transAxes, va="top"); y -= 0.032
+            tb.plot([0, 1], [0.07, 0.07], transform=tb.transAxes, color="#222", lw=0.8)
+            tb.text(0.04, 0.04, "SCALE: NTS", fontsize=7.5, color="#555", transform=tb.transAxes)
+            tb.text(0.96, 0.04, f"S-{si:02d} / {n_levels:02d}", fontsize=10,
+                    fontweight="bold", ha="right", transform=tb.transAxes)
+
+            pdf.savefig(fig, facecolor="white")
+            _plt.close(fig)
+
+        # ── Shear / moment diagram pages (AI report only; failing beams first) ──
+        if report_text and eval_result:
+            _bev_all = eval_result.get("beams", [])
+
+            def _b_ok(bb):
+                return bool(bb.get("bend_PASS") and bb.get("shear_PASS")
+                            and bb.get("defl_TL_PASS") and bb.get("defl_LL_PASS"))
+            for _bd in sorted(_bev_all, key=_b_ok)[:8]:
+                L = max(float(_bd.get("span_m", 0) or 0), 0.001)
+                w = float(_bd.get("w_total_kNm", 0) or 0)
+                mmax = float(_bd.get("M_max_kNm", 0) or 0) or w * L * L / 8.0
+                x = _np.linspace(0, L, 60); V = w * (L / 2 - x); M = w * x * (L - x) / 2
+                dfig, dax = _plt.subplots(2, 1, figsize=(11.69, 8.27), facecolor="white",
+                                          gridspec_kw=dict(hspace=0.35))
+                dfig.suptitle(f"Beam {_bd.get('id','?')} — {'PASS' if _b_ok(_bd) else 'FAIL'}"
+                              f"   ·   L={L:.2f} m   ·   w={w:.2f} kN/m   ·   Mmax={mmax:.1f} kN·m",
+                              fontsize=12, fontweight="bold",
+                              color="#111" if _b_ok(_bd) else "#cc2020")
+                dax[0].fill_between(x, V, color="#1a8050", alpha=0.3); dax[0].plot(x, V, color="#1a8050")
+                dax[0].axhline(0, color="#222", lw=0.8); dax[0].set_title("Shear Force V (kN)", fontsize=10)
+                dax[1].fill_between(x, M, color="#cf8a3c", alpha=0.3); dax[1].plot(x, M, color="#cf8a3c")
+                dax[1].axhline(0, color="#222", lw=0.8); dax[1].set_title("Bending Moment M (kN·m)", fontsize=10)
+                dax[1].set_xlabel("x (m)")
+                pdf.savefig(dfig, facecolor="white")
+                _plt.close(dfig)
+    return buf.getvalue()
+
+
+@st.cache_data(show_spinner="Building structural sheet…")
+def _sheet_pdf_bytes(layout_json: str, eval_json: str, project: str,
+                     material: str, revs: tuple, show_labels: bool = False,
+                     report_text: str = "") -> bytes:
+    """Cached wrapper — rebuilds only when any input changes, so download_button
+    can render every run without rebuilding the PDF each time."""
+    return _build_structural_sheet_pdf(
+        json.loads(layout_json),
+        json.loads(eval_json) if eval_json else None,
+        project, material, list(revs),
+        show_labels=show_labels,
+        report_text=report_text or None,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _beam_diagram_png(span: float, w: float, m_max: float, label: str, is_light: bool) -> bytes:
+    """Shear-force + bending-moment diagram for a simply-supported beam under a UDL.
+    Computed from first principles (V = w(L/2 − x), M = w·x(L−x)/2) — no LLM needed."""
+    import io as _io
+    import numpy as _np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as _plt
+
+    L = max(float(span or 0.0), 0.001)
+    w = float(w or 0.0)
+    if not m_max:
+        m_max = w * L * L / 8.0
+    x = _np.linspace(0, L, 60)
+    V = w * (L / 2.0 - x)
+    M = w * x * (L - x) / 2.0
+
+    fg  = "#1a3535" if is_light else "#c8eeed"
+    bg  = "#ffffff" if is_light else "#0c2020"
+    acc = "#3f87d6"
+    mom = "#cf8a3c"
+    she = "#1a8050" if is_light else "#40d090"
+
+    fig, axes = _plt.subplots(3, 1, figsize=(4.6, 5.0), facecolor=bg,
+                              gridspec_kw=dict(height_ratios=[1, 1.2, 1.2], hspace=0.55))
+    for ax in axes:
+        ax.set_facecolor(bg)
+        for s in ax.spines.values():
+            s.set_color(fg)
+
+    a0 = axes[0]
+    a0.plot([0, L], [0, 0], color=fg, lw=2)
+    a0.plot([0, L], [0.55, 0.55], color=acc, lw=1)
+    for xi in _np.linspace(0, L, 11):
+        a0.annotate("", xy=(xi, 0), xytext=(xi, 0.55),
+                    arrowprops=dict(arrowstyle="->", color=acc, lw=1))
+    a0.plot([0], [0], marker="^", color=fg, ms=11)
+    a0.plot([L], [0], marker="^", color=fg, ms=11)
+    a0.set_title(f"{label}   ·   L = {L:.2f} m   ·   w = {w:.2f} kN/m",
+                 color=fg, fontsize=8.5, fontweight="bold")
+    a0.set_ylim(-0.35, 0.95)
+    a0.axis("off")
+
+    a1 = axes[1]
+    a1.fill_between(x, V, color=she, alpha=0.30)
+    a1.plot(x, V, color=she, lw=1.6)
+    a1.axhline(0, color=fg, lw=0.8)
+    a1.set_title("Shear Force  V (kN)", color=fg, fontsize=8.5)
+    a1.tick_params(colors=fg, labelsize=6)
+    a1.text(0, w * L / 2, f"+{w * L / 2:.1f}", color=she, fontsize=7, va="bottom")
+    a1.text(L, -w * L / 2, f"−{w * L / 2:.1f}", color=she, fontsize=7, va="top", ha="right")
+
+    a2 = axes[2]
+    a2.fill_between(x, M, color=mom, alpha=0.30)
+    a2.plot(x, M, color=mom, lw=1.6)
+    a2.axhline(0, color=fg, lw=0.8)
+    a2.set_title("Bending Moment  M (kN·m)", color=fg, fontsize=8.5)
+    a2.tick_params(colors=fg, labelsize=6)
+    a2.set_xlabel("x (m)", color=fg, fontsize=7)
+    a2.annotate(f"Mmax = {m_max:.1f}", xy=(L / 2, M.max() if len(M) else m_max),
+                color=mom, fontsize=7, ha="center", va="bottom", fontweight="bold")
+
+    buf = _io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, facecolor=bg, bbox_inches="tight")
+    _plt.close(fig)
+    return buf.getvalue()
+
+
 def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
     """SENSI-style element detail card with utilization bars."""
     import math as _math
@@ -1981,34 +2274,56 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
             # Advisory text from the agent (explanation + alternatives)
-            _advisory = result.get("final_response", "").strip()
-            if any(c.get("name") == "tag_and_audit" for c in calls):
-                return "GENERATE_GRID" + (f"\n{_advisory}" if _advisory else "")
+            _advisory = (result.get("final_response") or "").strip()
+            _force = "force" in prompt.lower()
             for _c in calls:
                 _cname  = _c.get("name", "")
-                _cinput = _c.get("input", _c.get("arguments", {}))
-                # Map modify_structure tool → local function signals
+                _cinput = _c.get("input", _c.get("arguments", {})) or {}
+
+                if _cname == "tag_and_audit":
+                    return "GENERATE_GRID" + (f"\n{_advisory}" if _advisory else "")
+                if _cname == "evaluate_structure":
+                    return "EVALUATE"
+                if _cname == "set_material":
+                    _mt = str(_cinput.get("material") or _cinput.get("value") or "").upper()
+                    if _mt:
+                        return f"APPLY_MATERIAL:{_mt}"
                 if _cname == "modify_structure":
                     _ms_action = _cinput.get("action", "")
                     _ms_eid    = _cinput.get("element_id", "")
+                    _ms_attr   = str(_cinput.get("attribute") or "").lower()
+                    _ms_val    = _cinput.get("value", "")
                     if _ms_action == "remove" and _ms_eid:
-                        return f"APPLY_TOOL:{json.dumps({'name': 'remove_element', 'input': {'element_id': _ms_eid}})}"
-                    if _ms_action == "set_attribute" and _ms_eid:
-                        _ms_val = _cinput.get("value", "")
-                        if _ms_val:
-                            return f"APPLY_TOOL:{json.dumps({'name': 'upgrade_element_section', 'input': {'element_id': _ms_eid, 'new_section': _ms_val}})}"
-                elif _cname == "evaluate_structure":
-                    return "EVALUATE"
-                elif _cname in {"remove_element", "add_midspan_column",
-                                "upgrade_element_section"}:
-                    _tool_payload = {"name": _cname, "input": _cinput, "advisory": _advisory}
-                    return f"APPLY_TOOL:{json.dumps(_tool_payload)}"
+                        return ("APPLY_TOOL:" + json.dumps(
+                            {"name": "remove_element",
+                             "input": {"element_id": _ms_eid, "force": _force},
+                             "advisory": _advisory}))
+                    # material set via set_attribute → real material switch
+                    if _ms_action == "set_attribute" and _ms_attr == "material" and _ms_val:
+                        return f"APPLY_MATERIAL:{str(_ms_val).upper()}"
+                    if _ms_action == "set_attribute" and _ms_eid and _ms_val:
+                        return ("APPLY_TOOL:" + json.dumps(
+                            {"name": "upgrade_element_section",
+                             "input": {"element_id": _ms_eid, "new_section": _ms_val},
+                             "advisory": _advisory}))
+                if _cname == "remove_element" and _cinput.get("element_id"):
+                    _cinput["force"] = _force
+                    return "APPLY_TOOL:" + json.dumps(
+                        {"name": "remove_element", "input": _cinput, "advisory": _advisory})
+                if _cname == "add_midspan_column" and (_cinput.get("beam_id") or _cinput.get("element_id")):
+                    return "APPLY_TOOL:" + json.dumps(
+                        {"name": "add_midspan_column", "input": _cinput, "advisory": _advisory})
+                if _cname == "upgrade_element_section" and _cinput.get("element_id"):
+                    return "APPLY_TOOL:" + json.dumps(
+                        {"name": "upgrade_element_section", "input": _cinput, "advisory": _advisory})
+
+            # The model asked for an action but the parameters were malformed
+            # (e.g. empty element_id) — be honest instead of faking success.
             if calls:
-                first = calls[0]
-                return (
-                    f"Agent wants to apply **{first.get('name', 'action')}** — "
-                    "use the controls in the left panel to proceed."
-                )
+                _avail = ", ".join(el["id"] for el in structure[:18])
+                return ((_advisory + "\n\n") if _advisory else "") + (
+                    "I understood you want an action, but I couldn't read which element to act on. "
+                    f"Please name it — available IDs: {_avail}{'…' if len(structure) > 18 else ''}.")
 
         resp = result.get("final_response", "")
         if not resp:
@@ -2036,6 +2351,28 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             _ids_in_prompt = list(dict.fromkeys(
                 m for m in _pat if _rid(m) and len(m) <= 14
             ))
+
+            # ── ADD a midspan column (split a beam) ───────────────────────────
+            if (any(k in _lower for k in ("add column", "add a column", "midspan",
+                                          "mid-span", "mid col", "intermediate column",
+                                          "split beam")) and _ids_in_prompt):
+                return ("APPLY_TOOL:" + json.dumps(
+                    {"name": "add_midspan_column",
+                     "input": {"beam_id": _rid(_ids_in_prompt[0])}}))
+
+            # ── MATERIAL switch (all elements) ────────────────────────────────
+            _mat_kw = ("STEEL" if "steel" in _lower
+                       else "TIMBER" if ("timber" in _lower or "wood" in _lower)
+                       else "RCC" if ("rcc" in _lower or "concrete" in _lower)
+                       else "")
+            if _mat_kw and any(k in _lower for k in
+                               ("switch", "change", "make it", "convert", "use ", "to ")):
+                return f"APPLY_MATERIAL:{_mat_kw}"
+
+            # ── FIX failing elements ─────────────────────────────────────────
+            if any(k in _lower for k in ("fix", "repair", "make it pass",
+                                          "make them pass", "resolve")):
+                return "FIX_FAILING"
 
             # ── Imperative removal — execute immediately ──────────────────────
             if _is_removal and not _is_explicit_whatif:
@@ -2131,6 +2468,7 @@ def _ensure_session() -> None:
         "live_load_kNm2":  2.0,
         "grid_options":    [],
         "selected_grid":   None,
+        "diff_baseline":   None,   # the applied grid/option — Diff toggle compares vs this
         "output_log":      [],
         "selected_el":     "",
         "active_level":    "level_01",
@@ -2207,11 +2545,13 @@ If the element type is "perimeter" or it defines the building envelope, do NOT c
 Set action="final" and explain: why it can't be removed, what the structural risk is, and offer 2 concrete alternatives the architect can actually do (e.g. upgrade sections, add internal support, redesign the span).
 
 ACTIONS:
-- REMOVE any element: set action="tool", call remove_element. Include advisory in final_response.
-- ADD midspan column: set action="tool", call add_midspan_column. Include advisory in final_response.
-- UPGRADE a section: set action="tool", call upgrade_element_section. Include advisory in final_response.
+- REMOVE any element: set action="tool", call remove_element with the exact element_id. Include advisory in final_response.
+- ADD midspan column: set action="tool", call add_midspan_column with the beam_id. Include advisory in final_response.
+- UPGRADE a section: set action="tool", call upgrade_element_section with element_id (and new_section if known). Include advisory in final_response.
+- CHANGE MATERIAL of the whole structure (e.g. "switch to timber", "change material to concrete/RCC", "make it steel"): set action="tool", call set_material with {{"material": "RCC"|"STEEL"|"TIMBER"}}. Do NOT use upgrade_element_section for material changes.
 - GENERATE structural grid: set action="tool", call tag_and_audit. Include advisory in final_response.
-- MODIFY attributes: set action="tool", call modify_structure. Include advisory in final_response.
+
+ALWAYS include the real element_id from the layout context in tool_calls. Never emit a tool call with an empty or placeholder element_id — if you don't know the id, ask for it in final_response with action="final".
 
 EVALUATION (user asks to evaluate, check structure, run analysis, run loads):
 Set action="final", final_response="" (empty string). The evaluation runs automatically.
@@ -2405,8 +2745,11 @@ section[data-testid="stSidebar"] [data-testid="stExpander"]:first-of-type summar
 .rec-met-pos{{font-size:.70rem;font-weight:700;color:{_PASS_C};font-family:{_F}}}
 .rec-met-neg{{font-size:.70rem;font-weight:700;color:{_FAIL};font-family:{_F}}}
 /* ── Chat & agent ──────────────────────────────────────────────────────── */
-.chat-q{{background:{_CHAT_Q};border-left:3px solid {_ACC};border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.80rem;color:{_TEXT};line-height:1.5;font-family:{_F}}}
-.chat-a{{background:{_CHAT_A};border-left:3px solid {_ACC2};border-radius:3px;padding:5px 8px;margin-bottom:4px;font-size:.80rem;color:{_TEXT};line-height:1.5;font-family:{_F}}}
+.chat-q{{background:{_CHAT_Q};border-left:3px solid {_ACC};border-radius:4px;padding:7px 10px;margin-bottom:5px;font-size:.92rem;color:{_TEXT};line-height:1.6;font-family:{_F}}}
+.chat-a{{background:{_CHAT_A};border-left:3px solid {_ACC2};border-radius:4px;padding:7px 10px;margin-bottom:5px;font-size:.92rem;color:{_TEXT};line-height:1.6;font-family:{_F}}}
+/* Larger, clearer agent input in the sidebar */
+section[data-testid="stSidebar"] textarea{{font-size:.92rem!important;line-height:1.55!important}}
+section[data-testid="stSidebar"] .stForm [data-testid="stFormSubmitButton"] button{{font-size:.84rem!important;font-weight:700!important}}
 .agent-resp{{background:{_CHAT_Q};border-left:3px solid {_ACC};padding:8px 10px;border-radius:3px;font-size:.80rem;color:{_TEXT};line-height:1.6;margin-top:5px;font-family:{_F}}}
 /* ── Element & analysis ────────────────────────────────────────────────── */
 .crit-item{{background:{"#fff4f4" if _is_light else "#200808"};border-left:3px solid {"#cc2020" if _is_light else "#aa2020"};padding:4px 7px;margin-bottom:3px;border-radius:2px;font-size:.70rem;color:{_TEXT};cursor:pointer;font-family:{_F}}}
@@ -2518,6 +2861,11 @@ if st.session_state.currentLayout is None and EDITED_LAYOUT_PATH.exists():
         st.session_state.setupDone = True   # disk file = previously committed
 
 layout_obj      = st.session_state.currentLayout or {}
+# Capture a Diff baseline the first time we have a structural layout, so the Diff
+# toggle always has a reference even if the user never pressed Generate Grid.
+if (st.session_state.get("diff_baseline") is None
+        and layout_obj and get_structure(layout_obj)):
+    st.session_state.diff_baseline = json.loads(json.dumps(layout_obj))
 _level_keys_now = get_level_keys(layout_obj) if layout_obj else ["level_01"]
 if st.session_state.get("active_level") not in _level_keys_now:
     st.session_state.active_level = _level_keys_now[0] if _level_keys_now else "level_01"
@@ -2541,8 +2889,12 @@ if _aq_raw.strip():
                 from nodes.modify import remove_element as _aq_rem
                 _aq_eid = _aq_ti.get("element_id", "")
                 if _aq_eid:
-                    _push_version(json.loads(_aq_rem(json.dumps(layout_obj), _aq_eid)))
-                    _aq_resp = f"Removed **{_aq_eid}** from the layout."
+                    _aq_nl = json.loads(_aq_rem(json.dumps(layout_obj), _aq_eid, bool(_aq_ti.get("force"))))
+                    if find_element_in_layout(_aq_nl, _aq_eid)[1] is not None:
+                        _aq_resp = f"**{_aq_eid}** is a perimeter element (locked). Say 'force remove {_aq_eid}' to override."
+                    else:
+                        _push_version(_aq_nl)
+                        _aq_resp = f"Removed **{_aq_eid}** from the layout."
             elif _aq_tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _aq_amc
                 _aq_bid = _aq_ti.get("beam_id", "") or _aq_ti.get("element_id", "")
@@ -2553,10 +2905,21 @@ if _aq_raw.strip():
                 from nodes.modify import upgrade_element_section as _aq_ups
                 _aq_uid = _aq_ti.get("element_id", "")
                 if _aq_uid:
-                    _push_version(json.loads(_aq_ups(json.dumps(layout_obj), _aq_uid)))
+                    _push_version(json.loads(_aq_ups(json.dumps(layout_obj), _aq_uid,
+                                                     _aq_ti.get("new_section", "") or _aq_ti.get("value", ""))))
                     _aq_resp = f"Upgraded section of **{_aq_uid}**."
         except Exception as _aq_tex:
             _aq_resp = f"Tool execution failed: {_aq_tex}"
+    elif _aq_resp.startswith("APPLY_MATERIAL:"):
+        try:
+            from nodes.modify import apply_material_override
+            _aq_mt = _aq_resp.split(":", 1)[1].strip() or _mat_now
+            _push_version(json.loads(apply_material_override(json.dumps(layout_obj), _aq_mt)))
+            _aq_resp = f"Switched all framing to **{_aq_mt}**. Run analysis to check it."
+        except Exception as _aqme:
+            _aq_resp = f"Material switch failed: {_aqme}"
+    elif _aq_resp in ("GENERATE_GRID", "EVALUATE", "FIX_FAILING") or _aq_resp.startswith("GENERATE_GRID"):
+        _aq_resp = "Use the sidebar **AI Agent** chat to run that action."
     st.session_state.history.append({"prompt": _aq_raw, "response": _aq_resp})
 
 _drawer_bg    = "#ffffff" if _is_light else "#0d2828"
@@ -2813,6 +3176,7 @@ with st.sidebar:
             _auto_opt = st.session_state.grid_options[0].get("layout", {})
             if _auto_opt:
                 _push_version(_auto_opt)
+                st.session_state.diff_baseline = json.loads(json.dumps(_auto_opt))
         st.session_state["selected_opt_bar_idx"] = 0
         st.rerun()
 
@@ -2854,6 +3218,7 @@ with st.sidebar:
                         st.session_state.grid_options[_bi]["evaluation"] = _opt_ev
                 if _opt_layout:
                     _push_version(_opt_layout)
+                    st.session_state.diff_baseline = json.loads(json.dumps(_opt_layout))
                 st.session_state["selected_opt_bar_idx"] = _bi
                 st.session_state.eval_result = _opt_ev
                 st.session_state.eval_alts = _get_failure_alternatives(
@@ -2887,7 +3252,7 @@ with st.sidebar:
             "Ask agent",
             placeholder="Ask anything about your structure…\ne.g. remove column C4 / explain beam B1 failure",
             label_visibility="collapsed",
-            height=130,
+            height=150,
         )
         submitted = st.form_submit_button("Ask Agent  ›", width="stretch")
 
@@ -2924,6 +3289,7 @@ if submitted and prompt_input.strip():
             _ag_opt = st.session_state.grid_options[0].get("layout", {})
             if _ag_opt:
                 _push_version(_ag_opt)
+                st.session_state.diff_baseline = json.loads(json.dumps(_ag_opt))
                 st.session_state["selected_opt_bar_idx"] = 0
         _resp = (f"{_gen_advisory}\n\n" if _gen_advisory else "") + f"Generated {len(st.session_state.grid_options)} grid option(s). Option 1 applied."
     elif _resp.startswith("APPLY_TOOL:"):
@@ -2934,9 +3300,18 @@ if submitted and prompt_input.strip():
             if _tn == "remove_element":
                 from nodes.modify import remove_element as _rem_el
                 _eid = _ti.get("element_id", "")
+                _frc = bool(_ti.get("force"))
                 if _eid:
-                    _push_version(json.loads(_rem_el(json.dumps(layout_obj), _eid)))
-                    _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Removed **{_eid}** from the layout."
+                    _new_l = json.loads(_rem_el(json.dumps(layout_obj), _eid, _frc))
+                    if find_element_in_layout(_new_l, _eid)[1] is not None:
+                        # removal was blocked (perimeter / envelope lock)
+                        _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + (
+                            f"**{_eid}** is a perimeter element that defines the building "
+                            f"envelope, so I left it in place — removing it risks the structure. "
+                            f"Say **force remove {_eid}** if you want me to delete it anyway.")
+                    else:
+                        _push_version(_new_l)
+                        _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Removed **{_eid}** from the layout."
             elif _tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _amc
                 _bid = _ti.get("beam_id", "") or _ti.get("element_id", "")
@@ -2946,15 +3321,68 @@ if submitted and prompt_input.strip():
             elif _tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _ups
                 _uid = _ti.get("element_id", "")
+                _usec = _ti.get("new_section", "") or _ti.get("value", "")
                 if _uid:
-                    _push_version(json.loads(_ups(json.dumps(layout_obj), _uid)))
+                    _push_version(json.loads(_ups(json.dumps(layout_obj), _uid, _usec)))
                     _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Upgraded section of **{_uid}**."
         except Exception as _tex:
             _resp = f"Tool execution failed: {_tex}"
+            st.session_state["_last_error"] = f"APPLY_TOOL: {_tex}"
+    elif _resp.startswith("APPLY_MATERIAL:"):
+        _new_mat = _resp[len("APPLY_MATERIAL:"):].strip() or _mat_now
+        try:
+            from nodes.modify import apply_material_override
+            _ls_m = apply_material_override(json.dumps(layout_obj), _new_mat)
+            _push_version(json.loads(_ls_m))
+            with st.spinner(f"Applying {_new_mat} and evaluating…"):
+                _ev_m = _run_evaluate(_ls_m, sdl=_sdl_now, ll=_ll_now)
+            if _ev_m:
+                st.session_state.eval_result = _ev_m
+                st.session_state.eval_alts   = _get_failure_alternatives(_ev_m, _new_mat)
+            _sm_m = (_ev_m or {}).get("summary", {})
+            _resp = (f"Switched all framing to **{_new_mat}**. "
+                     f"Result: {'PASS' if _sm_m.get('overall_PASS') else 'FAIL'} — "
+                     f"{_sm_m.get('beam_failures', 0)} beam / {_sm_m.get('column_failures', 0)} column failures. "
+                     f"Ask me to *fix the failing beams* if you'd like options.")
+        except Exception as _mex:
+            _resp = f"Material switch failed: {_mex}"
+            st.session_state["_last_error"] = f"APPLY_MATERIAL: {_mex}"
+    elif _resp == "FIX_FAILING":
+        try:
+            _ev_fix = st.session_state.eval_result or _run_evaluate(
+                json.dumps(layout_obj), sdl=_sdl_now, ll=_ll_now)
+            _alts_fix = _get_failure_alternatives(_ev_fix or {}, _mat_now)
+            _auto_alt = next((a for a in _alts_fix if "upgrade" in a.lower()),
+                             (_alts_fix[0] if _alts_fix else None))
+            if _auto_alt:
+                _nl, _nev = _apply_alternative(_auto_alt, json.dumps(layout_obj),
+                                               _mat_now, _sdl_now, _ll_now)
+                if _nev:
+                    _push_version(json.loads(_nl))
+                    st.session_state.eval_result = _nev
+                    st.session_state.eval_alts = _get_failure_alternatives(_nev, _mat_now)
+                    _ns = _nev.get("summary", {})
+                    _resp = (f"Applied an automatic fix. Now "
+                             f"{'PASS' if _ns.get('overall_PASS') else 'FAIL'} — "
+                             f"{_ns.get('beam_failures', 0)} beam / {_ns.get('column_failures', 0)} column failures.")
+                else:
+                    _resp = "Tried to auto-fix but evaluation did not return — try upgrading sections manually."
+            else:
+                _resp = "Nothing to fix — run analysis first, or there are no failing elements."
+        except Exception as _fex:
+            _resp = f"Auto-fix failed: {_fex}"
+            st.session_state["_last_error"] = f"FIX_FAILING: {_fex}"
     elif _resp == "EVALUATE":
-        from nodes.modify import apply_material_override
-        _ls_ag = apply_material_override(json.dumps(layout_obj), _mat_now)
-        _push_version(json.loads(_ls_ag))
+        # Evaluate as-is; only seed the global material when nothing is assigned yet
+        # (never revert an applied timber/steel change).
+        _any_mat_ag = any((e.get("attributes") or {}).get("material")
+                          for _l, e in iter_all_structure(layout_obj))
+        if _any_mat_ag:
+            _ls_ag = json.dumps(layout_obj)
+        else:
+            from nodes.modify import apply_material_override
+            _ls_ag = apply_material_override(json.dumps(layout_obj), _mat_now)
+            _push_version(json.loads(_ls_ag))
         with st.spinner("Evaluating structure…"):
             _ev_ag = _run_evaluate(_ls_ag, sdl=_sdl_now, ll=_ll_now)
         if _ev_ag:
@@ -2978,7 +3406,7 @@ if submitted and prompt_input.strip():
 
 # ─── Page header ──────────────────────────────────────────────────────────────
 _cf_h  = st.session_state.get("cost_flexibility")
-_hcols = st.columns([5, 1, 1, 0.35], gap="small")
+_hcols = st.columns([4.2, 0.9, 1.0, 1.15, 0.35], gap="small")
 
 with _hcols[0]:
     _rev_chip  = ('<span class="stat-chip needs-review">⚠ Review</span>'
@@ -3009,6 +3437,39 @@ with _hcols[2]:
         width="stretch",
     )
 with _hcols[3]:
+    _revs = tuple(
+        (h.get("prompt") or h.get("label") or "")
+        for h in st.session_state.get("history", [])[-7:]
+    )
+    # Single export entry point — pick which design + whether to show labels.
+    _export_choices: dict[str, tuple[str, str]] = {
+        "Current design": (json.dumps(layout_obj), json.dumps(er) if er else "")
+    }
+    for _gi_x, _go_x in enumerate(st.session_state.get("grid_options", []), 1):
+        _ev_x = _go_x.get("evaluation")
+        _export_choices[f"Grid Option {_gi_x}"] = (
+            json.dumps(_go_x.get("layout", {})), json.dumps(_ev_x) if _ev_x else "")
+    for _sn_x in st.session_state.get("snapshots", []):
+        _ev_x = _sn_x.get("eval_result")
+        _export_choices[_sn_x["label"]] = (
+            _sn_x["layout_json"], json.dumps(_ev_x) if _ev_x else "")
+
+    with st.popover("⤓ Export", width="stretch"):
+        _exp_sel = st.selectbox("Design to export", list(_export_choices.keys()),
+                                key="exp_design_sel")
+        _exp_lbl = st.checkbox("Show element labels", value=True, key="exp_show_labels")
+        _exp_lj, _exp_ej = _export_choices.get(_exp_sel, (json.dumps(layout_obj), ""))
+        try:
+            _exp_data = _sheet_pdf_bytes(_exp_lj, _exp_ej, str(_lid), str(_mat_now),
+                                         _revs, _exp_lbl, "")
+            st.download_button(
+                "⤓ Download sheet (PDF)", data=_exp_data,
+                file_name=f"{_lid}_{_exp_sel.replace(' ', '_')}.pdf",
+                mime="application/pdf", width="stretch", key="exp_dl_btn",
+            )
+        except Exception as _ee:
+            st.caption(f"Export failed: {_ee}")
+with _hcols[4]:
     with st.popover("⋮", width="stretch"):
         st.markdown(
             f'<div style="font-size:.72rem;font-weight:700;color:#c8eeed;'
@@ -3024,14 +3485,32 @@ with _hcols[3]:
             st.session_state.theme        = "light" if not _is_light else "dark"
             st.session_state.viewer_nonce += 1
             st.rerun()
-        st.download_button(
-            "Export JSON",
-            data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
-            file_name="layout_export.json",
-            mime="application/json",
-            width="stretch",
-            key="btn_menu_export",
-        )
+        st.toggle("🐞 Debug mode", key="debug_mode",
+                  help="Show diagnostics and full error tracebacks for fast problem-finding.")
+        with st.expander("Diagnostics", expanded=bool(st.session_state.get("debug_mode"))):
+            _diag_cols, _diag_beams = _count_elements(layout_obj)
+            _diag_mats = ", ".join(l for _c, l in _materials_present(layout_obj)) or "none"
+            _diag_sm = (er or {}).get("summary", {})
+            _diag_err = st.session_state.get("_last_error", "")
+            st.markdown(
+                f"<div style='font-size:.66rem;line-height:1.7;font-family:monospace'>"
+                f"version: <b>{st.session_state.get('currentVersion', 0)}</b><br>"
+                f"multilevel: <b>{is_multilevel(layout_obj)}</b> · levels: <b>{get_level_count(layout_obj)}</b><br>"
+                f"columns: <b>{_diag_cols}</b> · beams: <b>{_diag_beams}</b><br>"
+                f"materials: <b>{_diag_mats}</b><br>"
+                f"eval: <b>{'PASS' if _diag_sm.get('overall_PASS') else ('FAIL' if er else '—')}</b> "
+                f"({_diag_sm.get('beam_failures', 0)}B / {_diag_sm.get('column_failures', 0)}C fail)<br>"
+                f"selected: <b>{st.session_state.get('selected_el') or '—'}</b><br>"
+                f"diff baseline set: <b>{st.session_state.get('diff_baseline') is not None}</b><br>"
+                f"LLM reachable: <b>{_llm_is_reachable()}</b>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            if _diag_err:
+                st.error(_diag_err)
+            if st.button("Clear last error", key="btn_clear_err", width="stretch"):
+                st.session_state["_last_error"] = ""
+                st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # EMPTY STATE GATE — nothing renders until upload + OK
@@ -3130,9 +3609,17 @@ with tab_mod:
                 icon="⚠️",
             )
         else:
-            from nodes.modify import apply_material_override
-            _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
-            _push_version(json.loads(_ls2))
+            # Only seed the global material when NO element has a material yet
+            # (fresh grid). If timber/steel/etc. was already applied, evaluate the
+            # layout AS-IS so Run Analysis never reverts an applied material change.
+            _any_mat = any((e.get("attributes") or {}).get("material")
+                           for _l, e in iter_all_structure(layout_obj))
+            if _any_mat:
+                _ls2 = json.dumps(layout_obj)
+            else:
+                from nodes.modify import apply_material_override
+                _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
+                _push_version(json.loads(_ls2))
             with st.spinner("Evaluating structure…"):
                 _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
             if _ev2:
@@ -3265,13 +3752,31 @@ with tab_mod:
             if _new_auto != st.session_state.get("auto_eval", True):
                 st.session_state["auto_eval"] = _new_auto
 
+        # Diff compares the live layout against the baseline (the applied grid/option),
+        # so it shows everything you've changed since — not just the last edit.
+        _before_lay = (st.session_state.get("diff_baseline")
+                       if st.session_state.compare_mode else None)
+        if st.session_state.compare_mode:
+            if _before_lay:
+                _da, _dr, _dm = (("#1a8050", "#cc2020", "#c07800") if _is_light
+                                 else ("#40d090", "#ff5050", "#ffd060"))
+                st.markdown(
+                    f'<div style="display:flex;gap:14px;align-items:center;margin:2px 0 6px;'
+                    f'font-size:.60rem;color:{_MUT}">'
+                    f'<span style="font-weight:700;text-transform:uppercase;letter-spacing:.5px">vs Baseline grid</span>'
+                    f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_da};display:inline-block"></span>Added</span>'
+                    f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_dr};display:inline-block"></span>Removed</span>'
+                    f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_dm};display:inline-block"></span>Changed</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div style="font-size:.60rem;color:{_MUT};margin:2px 0 6px">'
+                    f'Diff on — generate or apply a grid first to set the baseline.</div>',
+                    unsafe_allow_html=True,
+                )
         if _vm == "2D":
-            _before_lay = None
-            if st.session_state.compare_mode and st.session_state.get("versionHistory"):
-                try:
-                    _before_lay = st.session_state.versionHistory[-1]
-                except Exception:
-                    pass
             _fig2d = _render_floor_plan_plotly(
                 _plan_layout, eval_result=er,
                 highlight=st.session_state.selected_el,
@@ -3356,6 +3861,7 @@ with tab_mod:
                     active_level=st.session_state.active_level,
                     is_light=_is_light,
                     height=512,
+                    before_layout=_before_lay,
                 ),
                 height=520,
                 scrolling=False,
@@ -3633,8 +4139,33 @@ with tab_mod:
             if _sel_obj:
                 st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
 
-                # ── Direct action buttons (bypass agent) ──────────────────
+                # ── Force & moment diagram (any selected beam — passing OR failing) ──
                 _sel_is_beam = len(_sel_obj.get("geometry", [])) == 2
+                if _sel_is_beam:
+                    _bev = next((b for b in (er or {}).get("beams", [])
+                                 if b.get("id") == _sel), None)
+                    with st.expander("📐  Force & moment diagram", expanded=False):
+                        try:
+                            if _bev:
+                                _d_span = _bev.get("span_m", 0.0)
+                                _d_w    = _bev.get("w_total_kNm", 0.0)
+                                _d_mmax = _bev.get("M_max_kNm", 0.0)
+                            else:
+                                import math as _dmath
+                                _dg = _sel_obj.get("geometry", [])
+                                _d_span = _dmath.dist(_dg[0], _dg[1]) if len(_dg) >= 2 else 0.0
+                                _d_w    = (_sdl_now + _ll_now) * 3.0   # nominal 3 m tributary
+                                _d_mmax = _d_w * _d_span * _d_span / 8.0
+                            st.image(
+                                _beam_diagram_png(_d_span, _d_w, _d_mmax, _sel, _is_light),
+                                width="stretch",
+                            )
+                            if not _bev:
+                                st.caption("Estimated loads — run analysis for exact values.")
+                        except Exception as _de:
+                            st.caption(f"Diagram unavailable: {_de}")
+
+                # ── Direct action buttons (bypass agent) ──────────────────
                 _act_cols = st.columns(2, gap="small") if _sel_is_beam else st.columns([1, 1], gap="small")
 
                 with _act_cols[0]:
@@ -4076,8 +4607,45 @@ with tab_cmp:
                 unsafe_allow_html=True,
             )
         with _rp3:
-            st.button("↓ Export PDF", width="stretch", disabled=True,
-                      key="cmp_export_pdf", help="Revit-style report export (coming soon)")
+            with st.popover("🧾 AI Report", width="stretch"):
+                st.caption("Agent writes a structural report; the PDF includes the "
+                           "explanation, labelled plans and shear/moment diagrams.")
+                if st.button("Generate report", key="cmp_gen_report", width="stretch"):
+                    with st.spinner("Writing structural report…"):
+                        if _llm_is_reachable():
+                            _rep = _run_agent_chat(
+                                "Write a concise structural report for this layout: summarise the "
+                                "framing system, materials, spans, any failing elements and the "
+                                "recommended fixes. Plain prose, no JSON.",
+                                layout_obj, er,
+                            )
+                            if (not _rep) or _rep.startswith(("APPLY_TOOL:", "GENERATE_GRID", "EVALUATE")):
+                                _rep = _structural_summary_text(layout_obj, er)
+                        else:
+                            _rep = _structural_summary_text(layout_obj, er)
+                    st.session_state["_cmp_report_txt"] = _rep
+                _rep_txt = st.session_state.get("_cmp_report_txt")
+                if _rep_txt:
+                    st.markdown(
+                        f'<div style="font-size:.66rem;color:{_MUT};max-height:140px;'
+                        f'overflow-y:auto;white-space:pre-wrap;line-height:1.5">{_rep_txt}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    try:
+                        _rep_pdf = _sheet_pdf_bytes(
+                            json.dumps(layout_obj), json.dumps(er) if er else "",
+                            str(_lid), str(_mat_now),
+                            tuple((h.get("prompt") or h.get("label") or "")
+                                  for h in st.session_state.get("history", [])[-7:]),
+                            True, _rep_txt,
+                        )
+                        st.download_button(
+                            "⤓ Download report (PDF)", data=_rep_pdf,
+                            file_name=f"{_lid}_structural_report.pdf",
+                            mime="application/pdf", width="stretch", key="cmp_dl_report",
+                        )
+                    except Exception as _re:
+                        st.caption(f"Report build failed: {_re}")
         with _rp4:
             if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
                 st.session_state.snapshots = []

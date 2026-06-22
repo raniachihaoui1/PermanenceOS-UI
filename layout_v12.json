@@ -775,9 +775,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -791,9 +790,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -807,9 +805,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -823,9 +820,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -839,9 +835,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -855,9 +850,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -871,9 +865,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -887,9 +880,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -903,9 +895,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -919,9 +910,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -935,9 +925,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -951,9 +940,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -967,9 +955,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -983,9 +970,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -999,9 +985,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1015,9 +1000,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1031,9 +1015,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1047,9 +1030,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1063,9 +1045,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1079,9 +1060,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1095,9 +1075,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1111,9 +1090,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1127,9 +1105,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1143,9 +1120,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1159,9 +1135,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1175,9 +1150,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1191,9 +1165,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1207,9 +1180,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1223,9 +1195,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1239,9 +1210,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1255,9 +1225,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1271,9 +1240,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -1294,10 +1262,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1318,10 +1287,36 @@
             "length": 0.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
+          }
+        },
+        {
+          "id": "A8-D8",
+          "name": "Beam_A8-D8",
+          "geometry": [
+            [
+              0.45,
+              10.0
+            ],
+            [
+              3.95,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
+            "length": 3.5,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": null,
+            "conflict": null,
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1342,10 +1337,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1366,10 +1362,11 @@
             "length": 0.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1390,10 +1387,11 @@
             "length": 2.95,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1414,10 +1412,11 @@
             "length": 4.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1438,10 +1437,11 @@
             "length": 3.8,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1462,10 +1462,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1486,10 +1487,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1510,10 +1512,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1534,10 +1537,11 @@
             "length": 0.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1558,10 +1562,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1582,10 +1587,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1606,10 +1612,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1630,10 +1637,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1654,10 +1662,11 @@
             "length": 2.1,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1678,10 +1687,11 @@
             "length": 2.4,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1702,10 +1712,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1726,10 +1737,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1750,10 +1762,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1774,10 +1787,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1798,10 +1812,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1822,10 +1837,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1846,10 +1862,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1870,10 +1887,11 @@
             "length": 0.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1894,10 +1912,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1918,10 +1937,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1942,10 +1962,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1966,10 +1987,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -1990,10 +2012,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2014,10 +2037,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2038,10 +2062,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2062,10 +2087,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2086,10 +2112,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2110,10 +2137,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2134,10 +2162,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2158,10 +2187,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2182,10 +2212,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2206,10 +2237,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2230,10 +2262,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2254,10 +2287,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2278,10 +2312,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2302,10 +2337,11 @@
             "length": 1.35,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2326,10 +2362,11 @@
             "length": 3.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -2350,10 +2387,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         }
       ]
@@ -3132,9 +3170,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3148,9 +3185,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3164,9 +3200,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3180,9 +3215,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3196,9 +3230,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3212,9 +3245,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3228,9 +3260,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3244,9 +3275,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3260,9 +3290,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3276,9 +3305,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3292,9 +3320,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3308,9 +3335,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3324,9 +3350,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3340,9 +3365,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3356,9 +3380,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3372,9 +3395,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3388,9 +3410,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3404,9 +3425,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3420,9 +3440,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3436,9 +3455,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3452,9 +3470,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3468,9 +3485,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3484,9 +3500,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3500,9 +3515,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3516,9 +3530,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3532,9 +3545,8 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3548,9 +3560,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3564,9 +3575,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3580,9 +3590,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3596,9 +3605,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3612,9 +3620,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3628,9 +3635,8 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
+            "material": null,
+            "conflict": null
           }
         },
         {
@@ -3651,10 +3657,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3675,10 +3682,11 @@
             "length": 0.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3699,10 +3707,11 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3723,10 +3732,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3747,10 +3757,11 @@
             "length": 0.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3771,10 +3782,11 @@
             "length": 2.95,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3795,10 +3807,11 @@
             "length": 4.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3819,10 +3832,11 @@
             "length": 3.8,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3843,10 +3857,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3867,10 +3882,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3891,10 +3907,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3915,10 +3932,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3939,10 +3957,11 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3963,10 +3982,11 @@
             "length": 2.1,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -3987,10 +4007,11 @@
             "length": 2.4,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4011,10 +4032,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4035,10 +4057,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4059,10 +4082,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4083,10 +4107,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4107,10 +4132,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4131,10 +4157,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4155,10 +4182,11 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4179,10 +4207,11 @@
             "length": 0.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4203,10 +4232,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4227,10 +4257,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4251,10 +4282,11 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4275,10 +4307,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4299,10 +4332,11 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4323,10 +4357,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4347,10 +4382,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4371,10 +4407,11 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4395,10 +4432,11 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4419,10 +4457,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4443,10 +4482,11 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4467,10 +4507,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4491,10 +4532,11 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4515,10 +4557,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4539,10 +4582,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4563,10 +4607,11 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4587,10 +4632,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4611,10 +4657,11 @@
             "length": 1.35,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4635,10 +4682,11 @@
             "length": 3.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         },
         {
@@ -4659,10 +4707,11 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "RCC",
+            "material": null,
             "conflict": null,
-            "depth": "250",
-            "width": "175"
+            "depth": null,
+            "width": null,
+            "section": null
           }
         }
       ]

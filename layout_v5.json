@@ -1050,21 +1050,6 @@
           }
         },
         {
-          "id": "F5",
-          "name": "Col_F5",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": null,
-            "conflict": null
-          }
-        },
-        {
           "id": "F6",
           "name": "Col_F6",
           "geometry": [
@@ -1960,8 +1945,8 @@
           }
         },
         {
-          "id": "F4-F5",
-          "name": "Beam_F4-F5",
+          "id": "F4-F6",
+          "name": "Beam_F4-F6",
           "geometry": [
             [
               7.85,
@@ -1969,12 +1954,12 @@
             ],
             [
               7.85,
-              6.5
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.0,
+            "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": null,
@@ -1995,56 +1980,6 @@
             [
               11.7,
               4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": null,
-            "conflict": null,
-            "depth": null,
-            "width": null,
-            "section": null
-          }
-        },
-        {
-          "id": "F5-F6",
-          "name": "Beam_F5-F6",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ],
-            [
-              7.85,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 0.5,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": null,
-            "conflict": null,
-            "depth": null,
-            "width": null,
-            "section": null
-          }
-        },
-        {
-          "id": "F5-G5",
-          "name": "Beam_F5-G5",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ],
-            [
-              11.7,
-              6.5
             ]
           ],
           "attributes": {
@@ -2100,6 +2035,31 @@
           "attributes": {
             "type": "internal",
             "length": 1.75,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": null,
+            "conflict": null,
+            "depth": null,
+            "width": null,
+            "section": null
+          }
+        },
+        {
+          "id": "F7-G7",
+          "name": "Beam_F7-G7",
+          "geometry": [
+            [
+              7.85,
+              8.25
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
             "material": null,
@@ -3485,21 +3445,6 @@
           }
         },
         {
-          "id": "F5",
-          "name": "Col_F5",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": null,
-            "conflict": null
-          }
-        },
-        {
           "id": "F6",
           "name": "Col_F6",
           "geometry": [
@@ -4320,8 +4265,8 @@
           }
         },
         {
-          "id": "F4-F5",
-          "name": "Beam_F4-F5",
+          "id": "F4-F6",
+          "name": "Beam_F4-F6",
           "geometry": [
             [
               7.85,
@@ -4329,12 +4274,12 @@
             ],
             [
               7.85,
-              6.5
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.0,
+            "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": null,
@@ -4355,56 +4300,6 @@
             [
               11.7,
               4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": null,
-            "conflict": null,
-            "depth": null,
-            "width": null,
-            "section": null
-          }
-        },
-        {
-          "id": "F5-F6",
-          "name": "Beam_F5-F6",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ],
-            [
-              7.85,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 0.5,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": null,
-            "conflict": null,
-            "depth": null,
-            "width": null,
-            "section": null
-          }
-        },
-        {
-          "id": "F5-G5",
-          "name": "Beam_F5-G5",
-          "geometry": [
-            [
-              7.85,
-              6.5
-            ],
-            [
-              11.7,
-              6.5
             ]
           ],
           "attributes": {
@@ -4460,6 +4355,31 @@
           "attributes": {
             "type": "internal",
             "length": 1.75,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": null,
+            "conflict": null,
+            "depth": null,
+            "width": null,
+            "section": null
+          }
+        },
+        {
+          "id": "F7-G7",
+          "name": "Beam_F7-G7",
+          "geometry": [
+            [
+              7.85,
+              8.25
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
             "material": null,
