@@ -444,9 +444,10 @@ def _remove_element_from_structure(element_id: str, structure: list) -> list:
     return new_structure
 
 
-def remove_element(layout_json_string: str, element_id: str) -> str:
+def remove_element(layout_json_string: str, element_id: str, force: bool = False) -> str:
     """Remove a structural element. For columns: merge collinear beams through the removed point.
-    For multilevel: also blocks removal if a column exists directly above (load path broken)."""
+    For multilevel: also blocks removal if a column exists directly above (load path broken).
+    Perimeter elements are locked by default; pass force=True to remove them anyway."""
     from nodes._layout import is_multilevel, find_element_in_layout, has_column_above
     data = json.loads(layout_json_string)
 
@@ -456,7 +457,7 @@ def remove_element(layout_json_string: str, element_id: str) -> str:
             return layout_json_string
         is_column = len(target.get("geometry", [])) == 1
         el_type = (target.get("attributes") or {}).get("type", "")
-        if el_type == "perimeter":
+        if el_type == "perimeter" and not force:
             kind = "column" if is_column else "beam"
             print(f"  Cannot remove {element_id}: perimeter {kind} defines the building envelope — locked.")
             return layout_json_string
@@ -468,7 +469,7 @@ def remove_element(layout_json_string: str, element_id: str) -> str:
         return json.dumps(data, indent=2, ensure_ascii=False)
 
     _sl_target = next((e for e in data.get("structure", []) if e.get("id") == element_id), None)
-    if _sl_target is not None and ((_sl_target.get("attributes") or {}).get("type") == "perimeter"):
+    if _sl_target is not None and ((_sl_target.get("attributes") or {}).get("type") == "perimeter") and not force:
         kind = "column" if len(_sl_target.get("geometry", [])) == 1 else "beam"
         print(f"  Cannot remove {element_id}: perimeter {kind} defines the building envelope — locked.")
         return layout_json_string

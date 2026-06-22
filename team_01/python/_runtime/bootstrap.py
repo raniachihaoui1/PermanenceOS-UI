@@ -33,6 +33,7 @@ def bootstrap() -> Context:
         base_url=settings.base_url,
         llm_model=settings.llm_model,
         timeout_seconds=settings.request_timeout_seconds,
+        provider=settings.provider,
     )
 
     tools = get_action_tools()

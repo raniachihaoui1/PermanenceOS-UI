@@ -16,7 +16,25 @@ def create_chat_llm(
     llm_model: str,
     timeout_seconds: float,
     model_kwargs: dict[str, Any] | None = None,
-) -> ChatOpenAI:
+    provider: str = "local",
+) -> Any:
+    """Build a LangChain chat model for the configured provider.
+
+    provider="anthropic" -> ChatAnthropic (Claude). The agent invokes the LLM
+    as plain text that it parses into JSON, so no provider-specific structured
+    output binding is needed; we only need a generous max_tokens so the
+    advisory text + tool-call JSON is never truncated.
+    """
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            api_key=api_key,
+            model=llm_model,
+            timeout=timeout_seconds,
+            temperature=0,
+            max_tokens=4096,
+        )
+
     return ChatOpenAI(
         api_key=api_key,
         base_url=base_url,

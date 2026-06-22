@@ -95,15 +95,18 @@ def _sync_viewers() -> None:
 
 
 def _compute_diff(before: dict, after: dict) -> dict:
-    """Return sets of element IDs: added, removed, changed between two layouts."""
-    b_els = {el["id"]: el for el in get_structure(before)}
-    a_els = {el["id"]: el for el in get_structure(after)}
+    """Return sets of 'level|id' keys: added, removed, changed (geometry OR attributes).
+    Keyed per-level because element ids repeat across levels in multilevel layouts."""
+    b_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(before)}
+    a_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(after)}
     added   = set(a_els) - set(b_els)
     removed = set(b_els) - set(a_els)
-    changed = {
-        eid for eid in (set(a_els) & set(b_els))
-        if json.dumps(a_els[eid], sort_keys=True) != json.dumps(b_els[eid], sort_keys=True)
-    }
+    changed = set()
+    for k in (set(a_els) & set(b_els)):
+        ae, be = a_els[k], b_els[k]
+        if (json.dumps(ae.get("geometry"),   sort_keys=True) != json.dumps(be.get("geometry"),   sort_keys=True)
+                or json.dumps(ae.get("attributes"), sort_keys=True) != json.dumps(be.get("attributes"), sort_keys=True)):
+            changed.add(k)
     return {"added": added, "removed": removed, "changed": changed}
 
 
@@ -230,7 +233,11 @@ def _render_floor_plan_plotly(
         PASS_C = "#40d090"; FAIL_C = "#ff5050"; SEL_C = "#ffd060"; WIN_C = "#4696dc"
         REM_C = "#ff5050"; ADD_C = "#40d090"; MOD_C = "#ffd060"
 
+    # Base (un-evaluated) structural colour: blue in light mode, white in dark mode.
+    STRUCT_BASE = "#2563c0" if is_light else "#e8eef5"
+
     level_keys = get_level_keys(layout)
+    _show_all = (level_key == "__ALL__")   # render every level solid (Compare "All levels")
     active_level = level_key if level_key in level_keys else (level_keys[0] if level_keys else "level_01")
     level_payload = _get_level_payload(layout, active_level)
     active_rooms = get_rooms(layout, active_level)
@@ -252,22 +259,24 @@ def _render_floor_plan_plotly(
             el_status[c["id"]] = "pass" if ok else "fail"
             eval_map_c[c["id"]] = c
 
-    # ── DIFF: compute added / removed / changed sets ───────────────────────────
-    _diff_removed: set[str] = set()
-    _diff_added:   set[str] = set()
-    _diff_changed: set[str] = set()
+    # ── DIFF: added / removed / changed sets, keyed by (level, id) ─────────────
+    # (element ids repeat across levels, so a flat id key would miss per-level edits)
+    _diff_removed: set = set()
+    _diff_added:   set = set()
+    _diff_changed: set = set()
     _before_el_map: dict = {}
     if diff_on and before_layout:
-        _cur_map   = {el["id"]: el for el in get_structure(layout)}
-        _bef_map   = {el["id"]: el for el in get_structure(before_layout)}
+        _cur_map = {(lk, el["id"]): el for lk, el in iter_all_structure(layout)}
+        _bef_map = {(lk, el["id"]): el for lk, el in iter_all_structure(before_layout)}
         _before_el_map = _bef_map
         _diff_removed  = set(_bef_map) - set(_cur_map)
         _diff_added    = set(_cur_map) - set(_bef_map)
-        for _eid in set(_cur_map) & set(_bef_map):
-            import json as _j
-            if _j.dumps(_cur_map[_eid].get("geometry"), sort_keys=True) != \
-               _j.dumps(_bef_map[_eid].get("geometry"), sort_keys=True):
-                _diff_changed.add(_eid)
+        import json as _j
+        for _key in set(_cur_map) & set(_bef_map):
+            _ce, _be = _cur_map[_key], _bef_map[_key]
+            if (_j.dumps(_ce.get("geometry"),   sort_keys=True) != _j.dumps(_be.get("geometry"),   sort_keys=True)
+                    or _j.dumps(_ce.get("attributes"), sort_keys=True) != _j.dumps(_be.get("attributes"), sort_keys=True)):
+                _diff_changed.add(_key)
 
     traces: list = []
     annotations: list = []
@@ -340,8 +349,10 @@ def _render_floor_plan_plotly(
 
     # ── DIFF: ghost removed elements at the back ───────────────────────────────
     if diff_on and before_layout:
-        for _eid in _diff_removed:
-            _bel = _before_el_map[_eid]
+        for (_rlvl, _eid) in _diff_removed:
+            if not (_show_all or _rlvl == active_level):
+                continue
+            _bel = _before_el_map[(_rlvl, _eid)]
             _bg  = _bel.get("geometry", [])
             if len(_bg) == 2:
                 traces.insert(0, go.Scatter(
@@ -374,19 +385,19 @@ def _render_floor_plan_plotly(
 
         status = el_status.get(eid, "none")
         # Diff colour overrides evaluation colour
-        if beam_level != active_level:
+        if (not _show_all) and beam_level != active_level:
             clr, lw = ACCENT, 1.2
-        elif diff_on and eid in _diff_added:
+        elif diff_on and (beam_level, eid) in _diff_added:
             clr, lw = ADD_C, 3.0
-        elif diff_on and eid in _diff_changed:
+        elif diff_on and (beam_level, eid) in _diff_changed:
             clr, lw = MOD_C, 3.0
         else:
-            clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+            clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
             lw  = 4.5 if eid == highlight else 2.5
         if eid == highlight:
             clr = SEL_C
             lw  = 4.5
-        _opacity = 0.28 if beam_level != active_level else 1.0
+        _opacity = 1.0 if (_show_all or beam_level == active_level) else 0.28
 
         bev  = eval_map_b.get(eid, {})
         htxt = (
@@ -420,7 +431,7 @@ def _render_floor_plan_plotly(
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        if labels and beam_level == active_level:
+        if labels and (_show_all or beam_level == active_level):
             mx, my = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
             annotations.append(dict(
                 x=mx, y=my, text=eid, showarrow=False, yshift=7,
@@ -439,19 +450,19 @@ def _render_floor_plan_plotly(
                   if attrs.get("depth") else None) or "—")
 
         status = el_status.get(eid, "none")
-        if col_level != active_level:
+        if (not _show_all) and col_level != active_level:
             clr, sz = ACCENT, 8
-        elif diff_on and eid in _diff_added:
+        elif diff_on and (col_level, eid) in _diff_added:
             clr, sz = ADD_C, 12
-        elif diff_on and eid in _diff_changed:
+        elif diff_on and (col_level, eid) in _diff_changed:
             clr, sz = MOD_C, 12
         else:
-            clr = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
+            clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
             sz  = 16 if eid == highlight else 10
         if eid == highlight:
             clr = SEL_C
             sz  = 16
-        _opacity = 0.26 if col_level != active_level else 1.0
+        _opacity = 1.0 if (_show_all or col_level == active_level) else 0.26
 
         cev  = eval_map_c.get(eid, {})
         htxt = (
@@ -483,7 +494,7 @@ def _render_floor_plan_plotly(
             name=eid, showlegend=False,
             hovertemplate=htxt + "<extra></extra>",
         ))
-        if labels and col_level == active_level:
+        if labels and (_show_all or col_level == active_level):
             annotations.append(dict(
                 x=cx, y=cy, text=eid, showarrow=False, yshift=-14,
                 font=dict(size=7, color=clr, family="monospace"),
@@ -1010,6 +1021,7 @@ def _render_3d_viewport(
         active_level: str,
         is_light: bool,
         height: int = 512,
+        before_layout: dict | None = None,
 ) -> str:
         level_keys = get_level_keys(layout)
         if not level_keys:
@@ -1023,6 +1035,28 @@ def _render_3d_viewport(
                 for c in eval_result.get("columns", []):
                         c_ok = c.get("stress_PASS") and c.get("buckling_PASS")
                         status_by_id[c.get("id", "")] = "pass" if c_ok else "fail"
+
+        # Diff vs a baseline (Compare windows): added/changed recolour, removed render as ghosts.
+        # Keys are "level|id" because element ids repeat across levels.
+        diff_by_key: dict[str, str] = {}
+        removed_payload: list[dict] = []
+        if before_layout:
+                _d = _compute_diff(before_layout, layout)
+                for _k in _d["added"]:
+                        diff_by_key[_k] = "added"
+                for _k in _d["changed"]:
+                        diff_by_key[_k] = "changed"
+                _bkeys = get_level_keys(before_layout)
+                for _k in _d["removed"]:
+                        _lvl, _, _eid = _k.partition("|")
+                        _el = next((e for e in get_structure(before_layout, _lvl)
+                                    if e.get("id") == _eid), None)
+                        if _el is None:
+                                continue
+                        removed_payload.append({
+                                "geometry": _el.get("geometry", []),
+                                "levelIdx": _bkeys.index(_lvl) if _lvl in _bkeys else 0,
+                        })
 
         levels_payload: list[dict] = []
         for lk in level_keys:
@@ -1044,6 +1078,8 @@ def _render_3d_viewport(
                 "selected": selected_el or "",
                 "statusById": status_by_id,
                 "isLight": is_light,
+                "diffByKey": diff_by_key,
+                "removed": removed_payload,
         }
         data_json = json.dumps(payload)
 
@@ -1121,22 +1157,37 @@ def _render_3d_viewport(
             const box = new THREE.Box3();
             const statusById = DATA.statusById || {{}};
 
-            function statusColor(id) {{
-                const s = statusById[id] || 'none';
-                if (s === 'pass') return 0x40d090;
-                if (s === 'fail') return 0xff5050;
-                return 0x6aa6ff;
+            function matColor(mat) {{
+                const m = (mat || '').toLowerCase();
+                if (m.indexOf('steel') === 0) return 0x3f87d6;
+                if (m.indexOf('timber') === 0 || m.indexOf('wood') === 0) return 0xcf8a3c;
+                if (m.indexOf('rcc') === 0 || m.indexOf('concrete') === 0) return 0x9aa0a6;
+                // Base (no material): white in dark mode, blue in light mode.
+                return DATA.isLight ? 0x2563c0 : 0xffffff;
+            }}
+            function elColor(el, level) {{
+                // Diff (Compare): added=green, changed=orange override everything.
+                const d = (DATA.diffByKey || {{}})[level + '|' + el.id];
+                if (d === 'added')   return 0x40d090;
+                if (d === 'changed') return 0xffd060;
+                // Failing elements show red; otherwise colour by material.
+                if ((statusById[el.id] || 'none') === 'fail') return 0xff5050;
+                return matColor((el.attributes || {{}}).material);
             }}
 
             function levelOpacity(level) {{
+                if (DATA.activeLevel === '__ALL__') return 0.95;
                 return level === DATA.activeLevel ? 0.95 : 0.28;
             }}
 
             function addSlab(level, idx, outline) {{
                 if (!Array.isArray(outline) || outline.length < 3) return;
                 const shape = new THREE.Shape();
-                shape.moveTo(outline[0][0], outline[0][1]);
-                for (let i = 1; i < outline.length; i++) shape.lineTo(outline[i][0], outline[i][1]);
+                // Negate Y so that after the slab's -90deg X rotation (which maps shape-Y -> world -Z)
+                // the slab footprint lands on world +Z, matching how columns/beams are placed
+                // (world z = geometry y). Without this the slab is mirrored off the structure.
+                shape.moveTo(outline[0][0], -outline[0][1]);
+                for (let i = 1; i < outline.length; i++) shape.lineTo(outline[i][0], -outline[i][1]);
                 const geo = new THREE.ExtrudeGeometry(shape, {{ depth: 0.18, bevelEnabled: false }});
                 const mat = new THREE.MeshStandardMaterial({{
                     color: DATA.isLight ? 0xe8efef : 0x0f2f2f,
@@ -1157,7 +1208,7 @@ def _render_3d_viewport(
                 if (!pt) return;
                 const geo = new THREE.BoxGeometry(0.32, STOREY_H, 0.32);
                 const mat = new THREE.MeshStandardMaterial({{
-                    color: statusColor(el.id),
+                    color: elColor(el, level),
                     transparent: true,
                     opacity: levelOpacity(level),
                     emissive: 0x000000,
@@ -1179,7 +1230,7 @@ def _render_3d_viewport(
                 if (span <= 0.001) return;
                 const geo = new THREE.BoxGeometry(span, 0.28, 0.22);
                 const mat = new THREE.MeshStandardMaterial({{
-                    color: statusColor(el.id),
+                    color: elColor(el, level),
                     transparent: true,
                     opacity: levelOpacity(level),
                     emissive: 0x000000,
@@ -1203,6 +1254,33 @@ def _render_3d_viewport(
                 }});
             }});
 
+            // Removed elements (Compare diff): translucent red ghosts at their old position.
+            (DATA.removed || []).forEach((r) => {{
+                const g = r.geometry || [];
+                const yBase = (r.levelIdx || 0) * STOREY_H;
+                let mesh = null;
+                if (g.length === 1) {{
+                    mesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.32, STOREY_H, 0.32),
+                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
+                    );
+                    mesh.position.set(g[0][0], yBase + STOREY_H * 0.5, g[0][1]);
+                }} else if (g.length === 2) {{
+                    const p1 = new THREE.Vector3(g[0][0], 0, g[0][1]);
+                    const p2 = new THREE.Vector3(g[1][0], 0, g[1][1]);
+                    const span = p1.distanceTo(p2);
+                    if (span <= 0.001) return;
+                    mesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(span, 0.28, 0.22),
+                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
+                    );
+                    const mid = p1.clone().add(p2).multiplyScalar(0.5);
+                    mesh.position.set(mid.x, yBase + (STOREY_H - 0.25), mid.z);
+                    mesh.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+                }}
+                if (mesh) {{ scene.add(mesh); box.expandByObject(mesh); }}
+            }});
+
             const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
             const size = box.isEmpty() ? new THREE.Vector3(10, 10, 10) : box.getSize(new THREE.Vector3());
             const radius = Math.max(size.x, size.y, size.z, 10);
@@ -1212,12 +1290,53 @@ def _render_3d_viewport(
 
             const ray = new THREE.Raycaster();
             const ptr = new THREE.Vector2();
+            const hud = document.getElementById('hud');
+            const HUD_DEFAULT = '3D BIM View<br/>Click element to inspect';
             let hovered = null;
+            let selectedObj = null;
+
+            function statusLabel(id) {{
+                const s = statusById[id] || 'none';
+                if (s === 'pass') return ['PASS', '#40d090'];
+                if (s === 'fail') return ['FAIL', '#ff5050'];
+                return ['not evaluated', DATA.isLight ? '#5a7070' : '#9ab'];
+            }}
+
+            // Instant, client-side inspector — fills the moment an element is clicked,
+            // independent of the Streamlit round-trip that syncs the full Design Data panel.
+            function showHud(obj) {{
+                if (!obj) {{ hud.innerHTML = HUD_DEFAULT; return; }}
+                const d = obj.userData || {{}};
+                const [stxt, scol] = statusLabel(d.id || '');
+                hud.innerHTML =
+                    '<div style="font-weight:700;font-size:12px;margin-bottom:1px">' + (d.id || '?') + '</div>' +
+                    '<div style="opacity:.85">' + (d.type || '') + (d.level ? ' &middot; ' + d.level : '') + '</div>' +
+                    '<div style="color:' + scol + ';font-weight:700;margin-top:1px">' + stxt + '</div>' +
+                    '<div style="opacity:.6;margin-top:2px">Full details &amp; remove in panel &rarr;</div>';
+            }}
+
+            // emissive priority: selected (amber) > hovered (indigo) > none
+            function paint(obj) {{
+                if (!obj || !obj.material) return;
+                if (obj === selectedObj) obj.material.emissive.setHex(0xffb020);
+                else if (obj === hovered) obj.material.emissive.setHex(0x4f46e5);
+                else obj.material.emissive.setHex(0x000000);
+            }}
 
             function setHover(obj) {{
-                if (hovered && hovered.material) hovered.material.emissive.setHex(0x000000);
+                const prev = hovered;
                 hovered = obj;
-                if (hovered && hovered.material) hovered.material.emissive.setHex(0x4f46e5);
+                paint(prev);
+                paint(hovered);
+                renderer.domElement.style.cursor = obj ? 'pointer' : 'default';
+            }}
+
+            function setSelected(obj) {{
+                const prev = selectedObj;
+                selectedObj = obj;
+                paint(prev);
+                paint(selectedObj);
+                showHud(obj);
             }}
 
             function pointerToNdc(evt) {{
@@ -1238,11 +1357,13 @@ def _render_3d_viewport(
                 ray.setFromCamera(ptr, camera);
                 const hit = ray.intersectObjects(pickables, false)[0];
                 if (!hit) {{
+                    setSelected(null);
                     window.parent.postMessage({{ type:'selectElement', elementId:'', level:'' }}, '*');
                     return;
                 }}
                 const id = hit.object.userData?.id || '';
                 const level = hit.object.userData?.level || '';
+                setSelected(hit.object);   // instant feedback, no rerun wait
                 window.parent.postMessage({{ type:'selectElement', elementId:id, level }}, '*');
             }});
 
@@ -1275,7 +1396,7 @@ def _render_3d_viewport(
             const selected = (DATA.selected || '').trim();
             if (selected) {{
                 const target = pickables.find((m) => (m.userData?.id || '') === selected);
-                if (target && target.material) target.material.emissive.setHex(0x4f46e5);
+                if (target) setSelected(target);
             }}
 
             function onResize() {{
@@ -1353,6 +1474,90 @@ def _count_elements(layout: dict) -> tuple[int, int]:
     cols  = sum(1 for el in structure if len(el.get("geometry", [])) == 1)
     beams = sum(1 for el in structure if len(el.get("geometry", [])) == 2)
     return cols, beams
+
+
+def _present_legend_items(layout: dict, is_light: bool) -> list[tuple[str, str]]:
+    """Legend entries for ONLY the element categories actually present in `layout`,
+    so we never show Doors/Windows/Furniture when the JSON doesn't contain them."""
+    items: list[tuple[str, str]] = []
+    # iter_all_structure yields (level, element) tuples.
+    struct = [e for _lvl, e in iter_all_structure(layout)] if layout else []
+    has_col  = any(len(e.get("geometry", [])) == 1 for e in struct)
+    has_beam = any(len(e.get("geometry", [])) == 2 for e in struct)
+
+    def _has(cat: str) -> bool:
+        if is_multilevel(layout):
+            return any((_get_level_payload(layout, lk).get(cat) or [])
+                       for lk in (get_level_keys(layout) or []))
+        return bool(layout.get(cat))
+
+    el_col = "#2563c0" if is_light else "#e8eef5"   # structural base: blue (light) / white (dark)
+    if get_all_rooms(layout):  items.append(("#7cb2ff", "Rooms"))  # noqa: E701
+    if has_col:                items.append((el_col, "Columns"))
+    if has_beam:               items.append(("#ffd36a", "Beams"))
+    if _has("walls"):          items.append(("#9aa7b2", "Walls"))
+    if _has("doors"):          items.append(("#ff8a7a", "Doors"))
+    if _has("windows"):        items.append(("#8ad4ff", "Windows"))
+    if _has("furniture"):      items.append(("#9b7cff", "Furniture / MEP"))
+    return items
+
+
+# ── Material colour mapping (shared by 2D, 3D and the legend) ───────────────────
+# Mid-tones chosen to read on both the light (#f0f8f8) and dark (#0c2020) canvases.
+_MATERIAL_PALETTE = {
+    "rcc":      ("#9aa0a6", "Concrete (RCC)"),
+    "concrete": ("#9aa0a6", "Concrete (RCC)"),
+    "steel":    ("#3f87d6", "Steel"),
+    "timber":   ("#cf8a3c", "Timber"),
+    "wood":     ("#cf8a3c", "Timber"),
+}
+
+
+def _material_key(material) -> str | None:
+    m = (material or "").strip().lower()
+    for k in ("concrete", "rcc", "steel", "timber", "wood"):
+        if m.startswith(k):
+            return k
+    return None
+
+
+def _material_color(material, is_light: bool) -> str:
+    """Colour an element by its material; fall back to the white/blue base colour."""
+    k = _material_key(material)
+    if k:
+        return _MATERIAL_PALETTE[k][0]
+    return "#2563c0" if is_light else "#e8eef5"
+
+
+def _materials_present(layout: dict) -> list[tuple[str, str]]:
+    """(colour, label) for each material actually used in the layout, de-duplicated."""
+    seen: dict[str, str] = {}
+    if layout:
+        for _lvl, e in iter_all_structure(layout):
+            k = _material_key((e.get("attributes") or {}).get("material"))
+            if k:
+                col, label = _MATERIAL_PALETTE[k]
+                seen[label] = col
+    return [(c, l) for l, c in seen.items()]
+
+
+def _material_legend_html(layout: dict, is_light: bool, mut: str) -> str:
+    mats = _materials_present(layout)
+    if not mats:
+        return ""
+    html = ('<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;'
+            f'margin-top:4px;font-size:.60rem;color:{mut}">'
+            '<span style="font-weight:700;text-transform:uppercase;letter-spacing:.5px">Material</span>')
+    for col, label in mats:
+        html += (
+            f'<span style="display:flex;align-items:center;gap:4px">'
+            f'<span style="width:10px;height:10px;border-radius:2px;background:{col};'
+            f'display:inline-block"></span>{label}</span>'
+        )
+    html += ('<span style="display:flex;align-items:center;gap:4px">'
+             '<span style="width:10px;height:10px;border-radius:2px;background:#ff5050;'
+             'display:inline-block"></span>Failing</span></div>')
+    return html
 
 
 def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
@@ -1677,8 +1882,12 @@ def _compute_alt_metrics(alt: str, layout_obj: dict, ev0: dict,
 def _llm_is_reachable(timeout: float = 3.0) -> bool:
     try:
         from _runtime.config import load_settings
-        import urllib.request as _ur
         _s = load_settings()
+        # Anthropic (Claude): reachable as long as an API key is configured.
+        if _s.provider == "anthropic":
+            return bool(_s.api_key)
+        # Local OpenAI-compatible endpoint (e.g. LM Studio): probe /v1/models.
+        import urllib.request as _ur
         _url = _s.base_url.rstrip("/").replace("/v1", "") + "/v1/models"
         with _ur.urlopen(_url, timeout=timeout):
             return True
@@ -1691,6 +1900,12 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
     import re as _re
     try:
         if not _llm_is_reachable():
+            from _runtime.config import load_settings as _ls
+            if _ls().provider == "anthropic":
+                return (
+                    "No Anthropic API key configured. "
+                    "Add ANTHROPIC_API_KEY to the project .env file, then try again."
+                )
             return (
                 "LM Studio is not running. "
                 "Start LM Studio, load a model, then try again."
@@ -2072,8 +2287,8 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid=
 [data-testid="block-container"]{{padding:.3rem 1rem .2rem!important}}
 section[data-testid="stSidebar"]{{
   background:{_SB}!important;border-right:1px solid {_BORD}!important;
-  width:300px!important;min-width:300px!important;
-  flex:0 0 300px!important}}
+  width:380px!important;min-width:380px!important;
+  flex:0 0 380px!important}}
 section[data-testid="stSidebar"]>div:first-child{{padding:14px 14px 10px!important}}
 .react-resizable-handle{{display:none!important;pointer-events:none!important}}
 [data-testid="stSidebarHeader"]{{display:none!important;height:0!important;padding:0!important;margin:0!important}}
@@ -2243,10 +2458,10 @@ button[aria-label="Open sidebar"],
 button[aria-label="collapse"],
 button[aria-label="expand"]{{display:none!important;pointer-events:none!important}}
 section[data-testid="stSidebar"]{{
-  width:320px!important;min-width:320px!important;max-width:320px!important;
+  width:380px!important;min-width:380px!important;max-width:380px!important;
   transform:translateX(0)!important;transition:none!important;visibility:visible!important}}
 section[data-testid="stSidebar"]>div:first-child{{
-  width:320px!important;padding:12px 14px 10px!important;overflow-y:auto!important}}
+  width:380px!important;padding:12px 16px 10px!important;overflow-y:auto!important}}
 .inp-toggle button{{
   padding:1px 6px!important;min-height:unset!important;font-size:.70rem!important;
   background:transparent!important;border:1px solid {_BORD}!important;
@@ -2330,9 +2545,9 @@ if _aq_raw.strip():
                     _aq_resp = f"Removed **{_aq_eid}** from the layout."
             elif _aq_tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _aq_amc
-                _aq_bid = _aq_ti.get("beam_id", "")
+                _aq_bid = _aq_ti.get("beam_id", "") or _aq_ti.get("element_id", "")
                 if _aq_bid:
-                    _push_version(json.loads(_aq_amc(json.dumps(layout_obj), _aq_bid)))
+                    _push_version(json.loads(_aq_amc(json.dumps(layout_obj), _aq_bid, _mat_now)))
                     _aq_resp = f"Added midspan column to **{_aq_bid}**."
             elif _aq_tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _aq_ups
@@ -2724,9 +2939,9 @@ if submitted and prompt_input.strip():
                     _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Removed **{_eid}** from the layout."
             elif _tn == "add_midspan_column":
                 from nodes.modify import add_midspan_column as _amc
-                _bid = _ti.get("beam_id", "")
+                _bid = _ti.get("beam_id", "") or _ti.get("element_id", "")
                 if _bid:
-                    _push_version(json.loads(_amc(json.dumps(layout_obj), _bid)))
+                    _push_version(json.loads(_amc(json.dumps(layout_obj), _bid, _mat_now)))
                     _resp = (f"{_advisory_txt}\n\n" if _advisory_txt else "") + f"Added midspan column to **{_bid}**."
             elif _tn == "upgrade_element_section":
                 from nodes.modify import upgrade_element_section as _ups
@@ -2968,10 +3183,45 @@ with tab_mod:
     # with EDITED_LAYOUT_PATH, so both viewers always read the same data.
     _plan_layout = layout_obj
 
+    # ── Preview (non-committal) — render a recommendation's result without saving ─
+    _preview_active = False
+    _preview_alt = st.session_state.get("preview_alt")
+    if _preview_alt:
+        try:
+            _pv_ls, _pv_ev = _apply_alternative(
+                _preview_alt, json.dumps(layout_obj), _mat_now, _sdl_now, _ll_now,
+            )
+            _plan_layout = json.loads(_pv_ls)
+            if _pv_ev:
+                er = _pv_ev
+            _preview_active = True
+        except Exception:
+            st.session_state["preview_alt"] = None
+
     # ── Main: floor plan | right panel ───────────────────────────────────────
     _main_col, _right_col = st.columns([2.1, 0.55], gap="small")
 
     with _main_col:
+        if _preview_active:
+            _pvb1, _pvb2, _pvb3 = st.columns([3, 1, 1], gap="small")
+            with _pvb1:
+                st.markdown(
+                    f'<div style="background:{_MED_BG};color:{_MED_C};border:1px solid {_MED_C};'
+                    f'border-radius:6px;padding:6px 10px;font-size:.68rem;font-weight:700">'
+                    f'👁 Previewing a recommendation — not applied yet.</div>',
+                    unsafe_allow_html=True,
+                )
+            with _pvb2:
+                if st.button("✓ Apply", key="preview_apply", type="primary", width="stretch"):
+                    _push_version(_plan_layout)
+                    st.session_state.eval_result = er
+                    st.session_state.eval_alts = _get_failure_alternatives(er or {}, _mat_now)
+                    st.session_state["preview_alt"] = None
+                    st.rerun()
+            with _pvb3:
+                if st.button("✕ Cancel", key="preview_cancel", width="stretch"):
+                    st.session_state["preview_alt"] = None
+                    st.rerun()
         # Native toolbar (replaces the in-iframe JS bridge toolbar)
         _is_ml = is_multilevel(_plan_layout)
         _tb_cols = [0.55, 0.9, 0.7, 0.6, 0.6, 3.6] if _is_ml else [0.55, 0.7, 0.6, 0.6, 4]
@@ -3120,6 +3370,9 @@ with tab_mod:
             '</div>',
             unsafe_allow_html=True,
         )
+        _mat_leg = _material_legend_html(_plan_layout, _is_light, _MUT)
+        if _mat_leg:
+            st.markdown(_mat_leg, unsafe_allow_html=True)
 
         _mdef  = _sm.get("max_defl_mm", None)
         _tw    = _sm.get("total_weight_kN", None)
@@ -3336,6 +3589,10 @@ with tab_mod:
                                         st.rerun()
 
         with _rt2:
+            if st.button("⟳  Show details for selected element", key="dd_show_details",
+                         width="stretch",
+                         help="Click an element in the 3D/2D view, then press this to load its details here."):
+                st.rerun()
             _sel     = st.session_state.selected_el
             _sel_level = st.session_state.get("active_element_level", "")
             _found_level, _found_el = find_element_in_layout(layout_obj, _sel) if _sel else (None, None)
@@ -3386,10 +3643,16 @@ with tab_mod:
                         try:
                             from nodes.modify import remove_element as _direct_rem
                             _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel))
-                            _push_version(_new_layout)
-                            st.session_state.selected_el = ""
-                            st.session_state.active_element_level = ""
-                            st.rerun()
+                            # If the element is still present, removal was blocked (perimeter lock).
+                            if find_element_in_layout(_new_layout, _sel)[1] is not None:
+                                st.session_state["_remove_blocked"] = _sel
+                                st.rerun()
+                            else:
+                                _push_version(_new_layout)
+                                st.session_state.selected_el = ""
+                                st.session_state.active_element_level = ""
+                                st.session_state["_remove_blocked"] = ""
+                                st.rerun()
                         except Exception as _re:
                             st.error(f"Remove failed: {_re}")
 
@@ -3399,13 +3662,36 @@ with tab_mod:
                                      width="stretch"):
                             try:
                                 from nodes.modify import add_midspan_column as _direct_amc
-                                _new_layout = json.loads(_direct_amc(json.dumps(layout_obj), _sel))
+                                _new_layout = json.loads(_direct_amc(json.dumps(layout_obj), _sel, _mat_now))
                                 _push_version(_new_layout)
                                 st.session_state.selected_el = ""
                                 st.session_state.active_element_level = ""
                                 st.rerun()
                             except Exception as _me:
                                 st.error(f"Add midspan column failed: {_me}")
+
+                # Perimeter elements are envelope-locked — explain, then allow a forced remove.
+                if st.session_state.get("_remove_blocked") == _sel:
+                    st.markdown(
+                        f'<div style="background:{_FAIL_BG};color:{_FAIL};border:1px solid {_FAIL};'
+                        f'border-radius:6px;padding:7px 10px;font-size:.66rem;line-height:1.5;margin-top:6px">'
+                        f'<b>{_sel}</b> is a <b>perimeter</b> element — it defines the building '
+                        f'envelope and is locked. Removing it may compromise the structure. '
+                        f'Remove it anyway only if you are sure.</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("⚠  Force remove anyway", key="btn_force_remove",
+                                 width="stretch", type="primary"):
+                        try:
+                            from nodes.modify import remove_element as _force_rem
+                            _new_layout = json.loads(_force_rem(json.dumps(layout_obj), _sel, True))
+                            _push_version(_new_layout)
+                            st.session_state.selected_el = ""
+                            st.session_state.active_element_level = ""
+                            st.session_state["_remove_blocked"] = ""
+                            st.rerun()
+                        except Exception as _fre:
+                            st.error(f"Force remove failed: {_fre}")
 
                 st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
@@ -3576,63 +3862,8 @@ with tab_mod:
                         unsafe_allow_html=True,
                     )
 
-            # ── Inline agent chat in Design Details ───────────────────────────
-            st.markdown(
-                f'<div style="border-top:1px solid {_BORD};margin-top:10px;padding-top:8px">'
-                f'<div style="font-size:.63rem;font-weight:700;color:{_ACC};'
-                f'letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">'
-                f'Ask Agent</div>',
-                unsafe_allow_html=True,
-            )
-            _dd_history = st.session_state.get("history", [])
-            if _dd_history:
-                _dd_bub = ""
-                for _dmsg in _dd_history[-4:]:
-                    _dq = _dmsg.get("prompt", "")
-                    _da = _dmsg.get("response", "")
-                    if _dq:
-                        _dd_bub += f'<div class="chat-q" style="font-size:.68rem">{_dq[:120]}{"…" if len(_dq)>120 else ""}</div>'
-                    if _da:
-                        _dd_bub += f'<div class="chat-a" style="font-size:.68rem">{_da[:200]}{"…" if len(_da)>200 else ""}</div>'
-                st.markdown(
-                    f'<div style="max-height:200px;overflow-y:auto;margin-bottom:6px">{_dd_bub}</div>',
-                    unsafe_allow_html=True,
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
-            with st.form("agent_form_dd", clear_on_submit=True):
-                _dd_prompt = st.text_area(
-                    "Ask about selected element or layout",
-                    placeholder="e.g. why is this beam failing? / what section should I use?",
-                    label_visibility="collapsed",
-                    height=70,
-                    key="dd_agent_input",
-                )
-                _dd_submitted = st.form_submit_button("Ask  ›", width="stretch")
-            if _dd_submitted and _dd_prompt.strip():
-                with st.spinner("Thinking…"):
-                    _dd_resp = _run_agent_chat(_dd_prompt.strip(), layout_obj, er)
-                if _dd_resp.startswith("APPLY_TOOL:"):
-                    try:
-                        _dd_td = json.loads(_dd_resp[len("APPLY_TOOL:"):])
-                        _dd_tn, _dd_ti = _dd_td.get("name", ""), _dd_td.get("input", {})
-                        _dd_adv = _dd_td.get("advisory", "")
-                        if _dd_tn == "remove_element":
-                            from nodes.modify import remove_element as _dd_rem
-                            _dd_eid = _dd_ti.get("element_id", "")
-                            if _dd_eid:
-                                _push_version(json.loads(_dd_rem(json.dumps(layout_obj), _dd_eid)))
-                                _dd_resp = (f"{_dd_adv}\n\n" if _dd_adv else "") + f"Removed **{_dd_eid}**."
-                        elif _dd_tn == "upgrade_element_section":
-                            from nodes.modify import upgrade_element_section as _dd_ups
-                            _dd_uid = _dd_ti.get("element_id", "")
-                            if _dd_uid:
-                                _push_version(json.loads(_dd_ups(json.dumps(layout_obj), _dd_uid)))
-                                _dd_resp = (f"{_dd_adv}\n\n" if _dd_adv else "") + f"Upgraded **{_dd_uid}**."
-                    except Exception as _ddte:
-                        _dd_resp = f"Error: {_ddte}"
-                st.session_state.history.append({"prompt": _dd_prompt.strip(), "response": _dd_resp})
-                st.session_state.output_log.append(_dd_resp)
-                st.rerun()
+            # (Inline agent chat removed from Design Details — the single agent
+            #  chat now lives only in the left sidebar to avoid duplication.)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3710,370 +3941,308 @@ with tab_cmp:
             return "—", None
         return (min if lower else max)(valid, key=lambda x: x[1])
 
-    # ── Report options bar ────────────────────────────────────────────────────
-    _rp1, _rp2, _rp3, _rp4 = st.columns([3.5, 0.9, 0.9, 0.7], gap="small")
-    with _rp1:
-        st.markdown(
-            f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
-            f'text-transform:uppercase;letter-spacing:1px;padding:6px 0">'
-            f'Compare Options</div>',
-            unsafe_allow_html=True,
-        )
-    with _rp2:
-        st.download_button(
-            "↓ Export JSON", width="stretch",
-            data=json.dumps(
-                {"baseline": layout_obj,
-                 "options":  [{"label": s["label"],
-                               "layout": json.loads(s["layout_json"])}
-                              for s in _snaps_c]},
-                indent=2, ensure_ascii=False,
-            ),
-            file_name="comparison_report.json",
-            mime="application/json",
-            key="cmp_export_json",
-        )
-    with _rp3:
-        st.button("↓ Export PDF", width="stretch", disabled=True,
-                  key="cmp_export_pdf")
-    with _rp4:
-        if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
-            st.session_state.snapshots = []
-            st.session_state.cmp_sel_indices = []
-            st.rerun()
+    # -- Layout: comparison plans (left) + View Settings / Comparison Set rail
+    #    Mirrors the ANALYSIS / DESIGN DETAILS rail in the Modify workspace.
+    _cmp_main, _cmp_right = st.columns([2.1, 0.55], gap="small")
 
-    # ── 2-column layout: left = View Settings + Legend; right = Comparison Set ─
-    _lcol, _rcol = st.columns([1.3, 1.6], gap="small")
-
-    # ── LEFT: View Settings + Legend ─────────────────────────────────────────
-    with _lcol:
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:4px">View Settings</div>',
-            unsafe_allow_html=True,
-        )
-        _vs1, _vs2 = st.columns(2, gap="small")
-        with _vs1:
-            if st.button("2D", key="cmp_2d", width="stretch",
-                         type="primary" if _cvm_now == "2D" else "secondary"):
-                st.session_state["compare_view_mode"] = "2D"
-                st.rerun()
-        with _vs2:
-            if st.button("3D", key="cmp_3d", width="stretch",
-                         type="primary" if _cvm_now == "3D" else "secondary"):
-                st.session_state["compare_view_mode"] = "3D"
-                st.rerun()
-        _cmp_ids = st.toggle("Overlay IDs",  value=_cmp_ids, key="cmp_labels")
-        _cmp_ev  = st.toggle("Eval overlay", value=_cmp_ev,  key="cmp_eval")
-
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:10px">Legend</div>',
-            unsafe_allow_html=True,
-        )
-        _legend_items = [
-            ("#7cb2ff", "Rooms"), ("#9b7cff", "Furniture / MEP"),
-            ("#3a70e0", "Columns"), ("#ffd36a", "Beams / Walls"),
-            ("#ff8a7a", "Doors"),  ("#8ad4ff", "Windows"),
-        ]
-        _leg_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;margin-top:2px">'
-        for _lc, _ll in _legend_items:
-            _leg_html += (
-                f'<div style="display:flex;align-items:center;gap:4px;font-size:.60rem;color:{_MUT}">'
-                f'<span style="width:8px;height:8px;border-radius:50%;background:{_lc};flex-shrink:0;display:inline-block"></span>'
-                f'{_ll}</div>'
-            )
-        _leg_html += '</div>'
-        st.markdown(_leg_html, unsafe_allow_html=True)
-
-        st.markdown('<div style="margin-top:10px"></div>', unsafe_allow_html=True)
-        if st.button("Reset View", key="cmp_reset_view", width="stretch"):
-            st.session_state["compare_view_mode"] = "2D"
-            st.session_state["cmp_labels"] = False
-            st.session_state["cmp_eval"]   = True
-            st.rerun()
-
-    # ── RIGHT: Comparison Set (snapshot picker + add) ──────────────────────
-    with _rcol:
-        st.markdown(
-            f'<div class="sb-section" style="margin-top:4px">Comparison Set</div>',
-            unsafe_allow_html=True,
-        )
-        # Baseline always shown
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:7px;padding:4px 6px;'
-            f'border-radius:5px;background:{"#eef7f7" if _is_light else "#0d2828"};margin-bottom:3px">'
-            f'<span style="width:8px;height:8px;border-radius:50%;background:{_DOT_C[0]};flex-shrink:0;display:inline-block"></span>'
-            f'<span style="font-size:.70rem;font-weight:700;color:{_TEXT}">Baseline (Current)</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        if _snaps_c:
-            for _si, _sn in enumerate(_snaps_c):
-                _in_cmp = _si in _sel_idx
-                _dot_c  = _DOT_C[min(_sel_idx.index(_si)+1 if _in_cmp else 0, len(_DOT_C)-1)]
-                _s_fails = _snap_fails(_sn)
-                _s_sub  = "Pass" if _s_fails == 0 else f"{_s_fails} fail"
-                _s_bg   = f"{'rgba(42,192,192,0.08)' if _in_cmp else 'transparent'}"
-                _s_brd  = f"border:1px solid {_ACC if _in_cmp else _BORD}"
-                _c1, _c2 = st.columns([4, 1], gap="small")
-                with _c1:
-                    st.markdown(
-                        f'<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;'
-                        f'border-radius:5px;background:{_s_bg};{_s_brd};margin-bottom:2px">'
-                        f'<span style="width:8px;height:8px;border-radius:50%;background:{_dot_c if _in_cmp else _MUT};flex-shrink:0;display:inline-block"></span>'
-                        f'<div style="min-width:0"><div style="font-size:.70rem;font-weight:{"700" if _in_cmp else "400"};color:{_TEXT if _in_cmp else _MUT};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_sn["label"]}</div>'
-                        f'<div style="font-size:.58rem;color:{_MUT}">{_s_sub}</div></div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                with _c2:
-                    if _in_cmp:
-                        if st.button("✕", key=f"cmp_rm_{_si}", width="stretch"):
-                            _new_idx = [i for i in _sel_idx if i != _si]
-                            st.session_state.cmp_sel_indices = _new_idx
-                            st.rerun()
-                    else:
-                        if st.button("+", key=f"cmp_add_{_si}", width="stretch"):
-                            st.session_state.cmp_sel_indices = _sel_idx + [_si]
-                            st.rerun()
-        else:
+    with _cmp_right:
+        _ct_vs, _ct_set = st.tabs(["  VIEW SETTINGS  ", "  COMPARISON SET  "])
+        with _ct_vs:
             st.markdown(
-                f'<div style="font-size:.60rem;color:{_MUT};padding:6px 4px;'
-                f'border:1px dashed {_BORD};border-radius:6px;margin-top:3px">'
-                f'Save snapshots in the Modify tab to compare options here.</div>',
+                f'<div class="sb-section" style="margin-top:4px">View Settings</div>',
+                unsafe_allow_html=True,
+            )
+            _vs1, _vs2 = st.columns(2, gap="small")
+            with _vs1:
+                if st.button("2D", key="cmp_2d", width="stretch",
+                             type="primary" if _cvm_now == "2D" else "secondary"):
+                    st.session_state["compare_view_mode"] = "2D"
+                    st.rerun()
+            with _vs2:
+                if st.button("3D", key="cmp_3d", width="stretch",
+                             type="primary" if _cvm_now == "3D" else "secondary"):
+                    st.session_state["compare_view_mode"] = "3D"
+                    st.rerun()
+            # Level selector (replaces the old Overlay-IDs / Eval-overlay toggles).
+            _cmp_lvl_keys = get_level_keys(layout_obj) or ["level_01"]
+            _cmp_lvl_opts = (_cmp_lvl_keys + ["All levels"]) if len(_cmp_lvl_keys) > 1 else _cmp_lvl_keys
+            _cmp_cur = st.session_state.get("cmp_level", _cmp_lvl_keys[0])
+            if _cmp_cur not in _cmp_lvl_opts:
+                _cmp_cur = _cmp_lvl_keys[0]
+            _cmp_level_sel = st.selectbox(
+                "Show", _cmp_lvl_opts,
+                index=_cmp_lvl_opts.index(_cmp_cur),
+                format_func=lambda x: ("Show all levels" if x == "All levels" else f"Show {x}"),
+                key="cmp_level_sel",
+            )
+            st.session_state.cmp_level = _cmp_level_sel
+            _cmp_ids = st.toggle("Show labels", value=_cmp_ids, key="cmp_labels")
+
+            st.markdown(
+                f'<div class="sb-section" style="margin-top:10px">Legend</div>',
+                unsafe_allow_html=True,
+            )
+            _legend_items = _present_legend_items(layout_obj, _is_light)
+            if _legend_items:
+                _leg_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;margin-top:2px">'
+                for _lc, _ll in _legend_items:
+                    _leg_html += (
+                        f'<div style="display:flex;align-items:center;gap:4px;font-size:.60rem;color:{_MUT}">'
+                        f'<span style="width:8px;height:8px;border-radius:50%;background:{_lc};flex-shrink:0;display:inline-block"></span>'
+                        f'{_ll}</div>'
+                    )
+                _leg_html += '</div>'
+                st.markdown(_leg_html, unsafe_allow_html=True)
+            _cmp_mat_leg = _material_legend_html(layout_obj, _is_light, _MUT)
+            if _cmp_mat_leg:
+                st.markdown(_cmp_mat_leg, unsafe_allow_html=True)
+
+            st.markdown('<div style="margin-top:10px"></div>', unsafe_allow_html=True)
+            if st.button("Reset View", key="cmp_reset_view", width="stretch"):
+                st.session_state["compare_view_mode"] = "2D"
+                st.session_state["cmp_labels"] = False
+                st.session_state["cmp_eval"]   = True
+                st.rerun()
+        with _ct_set:
+            st.markdown(
+                f'<div style="font-size:.60rem;color:{_MUT};margin:4px 0 6px;line-height:1.5">'
+                f'Pick which snapshots to compare — add as many as you need.</div>',
+                unsafe_allow_html=True,
+            )
+            # Baseline always shown
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:7px;padding:4px 6px;'
+                f'border-radius:5px;background:{"#eef7f7" if _is_light else "#0d2828"};margin-bottom:3px">'
+                f'<span style="width:8px;height:8px;border-radius:50%;background:{_DOT_C[0]};flex-shrink:0;display:inline-block"></span>'
+                f'<span style="font-size:.70rem;font-weight:700;color:{_TEXT}">Baseline (Current)</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if _snaps_c:
+                _ca1, _ca2 = st.columns(2, gap="small")
+                with _ca1:
+                    if st.button("Add all", key="cmp_add_all", width="stretch"):
+                        st.session_state.cmp_sel_indices = list(range(len(_snaps_c)))
+                        st.rerun()
+                with _ca2:
+                    if st.button("Clear", key="cmp_clear_all", width="stretch",
+                                 disabled=not _sel_idx):
+                        st.session_state.cmp_sel_indices = []
+                        st.rerun()
+                for _si, _sn in enumerate(_snaps_c):
+                    _in_cmp = _si in _sel_idx
+                    _dot_c  = _DOT_C[min(_sel_idx.index(_si)+1 if _in_cmp else 0, len(_DOT_C)-1)]
+                    _s_fails = _snap_fails(_sn)
+                    _s_sub  = "Pass" if _s_fails == 0 else f"{_s_fails} fail"
+                    _s_bg   = f"{'rgba(42,192,192,0.08)' if _in_cmp else 'transparent'}"
+                    _s_brd  = f"border:1px solid {_ACC if _in_cmp else _BORD}"
+                    _c1, _c2 = st.columns([4, 1], gap="small")
+                    with _c1:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;'
+                            f'border-radius:5px;background:{_s_bg};{_s_brd};margin-bottom:2px">'
+                            f'<span style="width:8px;height:8px;border-radius:50%;background:{_dot_c if _in_cmp else _MUT};flex-shrink:0;display:inline-block"></span>'
+                            f'<div style="min-width:0"><div style="font-size:.70rem;font-weight:{"700" if _in_cmp else "400"};color:{_TEXT if _in_cmp else _MUT};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{_sn["label"]}</div>'
+                            f'<div style="font-size:.58rem;color:{_MUT}">{_s_sub}</div></div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                    with _c2:
+                        if _in_cmp:
+                            if st.button("✕", key=f"cmp_rm_{_si}", width="stretch"):
+                                _new_idx = [i for i in _sel_idx if i != _si]
+                                st.session_state.cmp_sel_indices = _new_idx
+                                st.rerun()
+                        else:
+                            if st.button("+", key=f"cmp_add_{_si}", width="stretch"):
+                                st.session_state.cmp_sel_indices = _sel_idx + [_si]
+                                st.rerun()
+            else:
+                st.markdown(
+                    f'<div style="font-size:.60rem;color:{_MUT};padding:6px 4px;'
+                    f'border:1px dashed {_BORD};border-radius:6px;margin-top:3px">'
+                    f'Save snapshots in the Modify tab to compare options here.</div>',
+                    unsafe_allow_html=True,
+                )
+
+    with _cmp_main:
+        # ── Report options bar (Export JSON lives in the global top bar) ────────────
+        _rp1, _rp3, _rp4 = st.columns([4.4, 0.9, 0.7], gap="small")
+        with _rp1:
+            st.markdown(
+                f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
+                f'text-transform:uppercase;letter-spacing:1px;padding:6px 0">'
+                f'Compare Options</div>',
+                unsafe_allow_html=True,
+            )
+        with _rp3:
+            st.button("↓ Export PDF", width="stretch", disabled=True,
+                      key="cmp_export_pdf", help="Revit-style report export (coming soon)")
+        with _rp4:
+            if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
+                st.session_state.snapshots = []
+                st.session_state.cmp_sel_indices = []
+                st.rerun()
+
+        # ── Comparison plans area ─────────────────────────────────────────────────
+        st.markdown(f'<div style="margin-top:10px;border-top:1px solid {_BORD}"></div>',
+                    unsafe_allow_html=True)
+
+        if _n_opts < 2:
+            st.markdown(
+                f'<div style="font-size:.70rem;color:{_MUT};padding:20px 8px;'
+                f'text-align:center;line-height:1.9">'
+                f'Select at least one snapshot using <b>+</b> in the '
+                f'<b>Comparison Set</b> tab on the right.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            # (Baseline-only insight chips removed — the metric cards below already
+            #  show the per-option comparison.)
+
+            # ── Metric row ─────────────────────────────────────────────────────────
+            def _delta_badge(val, base, lower_good=True):
+                if val is None or base is None or abs(base) < 0.001:
+                    return ""
+                d    = (val - base) / abs(base) * 100
+                good = (d < 0) if lower_good else (d > 0)
+                clr  = _PASS_C if good else _FAIL
+                arr  = "↓" if d < 0 else "↑"
+                return (f'<span style="font-size:.58rem;font-weight:700;'
+                        f'color:{clr};margin-left:3px">{arr}&nbsp;{abs(d):.1f}%</span>')
+
+            def _met_card(title, unit, vals, fmt=".1f", lower_good=True):
+                base = vals[0]
+                html = (
+                    f'<div style="flex:1;border:1px solid {_BORD};border-radius:8px;'
+                    f'padding:8px 10px;background:{_CARD};min-width:0">'
+                    f'<div style="font-size:.58rem;font-weight:700;color:{_MUT};'
+                    f'text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">'
+                    f'{title}</div>'
+                    f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:6px">({unit})</div>'
+                    f'<div style="display:flex;gap:6px">'
+                )
+                for _i, (_co, _v) in enumerate(zip(_cmp_opts, vals)):
+                    _vstr = (f'{_v:{fmt}}' if isinstance(_v, (int, float)) else "—")
+                    _dlta = "" if _i == 0 else _delta_badge(_v, base, lower_good)
+                    _lbl_clr = _MUT if _i == 0 else (
+                        (_PASS_C if (isinstance(_v, (int, float)) and isinstance(base, (int, float))
+                                     and ((_v < base) if lower_good else (_v > base)))
+                         else _TEXT)
+                    )
+                    html += (
+                        f'<div style="flex:1;min-width:0;text-align:center">'
+                        f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:2px;'
+                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                        f'{_co["label"]}</div>'
+                        f'<div style="font-size:.75rem;font-weight:800;color:{_lbl_clr}">'
+                        f'{_vstr}</div>'
+                        f'{_dlta}</div>'
+                    )
+                html += '</div></div>'
+                return html
+
+            _wvals = [_co_weight(c)   for c in _cmp_opts]
+            _cvals = [_co_cost(c)     for c in _cmp_opts]
+            _dvals = [_co_max_defl(c) for c in _cmp_opts]
+            _uvals = [_co_max_util(c) for c in _cmp_opts]
+
+            st.markdown(
+                f'<div style="display:flex;gap:8px;margin-bottom:12px">'
+                + _met_card("Total Weight",    "kN",  _wvals, ".1f")
+                + _met_card("Total Cost",      "USD", _cvals, ".0f")
+                + _met_card("Max Deflection",  "mm",  _dvals, ".1f")
+                + _met_card("Max Utilization", "%",   _uvals, ".1f")
+                + '</div>',
                 unsafe_allow_html=True,
             )
 
-    # ── FULL WIDTH: Comparison plans area ─────────────────────────────────────
-    st.markdown(f'<div style="margin-top:10px;border-top:1px solid {_BORD}"></div>',
-                unsafe_allow_html=True)
-
-    if _n_opts < 2:
-        st.markdown(
-            f'<div style="font-size:.70rem;color:{_MUT};padding:20px 8px;'
-            f'text-align:center;line-height:1.9">'
-            f'Select at least one snapshot using <b>+</b> in the Comparison Set above.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        # ── Inline Insights row above plans ───────────────────────────────────
-        _wl, _wv = _best_from([(c["label"], _co_weight(c))   for c in _cmp_opts])
-        _cl, _cv = _best_from([(c["label"], _co_cost(c))     for c in _cmp_opts])
-        _dl, _dv = _best_from([(c["label"], _co_max_defl(c)) for c in _cmp_opts])
-        _ul, _uv = _best_from([(c["label"], _co_max_util(c)) for c in _cmp_opts])
-        _base_w = _co_weight(_cmp_opts[0]) or 1
-        _base_c = _co_cost(_cmp_opts[0])   or 1
-        _base_d = _co_max_defl(_cmp_opts[0]) or 1
-        _base_u = _co_max_util(_cmp_opts[0]) or 1
-
-        def _pct_str(v, base):
-            if v is None or base is None: return "No data"
-            return f"{abs((v - base) / base * 100):.1f}%"
-
-        _insights_chips = [
-            (f"🏆 {_wl} — lightest, {_pct_str(_wv, _base_w)} vs baseline"),
-            (f"💰 {_cl} — lowest cost, {_pct_str(_cv, _base_c)} saving"),
-            (f"🛡 {_dl} — best deflection, {_pct_str(_dv, _base_d)} better"),
-            (f"✅ {_ul} — lowest utilization, {_pct_str(_uv, _base_u)} lower"),
-        ]
-        _chips_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
-        for _chip in _insights_chips:
-            _chips_html += (
-                f'<div style="background:{_CARD};border:1px solid {_BORD};border-radius:16px;'
-                f'padding:3px 10px;font-size:.60rem;color:{_MUT}">{_chip}</div>'
+            # ── Diff legend (each non-baseline window is coloured vs the baseline) ──
+            _baseline_layout = _normalize_layout(json.loads(_cmp_opts[0]["layout_json"]))
+            _add_c = "#1a8050" if _is_light else "#40d090"
+            _rem_c = "#cc2020" if _is_light else "#ff5050"
+            _mod_c = "#c07800" if _is_light else "#ffd060"
+            st.markdown(
+                f'<div style="display:flex;gap:14px;align-items:center;margin-bottom:8px;'
+                f'font-size:.60rem;color:{_MUT}">'
+                f'<span style="font-weight:700;text-transform:uppercase;letter-spacing:.5px">vs Baseline</span>'
+                f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_add_c};display:inline-block"></span>Added</span>'
+                f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_rem_c};display:inline-block"></span>Removed</span>'
+                f'<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:{_mod_c};display:inline-block"></span>Changed</span>'
+                f'</div>',
+                unsafe_allow_html=True,
             )
-        _chips_html += '</div>'
-        st.markdown(_chips_html, unsafe_allow_html=True)
 
-        # ── Metric row ─────────────────────────────────────────────────────────
-        def _delta_badge(val, base, lower_good=True):
-            if val is None or base is None or abs(base) < 0.001:
-                return ""
-            d    = (val - base) / abs(base) * 100
-            good = (d < 0) if lower_good else (d > 0)
-            clr  = _PASS_C if good else _FAIL
-            arr  = "↓" if d < 0 else "↑"
-            return (f'<span style="font-size:.58rem;font-weight:700;'
-                    f'color:{clr};margin-left:3px">{arr}&nbsp;{abs(d):.1f}%</span>')
-
-        def _met_card(title, unit, vals, fmt=".1f", lower_good=True):
-            base = vals[0]
-            html = (
-                f'<div style="flex:1;border:1px solid {_BORD};border-radius:8px;'
-                f'padding:8px 10px;background:{_CARD};min-width:0">'
-                f'<div style="font-size:.58rem;font-weight:700;color:{_MUT};'
-                f'text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">'
-                f'{title}</div>'
-                f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:6px">({unit})</div>'
-                f'<div style="display:flex;gap:6px">'
-            )
-            for _i, (_co, _v) in enumerate(zip(_cmp_opts, vals)):
-                _vstr = (f'{_v:{fmt}}' if isinstance(_v, (int, float)) else "—")
-                _dlta = "" if _i == 0 else _delta_badge(_v, base, lower_good)
-                _lbl_clr = _MUT if _i == 0 else (
-                    (_PASS_C if (isinstance(_v, (int, float)) and isinstance(base, (int, float))
-                                 and ((_v < base) if lower_good else (_v > base)))
-                     else _TEXT)
-                )
-                html += (
-                    f'<div style="flex:1;min-width:0;text-align:center">'
-                    f'<div style="font-size:.55rem;color:{_MUT};margin-bottom:2px;'
-                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-                    f'{_co["label"]}</div>'
-                    f'<div style="font-size:.75rem;font-weight:800;color:{_lbl_clr}">'
-                    f'{_vstr}</div>'
-                    f'{_dlta}</div>'
-                )
-            html += '</div></div>'
-            return html
-
-        _wvals = [_co_weight(c)   for c in _cmp_opts]
-        _cvals = [_co_cost(c)     for c in _cmp_opts]
-        _dvals = [_co_max_defl(c) for c in _cmp_opts]
-        _uvals = [_co_max_util(c) for c in _cmp_opts]
-
-        st.markdown(
-            f'<div style="display:flex;gap:8px;margin-bottom:12px">'
-            + _met_card("Total Weight",    "kN",  _wvals, ".1f")
-            + _met_card("Total Cost",      "USD", _cvals, ".0f")
-            + _met_card("Max Deflection",  "mm",  _dvals, ".1f")
-            + _met_card("Max Utilization", "%",   _uvals, ".1f")
-            + '</div>',
-            unsafe_allow_html=True,
-        )
-
-        # ── Floor plan columns ─────────────────────────────────────────────────
-        _pcols = st.columns(_n_opts, gap="small")
-        for _ci, (_pcol, _co) in enumerate(zip(_pcols, _cmp_opts)):
-            with _pcol:
-                _dc = _co.get("dot", _DOT_C[min(_ci, len(_DOT_C)-1)])
-                _badge = (
-                    '<span class="badge-curr">Current Design</span>'
-                    if _ci == 0 else
-                    f'<span class="badge-opt">Applied Changes ({_ci})</span>'
-                )
-                st.markdown(
-                    f'<div class="cmp-card-hdr">'
-                    f'<span style="display:flex;align-items:center;gap:6px">'
-                    f'<span style="width:8px;height:8px;border-radius:50%;'
-                    f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
-                    f'<span class="cmp-title">{_co["label"]}</span></span>'
-                    f'{_badge}</div>',
-                    unsafe_allow_html=True,
-                )
-                _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
-                _ph = max(220, 300 - (_n_opts - 2) * 20)
-                if _cvm_now == "2D":
-                    _fig_ci = _render_floor_plan_plotly(
-                        _plan_ci,
-                        eval_result=_co["eval_result"] if _cmp_ev else None,
-                        level_key=st.session_state.get("active_level", "level_01"),
-                        labels=_cmp_ids, height_px=_ph, is_light=_is_light,
+            # ── Floor plan columns ─────────────────────────────────────────────────
+            _pcols = st.columns(_n_opts, gap="small")
+            for _ci, (_pcol, _co) in enumerate(zip(_pcols, _cmp_opts)):
+                with _pcol:
+                    _dc = _co.get("dot", _DOT_C[min(_ci, len(_DOT_C)-1)])
+                    _badge = (
+                        '<span class="badge-curr">Current Design</span>'
+                        if _ci == 0 else
+                        f'<span class="badge-opt">Applied Changes ({_ci})</span>'
                     )
-                    st.plotly_chart(
-                        _fig_ci, width="stretch",
-                        config=dict(scrollZoom=True, displaylogo=False,
-                                    modeBarButtonsToRemove=[
-                                        "lasso2d", "select2d",
-                                        "zoomIn2d", "zoomOut2d", "autoScale2d",
-                                    ]),
-                        key=f"cmp_plan_{_ci}",
+                    st.markdown(
+                        f'<div class="cmp-card-hdr">'
+                        f'<span style="display:flex;align-items:center;gap:6px">'
+                        f'<span style="width:8px;height:8px;border-radius:50%;'
+                        f'background:{_dc};flex-shrink:0;display:inline-block"></span>'
+                        f'<span class="cmp-title">{_co["label"]}</span></span>'
+                        f'{_badge}</div>',
+                        unsafe_allow_html=True,
                     )
-                else:
-                    components.html(
-                        _render_3d_viewport(
+                    _plan_ci = _normalize_layout(json.loads(_co["layout_json"]))
+                    _ph = max(220, 300 - (_n_opts - 2) * 20)
+                    _cmp_lk = ("__ALL__" if st.session_state.get("cmp_level") == "All levels"
+                               else st.session_state.get("cmp_level", "level_01"))
+                    if _cvm_now == "2D":
+                        _fig_ci = _render_floor_plan_plotly(
                             _plan_ci,
                             eval_result=_co["eval_result"] if _cmp_ev else None,
-                            selected_el="",
-                            active_level=st.session_state.get("active_level", "level_01"),
-                            is_light=_is_light,
-                            height=_ph,
-                        ),
-                        height=_ph + 8,
-                        scrolling=False,
+                            level_key=_cmp_lk,
+                            labels=_cmp_ids, height_px=_ph, is_light=_is_light,
+                            diff_on=(_ci > 0),
+                            before_layout=(_baseline_layout if _ci > 0 else None),
+                        )
+                        st.plotly_chart(
+                            _fig_ci, width="stretch",
+                            config=dict(scrollZoom=True, displaylogo=False,
+                                        modeBarButtonsToRemove=[
+                                            "lasso2d", "select2d",
+                                            "zoomIn2d", "zoomOut2d", "autoScale2d",
+                                        ]),
+                            key=f"cmp_plan_{_ci}",
+                        )
+                    else:
+                        components.html(
+                            _render_3d_viewport(
+                                _plan_ci,
+                                eval_result=_co["eval_result"] if _cmp_ev else None,
+                                selected_el="",
+                                active_level=_cmp_lk,
+                                is_light=_is_light,
+                                height=_ph,
+                                before_layout=(_baseline_layout if _ci > 0 else None),
+                            ),
+                            height=_ph + 8,
+                            scrolling=False,
+                        )
+                    # Per-plan footer metrics
+                    _fw = _co_weight(_co)
+                    _fc = _co_cost(_co)
+                    _fd = _co_max_defl(_co)
+                    _fu = _co_max_util(_co)
+                    _fparts = []
+                    if _fw is not None: _fparts.append(f"Weight: {_fw:.1f} kN")
+                    if _fc is not None: _fparts.append(f"Cost: ${_fc:,.0f}")
+                    if _fd is not None: _fparts.append(f"Max Defl: {_fd:.1f} mm")
+                    if _fu is not None: _fparts.append(f"Util: {_fu:.0f}%")
+                    st.markdown(
+                        f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
+                        f'padding:4px 2px;border-top:1px solid {_BORD};line-height:1.6">'
+                        + " &nbsp;·&nbsp; ".join(_fparts) + '</div>',
+                        unsafe_allow_html=True,
                     )
-                # Per-plan footer metrics
-                _fw = _co_weight(_co)
-                _fc = _co_cost(_co)
-                _fd = _co_max_defl(_co)
-                _fu = _co_max_util(_co)
-                _fparts = []
-                if _fw is not None: _fparts.append(f"Weight: {_fw:.1f} kN")
-                if _fc is not None: _fparts.append(f"Cost: ${_fc:,.0f}")
-                if _fd is not None: _fparts.append(f"Max Defl: {_fd:.1f} mm")
-                if _fu is not None: _fparts.append(f"Util: {_fu:.0f}%")
-                st.markdown(
-                    f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
-                    f'padding:4px 2px;border-top:1px solid {_BORD};line-height:1.6">'
-                    + " &nbsp;·&nbsp; ".join(_fparts) + '</div>',
-                    unsafe_allow_html=True,
-                )
 
-    # ── Metric helpers ────────────────────────────────────────────────────────
-    def _co_weight(co):
-        return _eval_weight_cost(co.get("eval_result") or {})[0]
-
-    def _co_cost(co):
-        cf = co.get("cost_flexibility") or {}
-        if cf.get("net_cost_usd") is not None:
-            return float(cf["net_cost_usd"])
-        return _eval_weight_cost(co.get("eval_result") or {})[1]
-
-    def _co_max_defl(co):
-        bs = (co.get("eval_result") or {}).get("beams", [])
-        return max((b.get("delta_total_mm", 0) for b in bs), default=None) if bs else None
-
-    def _co_max_util(co):
-        ev  = co.get("eval_result") or {}
-        rat = []
-        for b in ev.get("beams", []):
-            if b.get("allow_bend_MPa"):
-                rat.append(b["sigma_bend_MPa"] / b["allow_bend_MPa"])
-            if b.get("allow_shear_MPa"):
-                rat.append(b["tau_MPa"] / b["allow_shear_MPa"])
-            if b.get("limit_TL_mm"):
-                rat.append(b["delta_total_mm"] / b["limit_TL_mm"])
-        for c in ev.get("columns", []):
-            if c.get("allow_comp_MPa"):
-                rat.append(c["sigma_comp_MPa"] / c["allow_comp_MPa"])
-        return round(max(rat) * 100, 1) if rat else None
-
-    def _best_from(pairs, lower=True):
-        valid = [(l, v) for l, v in pairs if isinstance(v, (int, float))]
-        if not valid:
-            return "—", None
-        return (min if lower else max)(valid, key=lambda x: x[1])
-
-    # ── Report options bar ────────────────────────────────────────────────────
-    _rp1, _rp2, _rp3, _rp4 = st.columns([3.5, 0.9, 0.9, 0.7], gap="small")
-    with _rp1:
-        st.markdown(
-            f'<div style="font-size:.60rem;font-weight:700;color:{_MUT};'
-            f'text-transform:uppercase;letter-spacing:1px;padding:6px 0">'
-            f'Report Options</div>',
-            unsafe_allow_html=True,
-        )
-    with _rp2:
-        st.download_button(
-            "↓ Export JSON", width="stretch",
-            data=json.dumps(
-                {"baseline": layout_obj,
-                 "options":  [{"label": s["label"],
-                               "layout": json.loads(s["layout_json"])}
-                              for s in _snaps_c]},
-                indent=2, ensure_ascii=False,
-            ),
-            file_name="comparison_report.json",
-            mime="application/json",
-            key="cmp_export_json",
-        )
-    with _rp3:
-        st.button("↓ Export PDF", width="stretch", disabled=True,
-                  key="cmp_export_pdf")
-    with _rp4:
-        if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
-            st.session_state.snapshots = []
-            st.rerun()
-
-    # (old 3-column compare layout removed — new layout is above)
-    # ── end compare tab
 
