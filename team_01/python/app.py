@@ -604,18 +604,63 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
 
         col_summary  = ", ".join(col_lines[:30])  if col_lines  else "none generated yet"
         beam_summary = ", ".join(beam_lines[:20]) if beam_lines else "none generated yet"
+
+        # ── Grounding metrics: weight/cost per design + option, cheapest/lightest,
+        #    material unit costs, and the most-utilised members — so the model can
+        #    answer cost/which-option/which-beam questions with real numbers. ──
+        _metric_lines: list[str] = []
+        _opt_cw: list[tuple] = []   # (label, weight_kN, cost_usd, pass)
+        if eval_result:
+            _w0, _c0 = _eval_weight_cost(eval_result)
+            _metric_lines.append(f"Current design: weight {_w0:.1f} kN, cost ${_c0:,.0f}")
+        for _gi, _go in enumerate(st.session_state.get("grid_options", []), 1):
+            _gev = _go.get("evaluation")
+            if _gev:
+                _gw, _gc = _eval_weight_cost(_gev)
+                _gp = (_gev.get("summary", {}) or {}).get("overall_PASS")
+                _opt_cw.append((f"Option {_gi}", _gw, _gc, _gp))
+                _metric_lines.append(
+                    f"Option {_gi}: weight {_gw:.1f} kN, cost ${_gc:,.0f}, "
+                    f"{'PASS' if _gp else 'FAIL'}")
+        if _opt_cw:
+            _cheap = min(_opt_cw, key=lambda x: x[2])
+            _light = min(_opt_cw, key=lambda x: x[1])
+            _metric_lines.append(
+                f"Cheapest = {_cheap[0]} (${_cheap[2]:,.0f}); Lightest = {_light[0]} ({_light[1]:.1f} kN)")
+        _metric_lines.append(
+            "Material unit cost ($/m³): " + ", ".join(f"{k} {v}" for k, v in _MAT_COST_PER_M3.items())
+            + "  (timber is the cheapest & lightest per m³; steel the most expensive)")
+        _flex_top = _flexibility_rows(eval_result) if eval_result else []
+        if _flex_top:
+            _metric_lines.append("Most utilised members: " + "; ".join(
+                f"{r['id']} {r['util']:.0f}% ({r['gov']})" for r in _flex_top[:4]))
+        metrics_block = ("\nMetrics:\n  " + "\n  ".join(_metric_lines)) if _metric_lines else ""
+
         context_msg = {
             "role": "user",
             "content": (
                 f"Context: Layout '{layout.get('layoutId', '?')}' has "
-                f"{len(cols)} columns and {len(beams)} beams.{eval_lines}\n"
+                f"{len(cols)} columns and {len(beams)} beams.{eval_lines}{metrics_block}\n"
                 f"Columns: {col_summary}\n"
                 f"Beams: {beam_summary}\n\n"
                 f"User request:\n{prompt}"
             ),
         }
 
-        result = call_llm(ctx.llm, SYSTEM_PROMPT, [context_msg], tool_catalog)
+        # ── Conversation memory: replay the last few turns so follow-ups like
+        #    "do so" / "which is cheaper" / "why?" resolve against prior context. ──
+        _SIGNAL_PREFIXES = ("APPLY_TOOL:", "APPLY_MATERIAL:", "GENERATE_GRID",
+                            "EVALUATE", "FIX_FAILING")
+        _hist_msgs: list[dict] = []
+        for _h in st.session_state.get("history", [])[-4:]:
+            _hq = (_h.get("prompt") or "").strip()
+            _ha = (_h.get("response") or "").strip()
+            if _hq:
+                _hist_msgs.append({"role": "user", "content": _hq[:400]})
+            if _ha and not _ha.startswith(_SIGNAL_PREFIXES):
+                _hist_msgs.append({"role": "assistant", "content": _ha[:400]})
+
+        result = call_llm(ctx.llm, SYSTEM_PROMPT, _hist_msgs + [context_msg], tool_catalog)
 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
@@ -674,6 +719,31 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                     f"Please name it — available IDs: {_avail}{'…' if len(structure) > 18 else ''}.")
 
         resp = result.get("final_response", "")
+
+        # ── Cost-comparison safety-net: if the user asked about cost and the model
+        #    gave nothing or a waffle, answer with the real figures from Metrics. ──
+        def _cost_answer() -> str:
+            if _opt_cw:
+                _parts = [f"{l}: ${c:,.0f} ({w:.0f} kN, {'PASS' if p else 'FAIL'})"
+                          for l, w, c, p in _opt_cw]
+                _ch = min(_opt_cw, key=lambda x: x[2])
+                return ("Cost comparison — " + "; ".join(_parts)
+                        + f". **{_ch[0]} is the cheapest at ${_ch[2]:,.0f}.** "
+                        "Timber is cheapest per m³, steel the most expensive.")
+            if eval_result:
+                _w, _c = _eval_weight_cost(eval_result)
+                return (f"Current design ≈ **${_c:,.0f}** ({_w:.0f} kN). "
+                        "Save snapshots / options and I can compare their costs.")
+            return "Generate a grid and run analysis first, then I can compare option costs."
+
+        _is_cost = any(k in prompt.lower() for k in
+                       ("cheap", "cost", "price", "expensive", "budget", "carbon", "$"))
+        _generic = bool(resp) and any(p in resp.lower() for p in (
+            "we can analyz", "we can analys", "i suggest", "to determine",
+            "various factors", "difficult to recommend", "without further"))
+        if _is_cost and (not resp or _generic):
+            return _cost_answer()
+
         if not resp:
             # LLM deferred to the in-app pipeline — handle based on intent.
             _lower = prompt.lower()
@@ -824,7 +894,6 @@ def _ensure_session() -> None:
         "_last_sel_applied": "\x00",
         "_last_lvl_applied": "\x00",
         "cmp_sel_indices": [],      # indices into snapshots list for compare tab
-        "last_click_debug": {},
         "compare_mode":    False,
         "labels_on":       False,
         "auto_eval":       True,
@@ -904,9 +973,15 @@ ALWAYS include the real element_id from the layout context in tool_calls. Never 
 EVALUATION (user asks to evaluate, check structure, run analysis, run loads):
 Set action="final", final_response="" (empty string). The evaluation runs automatically.
 
-QUESTIONS (explain results, describe layout, interpret failures):
-Set action="final" and write a clear, concise answer in final_response.
+QUESTIONS (explain results, describe layout, interpret failures, cost/weight, which option):
+Set action="final" and write a clear, concise answer (1-3 sentences) in final_response.
 Use element IDs and values from the layout context. Never invent IDs.
+When the Context "Metrics" section already contains the figures (cost, weight, cheapest/lightest
+option, utilisation, pass/fail), STATE THEM DIRECTLY — e.g. "Option 2 is cheaper at $2,134 vs
+$2,160." NEVER answer with "we can analyse…", "I suggest evaluating…", "to determine… we need
+to consider various factors", or any non-answer when the data is present in the Context.
+Earlier turns are included for context — resolve follow-ups like "do so", "which is cheaper",
+"why?" against them.
 
 Toolbox:
 {tool_catalog}
@@ -2210,7 +2285,6 @@ with tab_mod:
                 try:
                     _new_sel = ""
                     _lvl_changed = False
-                    _cand_dbg = []
                     for _pt in _sel_ev.selection.points:
                         # Support both attribute-style and dict-style access.
                         _cd = (
@@ -2223,9 +2297,6 @@ with tab_mod:
                             _cand = str(_cd[0]) if _cd else ""
                             _kind = str(_cd[1]).lower() if len(_cd) > 1 else ""
                             _lvl = str(_cd[2]) if len(_cd) > 2 else ""
-                            _cand_dbg.append(
-                                f"id={_cand or '-'} kind={_kind or '-'} lvl={_lvl or '-'}"
-                            )
                             if _cand and (_kind in ("beam", "column") or not _kind):
                                 _new_sel = _cand
                                 if _lvl and _lvl != st.session_state.get("active_element_level", ""):
@@ -2236,18 +2307,8 @@ with tab_mod:
                                     st.session_state["_last_lvl_applied"] = _lvl
                                 break
                         else:
-                            _cand_dbg.append(f"id={str(_cd)} kind=-")
                             _new_sel = str(_cd)
                             break
-                    st.session_state["last_click_debug"] = {
-                        "selected_id": _new_sel,
-                        "points_count": len(_sel_ev.selection.points),
-                        "candidates": _cand_dbg,
-                        "raw_first_point": (
-                            _sel_ev.selection.points[0]
-                            if _sel_ev.selection.points else None
-                        ),
-                    }
                     if _new_sel and (
                         _new_sel != st.session_state.selected_el
                         or _lvl_changed
@@ -2570,7 +2631,6 @@ with tab_mod:
             if _found_level:
                 _sel_level = _found_level
                 st.session_state.active_element_level = _found_level
-            _dbg = st.session_state.get("last_click_debug", {})
 
             if _sel:
                 st.markdown(
@@ -2581,24 +2641,6 @@ with tab_mod:
                     f'</div>',
                     unsafe_allow_html=True,
                 )
-
-            if _dbg:
-                _dbg_id = _dbg.get("selected_id", "") or "(none)"
-                _dbg_pts = _dbg.get("points_count", 0)
-                _dbg_cands = _dbg.get("candidates", [])
-                _dbg_cands_txt = " | ".join(_dbg_cands) if _dbg_cands else "(none)"
-                st.markdown(
-                    f'<div style="font-size:.62rem;color:{_MUT};line-height:1.55;'
-                    f'border:1px dashed {_BORD};border-radius:8px;padding:8px;margin:0 0 8px 0">'
-                    f'<b style="color:{_TEXT}">Selection Debug</b><br>'
-                    f'points captured: <b style="color:{_TEXT}">{_dbg_pts}</b><br>'
-                    f'candidate(s): <span style="color:{_TEXT}">{_dbg_cands_txt}</span><br>'
-                    f'resolved selected_id: <b style="color:{_TEXT}">{_dbg_id}</b>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                with st.expander("Raw click payload", expanded=False):
-                    st.json(_dbg.get("raw_first_point", {}))
 
             if _sel_obj:
                 st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
