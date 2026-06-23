@@ -51,6 +51,12 @@ from nodes._layout import (
     is_multilevel,
     iter_all_structure,
 )
+from viz import (
+    _render_floor_plan_plotly, _render_3d_viewport, _count_elements, _present_legend_items,
+    _materials_present, _material_legend_html, _structural_summary_text,
+    _sheet_pdf_bytes, _beam_diagram_png, _normalize_layout, _strip_structure,
+    _flexibility_rows, _flex_advice,
+)
 
 # No default layout — app starts empty until the user uploads a file.
 
@@ -94,46 +100,10 @@ def _sync_viewers() -> None:
     st.session_state.viewer_nonce = st.session_state.get("viewer_nonce", 0) + 1
 
 
-def _compute_diff(before: dict, after: dict) -> dict:
-    """Return sets of 'level|id' keys: added, removed, changed (geometry OR attributes).
-    Keyed per-level because element ids repeat across levels in multilevel layouts."""
-    b_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(before)}
-    a_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(after)}
-    added   = set(a_els) - set(b_els)
-    removed = set(b_els) - set(a_els)
-    changed = set()
-    for k in (set(a_els) & set(b_els)):
-        ae, be = a_els[k], b_els[k]
-        if (json.dumps(ae.get("geometry"),   sort_keys=True) != json.dumps(be.get("geometry"),   sort_keys=True)
-                or json.dumps(ae.get("attributes"), sort_keys=True) != json.dumps(be.get("attributes"), sort_keys=True)):
-            changed.add(k)
-    return {"added": added, "removed": removed, "changed": changed}
 
 
-def _normalize_layout(payload: object) -> dict:
-    if isinstance(payload, dict):
-        return payload.get("layout", payload) if isinstance(payload.get("layout"), dict) else payload
-    if isinstance(payload, list):
-        if not payload:
-            raise ValueError("Uploaded JSON list is empty")
-        first = payload[0]
-        if isinstance(first, dict):
-            return first.get("layout", first) if isinstance(first.get("layout"), dict) else first
-        raise ValueError("First list item must be a layout object")
-    raise ValueError("Layout JSON must be an object or a non-empty list")
 
 
-def _strip_structure(layout: dict) -> dict:
-    """Remove all structural elements from a layout so the user starts with a blank grid.
-    Works for both flat (structure key) and multilevel (levels.*.structure) formats."""
-    import copy
-    layout = copy.deepcopy(layout)
-    if isinstance(layout.get("levels"), dict):
-        for lk in layout["levels"]:
-            layout["levels"][lk]["structure"] = []
-    else:
-        layout["structure"] = []
-    return layout
 
 
 def _load_working_layout() -> dict:
@@ -144,1283 +114,24 @@ def _load_working_layout() -> dict:
 
 
 @st.cache_data(ttl=5)
-def _viewer_is_reachable() -> bool:
-    try:
-        with urllib.request.urlopen(VIEWER_BASE_URL, timeout=0.8) as r:
-            return r.status == 200
-    except Exception:
-        return False
 
 
-def _viewer_url(highlight: str = "", compare: bool = False,
-                labels: bool = True, option_file: str = "") -> str:
-    layout_stamp = int(EDITED_LAYOUT_PATH.stat().st_mtime_ns) if EDITED_LAYOUT_PATH.exists() else 0
-    theme        = st.session_state.get("theme", "dark")
-    url = (
-        f"{VIEWER_BASE_URL}"
-        f"?v={st.session_state.viewer_nonce}"
-        f"&layout={layout_stamp}"
-        f"&theme={theme}"
-        f"&labels={'1' if labels else '0'}"
-    )
-    if highlight:
-        url += f"&highlight={highlight}"
-    if compare and st.session_state.get("versionHistory"):
-        url += "&mode=compare"
-    if option_file:
-        url += f"&optionFile={option_file}"
-    return url
 
 
-def _svg_poly_points(geo, fy):
-    return " ".join(f"{x},{fy(y)}" for x, y in geo)
 
 
-def _svg_centroid(geo):
-    pts = geo[:-1] if len(geo) > 2 and geo[0] == geo[-1] else geo
-    xs, ys = zip(*pts)
-    return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-def _svg_dims(geo):
-    xs = [p[0] for p in geo]; ys = [p[1] for p in geo]
-    return max(xs) - min(xs), max(ys) - min(ys), max(ys), (min(xs) + max(xs)) / 2
 
 
-def _door_swing_points(a, b, fy_fn, n=12):
-    import math
-    r  = math.hypot(b[0] - a[0], b[1] - a[1])
-    t0 = math.atan2(b[1] - a[1], b[0] - a[0])
-    pts = []
-    for i in range(n + 1):
-        t = t0 + (math.pi / 2) * (i / n)
-        pts.append((a[0] + r * math.cos(t), fy_fn(a[1] + r * math.sin(t))))
-    return " ".join(f"{x},{y}" for x, y in pts)
 
 
-def _get_level_payload(layout: dict, level_key: str | None = None) -> dict:
-    if not is_multilevel(layout):
-        return layout
-    keys = get_level_keys(layout)
-    if not keys:
-        return {}
-    lk = level_key if level_key in keys else keys[0]
-    return layout.get("levels", {}).get(lk, {})
 
 
-def _render_floor_plan_plotly(
-    layout: dict,
-    eval_result: dict | None = None,
-    highlight: str = "",
-    level_key: str | None = None,
-    labels: bool = False,
-    height_px: int = 510,
-    is_light: bool = False,
-    diff_on: bool = False,
-    before_layout: dict | None = None,
-    revision: int = 0,
-):
-    """Return a Plotly figure of the floor plan with clickable structural elements."""
-    import math as _hm
-    if is_light:
-        BG = "#f0f8f8"; ROOM_F = "rgba(218,234,234,0.80)"; ROOM_L = "#a0c8c8"
-        FG = "#1a3535"; ACCENT = "#088a87"
-        PASS_C = "#1a8050"; FAIL_C = "#cc2020"; SEL_C = "#c07800"; WIN_C = "#2060a0"
-        REM_C = "#cc2020"; ADD_C = "#1a8050"; MOD_C = "#c07800"
-    else:
-        BG = "#0c2020"; ROOM_F = "rgba(23,46,46,0.88)"; ROOM_L = "#1e4040"
-        FG = "#c8eeed"; ACCENT = "#2ac0c0"
-        PASS_C = "#40d090"; FAIL_C = "#ff5050"; SEL_C = "#ffd060"; WIN_C = "#4696dc"
-        REM_C = "#ff5050"; ADD_C = "#40d090"; MOD_C = "#ffd060"
 
-    # Base (un-evaluated) structural colour: blue in light mode, white in dark mode.
-    STRUCT_BASE = "#2563c0" if is_light else "#e8eef5"
 
-    level_keys = get_level_keys(layout)
-    _show_all = (level_key == "__ALL__")   # render every level solid (Compare "All levels")
-    active_level = level_key if level_key in level_keys else (level_keys[0] if level_keys else "level_01")
-    level_payload = _get_level_payload(layout, active_level)
-    active_rooms = get_rooms(layout, active_level)
-    active_outline = get_outline(layout, active_level)
-    active_doors = level_payload.get("doors", []) if is_multilevel(layout) else layout.get("doors", [])
-    active_windows = level_payload.get("windows", []) if is_multilevel(layout) else layout.get("windows", [])
-    active_furniture = level_payload.get("furniture", []) if is_multilevel(layout) else layout.get("furniture", [])
 
-    el_status: dict[str, str] = {}
-    eval_map_b: dict = {}
-    eval_map_c: dict = {}
-    if eval_result:
-        for b in eval_result.get("beams", []):
-            ok = b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"]
-            el_status[b["id"]] = "pass" if ok else "fail"
-            eval_map_b[b["id"]] = b
-        for c in eval_result.get("columns", []):
-            ok = c["stress_PASS"] and c["buckling_PASS"]
-            el_status[c["id"]] = "pass" if ok else "fail"
-            eval_map_c[c["id"]] = c
 
-    # ── DIFF: added / removed / changed sets, keyed by (level, id) ─────────────
-    # (element ids repeat across levels, so a flat id key would miss per-level edits)
-    _diff_removed: set = set()
-    _diff_added:   set = set()
-    _diff_changed: set = set()
-    _before_el_map: dict = {}
-    if diff_on and before_layout:
-        _cur_map = {(lk, el["id"]): el for lk, el in iter_all_structure(layout)}
-        _bef_map = {(lk, el["id"]): el for lk, el in iter_all_structure(before_layout)}
-        _before_el_map = _bef_map
-        _diff_removed  = set(_bef_map) - set(_cur_map)
-        _diff_added    = set(_cur_map) - set(_bef_map)
-        import json as _j
-        for _key in set(_cur_map) & set(_bef_map):
-            _ce, _be = _cur_map[_key], _bef_map[_key]
-            if (_j.dumps(_ce.get("geometry"),   sort_keys=True) != _j.dumps(_be.get("geometry"),   sort_keys=True)
-                    or _j.dumps(_ce.get("attributes"), sort_keys=True) != _j.dumps(_be.get("attributes"), sort_keys=True)):
-                _diff_changed.add(_key)
-
-    traces: list = []
-    annotations: list = []
-
-    # ── ROOMS ─────────────────────────────────────────────────────────────────
-    for room in active_rooms:
-        geo = room.get("geometry", [])
-        if len(geo) < 3:
-            continue
-        rxs = [p[0] for p in geo] + [geo[0][0]]
-        rys = [p[1] for p in geo] + [geo[0][1]]
-        rname = room.get("name", "")
-        area = abs(sum(
-            (geo[i][0]*geo[(i+1)%len(geo)][1] - geo[(i+1)%len(geo)][0]*geo[i][1])
-            for i in range(len(geo))
-        )) / 2
-        traces.append(go.Scatter(
-            x=rxs, y=rys, fill="toself",
-            fillcolor=ROOM_F,
-            line=dict(color=ROOM_L, width=0.8),
-            mode="lines", showlegend=False,
-            hovertemplate=(f"<b>{rname}</b><br>Area: {area:.1f} m²<extra></extra>"
-                           if rname else None),
-            hoverinfo=("skip" if not rname else None),
-        ))
-        if rname:
-            cx = sum(p[0] for p in geo) / len(geo)
-            cy = sum(p[1] for p in geo) / len(geo)
-            annotations.append(dict(
-                x=cx, y=cy, text=rname, showarrow=False,
-                font=dict(size=8, color=FG, family="monospace"),
-                opacity=0.55,
-            ))
-
-    # ── OUTLINE ───────────────────────────────────────────────────────────────
-    outline = active_outline
-    if len(outline) > 1:
-        traces.append(go.Scatter(
-            x=[p[0] for p in outline], y=[p[1] for p in outline],
-            mode="lines", line=dict(color=ACCENT, width=1.5),
-            showlegend=False, hoverinfo="skip",
-        ))
-
-    # ── WINDOWS ───────────────────────────────────────────────────────────────
-    for win in active_windows:
-        geo = win.get("geometry", [])
-        if len(geo) >= 2:
-            traces.append(go.Scatter(
-                x=[p[0] for p in geo], y=[p[1] for p in geo],
-                mode="lines", line=dict(color=WIN_C, width=1.5),
-                showlegend=False, hoverinfo="skip",
-            ))
-
-    # ── FURNITURE ─────────────────────────────────────────────────────────────
-    for furn in active_furniture:
-        geo = furn.get("geometry", [])
-        if len(geo) >= 3:
-            fxs = [p[0] for p in geo] + [geo[0][0]]
-            fys = [p[1] for p in geo] + [geo[0][1]]
-            traces.append(go.Scatter(
-                x=fxs, y=fys, fill="toself",
-                fillcolor="rgba(200,238,237,0.06)",
-                line=dict(color=FG, width=0.5),
-                mode="lines", showlegend=False, hoverinfo="skip",
-            ))
-
-    all_structure = list(iter_all_structure(layout))
-    beams = [(lk, s) for lk, s in all_structure if len(s.get("geometry", [])) == 2]
-    cols  = [(lk, s) for lk, s in all_structure if len(s.get("geometry", [])) == 1]
-
-    # ── DIFF: ghost removed elements at the back ───────────────────────────────
-    if diff_on and before_layout:
-        for (_rlvl, _eid) in _diff_removed:
-            if not (_show_all or _rlvl == active_level):
-                continue
-            _bel = _before_el_map[(_rlvl, _eid)]
-            _bg  = _bel.get("geometry", [])
-            if len(_bg) == 2:
-                traces.insert(0, go.Scatter(
-                    x=[_bg[0][0], _bg[1][0]], y=[_bg[0][1], _bg[1][1]],
-                    mode="lines", line=dict(color=REM_C, width=2.5, dash="dot"),
-                    opacity=0.65, showlegend=False,
-                    hovertemplate=f"<b>{_eid}</b><br><i>Removed</i><extra></extra>",
-                ))
-            elif len(_bg) == 1:
-                traces.insert(0, go.Scatter(
-                    x=[_bg[0][0]], y=[_bg[0][1]],
-                    mode="markers",
-                    marker=dict(color=REM_C, size=11, symbol="square-open",
-                                line=dict(color=REM_C, width=2.5), opacity=0.75),
-                    showlegend=False,
-                    hovertemplate=f"<b>{_eid}</b><br><i>Removed</i><extra></extra>",
-                ))
-
-    # ── BEAMS ─────────────────────────────────────────────────────────────────
-    for beam_level, beam in beams:
-        eid   = beam["id"]
-        geo   = beam["geometry"]
-        p1, p2 = geo[0], geo[1]
-        attrs = beam.get("attributes", {})
-        mat   = attrs.get("material") or "—"
-        sec   = (attrs.get("section") or
-                 (f"{attrs.get('width','')}×{attrs.get('depth','')}"
-                  if attrs.get("depth") else None) or "—")
-        span  = round(_hm.dist(p1, p2), 2)
-
-        status = el_status.get(eid, "none")
-        # Diff colour overrides evaluation colour
-        if (not _show_all) and beam_level != active_level:
-            clr, lw = ACCENT, 1.2
-        elif diff_on and (beam_level, eid) in _diff_added:
-            clr, lw = ADD_C, 3.0
-        elif diff_on and (beam_level, eid) in _diff_changed:
-            clr, lw = MOD_C, 3.0
-        else:
-            clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
-            lw  = 4.5 if eid == highlight else 2.5
-        if eid == highlight:
-            clr = SEL_C
-            lw  = 4.5
-        _opacity = 1.0 if (_show_all or beam_level == active_level) else 0.28
-
-        bev  = eval_map_b.get(eid, {})
-        htxt = (
-            f"<b>{eid}</b>  BEAM<br>"
-            f"Level: {beam_level}<br>"
-            f"Mat: {mat} · Sec: {sec} · Span: {span} m<br>"
-            f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
-        )
-        if bev:
-            htxt += (f"<br>σ = {bev.get('sigma_bend_MPa','?')} MPa"
-                     f"  δ = {bev.get('delta_total_mm','?')} mm")
-
-        traces.append(go.Scatter(
-            x=[p1[0], p2[0]], y=[p1[1], p2[1]],
-            mode="lines",
-            line=dict(color=clr, width=lw),
-            opacity=_opacity,
-            customdata=[[eid, "beam", beam_level], [eid, "beam", beam_level]],
-            name=eid, showlegend=False,
-            hovertemplate=htxt + "<extra></extra>",
-        ))
-        # Wide invisible hit-area: dense markers along the beam.
-        _n   = max(13, int(span * 3) + 2)
-        _hxs = [p1[0] + (p2[0] - p1[0]) * i / (_n - 1) for i in range(_n)]
-        _hys = [p1[1] + (p2[1] - p1[1]) * i / (_n - 1) for i in range(_n)]
-        traces.append(go.Scatter(
-            x=_hxs, y=_hys,
-            mode="markers",
-            marker=dict(size=20, color=clr, opacity=0.001),
-            customdata=[[eid, "beam", beam_level]] * _n,
-            name=eid, showlegend=False,
-            hovertemplate=htxt + "<extra></extra>",
-        ))
-        if labels and (_show_all or beam_level == active_level):
-            mx, my = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
-            annotations.append(dict(
-                x=mx, y=my, text=eid, showarrow=False, yshift=7,
-                font=dict(size=7, color=clr, family="monospace"),
-            ))
-
-    # ── COLUMNS ───────────────────────────────────────────────────────────────
-    for col_level, col_el in cols:
-        eid  = col_el["id"]
-        geo  = col_el["geometry"]
-        cx, cy = geo[0][0], geo[0][1]
-        attrs = col_el.get("attributes", {})
-        mat   = attrs.get("material") or "—"
-        sec   = (attrs.get("section") or
-                 (f"{attrs.get('width','')}×{attrs.get('depth','')}"
-                  if attrs.get("depth") else None) or "—")
-
-        status = el_status.get(eid, "none")
-        if (not _show_all) and col_level != active_level:
-            clr, sz = ACCENT, 8
-        elif diff_on and (col_level, eid) in _diff_added:
-            clr, sz = ADD_C, 12
-        elif diff_on and (col_level, eid) in _diff_changed:
-            clr, sz = MOD_C, 12
-        else:
-            clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
-            sz  = 16 if eid == highlight else 10
-        if eid == highlight:
-            clr = SEL_C
-            sz  = 16
-        _opacity = 1.0 if (_show_all or col_level == active_level) else 0.26
-
-        cev  = eval_map_c.get(eid, {})
-        htxt = (
-            f"<b>{eid}</b>  COL<br>"
-            f"Level: {col_level}<br>"
-            f"Mat: {mat} · Sec: {sec}<br>"
-            f"Status: {'✓ PASS' if status=='pass' else ('✗ FAIL' if status=='fail' else '—')}"
-        )
-        if cev:
-            htxt += (f"<br>σ = {cev.get('sigma_comp_MPa','?')} MPa"
-                     f"  SF = {cev.get('SF_buckling','?')}")
-
-        traces.append(go.Scatter(
-            x=[cx], y=[cy],
-            mode="markers",
-            marker=dict(color=clr, size=sz, symbol="square",
-                        line=dict(color=BG, width=1.5)),
-            opacity=_opacity,
-            customdata=[[eid, "column", col_level]],
-            name=eid, showlegend=False,
-            hovertemplate=htxt + "<extra></extra>",
-        ))
-        # Large invisible hit-area for columns.
-        traces.append(go.Scatter(
-            x=[cx], y=[cy],
-            mode="markers",
-            marker=dict(size=32, color=clr, opacity=0.001),
-            customdata=[[eid, "column", col_level]],
-            name=eid, showlegend=False,
-            hovertemplate=htxt + "<extra></extra>",
-        ))
-        if labels and (_show_all or col_level == active_level):
-            annotations.append(dict(
-                x=cx, y=cy, text=eid, showarrow=False, yshift=-14,
-                font=dict(size=7, color=clr, family="monospace"),
-            ))
-
-    # ── AXIS BOUNDS ───────────────────────────────────────────────────────────
-    all_pts: list = list(active_outline)
-    for _key in ("rooms", "doors", "windows", "furniture"):
-        for _el in level_payload.get(_key, []):
-            all_pts.extend(_el.get("geometry", []))
-    for _, _el in all_structure:
-        all_pts.extend(_el.get("geometry", []))
-    if all_pts:
-        _axs  = [p[0] for p in all_pts]; _ays = [p[1] for p in all_pts]
-        _span = max(max(_axs)-min(_axs), max(_ays)-min(_ays), 1)
-        _pad  = _span * 0.06 + 0.3
-        xr = [min(_axs)-_pad, max(_axs)+_pad]
-        yr = [min(_ays)-_pad, max(_ays)+_pad]
-    else:
-        xr = yr = [0, 10]
-
-    fig = go.Figure(data=traces)
-    fig.update_layout(
-        paper_bgcolor=BG, plot_bgcolor=BG,
-        margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(range=xr, constrain="domain",
-                   showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(range=yr, scaleanchor="x", scaleratio=1,
-                   showgrid=False, zeroline=False, showticklabels=False),
-        showlegend=False,
-        hovermode="closest",
-        # "zoom" mode: single click fires the select event on a point.
-        # "select" mode requires a drag box — breaks individual click selection.
-        dragmode="zoom",
-        clickmode="event+select",
-        annotations=annotations,
-        # uirevision: stable key preserves zoom/pan.
-        # Change it only when the layout version changes so zoom resets on new layouts.
-        uirevision=f"plan-v{revision}",
-    )
-    return fig
-
-
-def _render_floor_plan_html(
-    layout: dict,
-    eval_result: dict | None = None,
-    highlight: str = "",
-    level_key: str | None = None,
-    labels: bool = False,
-    height_px: int = 380,
-    is_light: bool = False,
-    view_mode: str = "2D",
-    diff_on: bool = False,
-    auto_on: bool = True,
-) -> str:
-    if is_light:
-        BG     = "#f0f8f8"
-        ROOM   = "#daeaea"
-        FG     = "#1a3535"
-        ACCENT = "#088a87"
-        PASS_C = "#1a8050"
-        FAIL_C = "#cc2020"
-        SEL_C  = "#c07800"
-        WIN_C  = "#2060a0"
-    else:
-        BG     = "#0c2020"
-        ROOM   = "#172e2e"
-        FG     = "#c8eeed"
-        ACCENT = "#2ac0c0"
-        PASS_C = "#40d090"
-        FAIL_C = "#ff5050"
-        SEL_C  = "#ffd060"
-        WIN_C  = "#4696dc"
-
-    _level_payload = _get_level_payload(layout, level_key)
-    all_pts: list = list(get_outline(layout, level_key))
-    for r in get_rooms(layout, level_key): all_pts.extend(r.get("geometry", []))
-    for d in _level_payload.get("doors", []): all_pts.extend(d.get("geometry", []))
-    for w in _level_payload.get("windows", []): all_pts.extend(w.get("geometry", []))
-    for f in _level_payload.get("furniture", []): all_pts.extend(f.get("geometry", []))
-    for s in get_structure(layout): all_pts.extend(s.get("geometry", []))
-
-    if not all_pts:
-        return (
-            f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
-            f'*{{margin:0;padding:0}}html,body{{background:{BG};height:100%;display:flex;'
-            f'align-items:center;justify-content:center}}</style></head><body>'
-            f'<span style="color:{ACCENT};font-family:monospace;font-size:.82rem">'
-            f'Upload a layout JSON to view the plan</span></body></html>'
-        )
-
-    xs = [p[0] for p in all_pts]; ys = [p[1] for p in all_pts]
-    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
-    span = max(x1 - x0, y1 - y0) or 1
-    pad  = span * 0.07 + 0.5
-    vb_x, vb_y = x0 - pad, y0 - pad
-    vb_w, vb_h = (x1 - x0) + 2 * pad, (y1 - y0) + 2 * pad
-
-    def fy(y): return (y0 + y1) - y
-
-    u = span * 0.012  # SVG-unit scalar for column radii and label sizes
-
-    el_status: dict[str, str] = {}
-    if eval_result:
-        for b in eval_result.get("beams", []):
-            ok = b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"]
-            el_status[b["id"]] = "pass" if ok else "fail"
-        for c in eval_result.get("columns", []):
-            ok = c["stress_PASS"] and c["buckling_PASS"]
-            el_status[c["id"]] = "pass" if ok else "fail"
-
-    # Needed for score badges — define before the room loop
-    _all_structure = get_structure(layout)
-
-    parts: list[str] = []
-
-    # ── ROOMS ──────────────────────────────────────────────────────────────────
-    for room in get_rooms(layout, level_key):
-        geo = room.get("geometry", [])
-        if len(geo) < 3:
-            continue
-        pts_str = _svg_poly_points(geo, fy)
-        cx, cy  = _svg_centroid(geo)
-        w       = _svg_dims(geo)[0]
-        label   = room.get("name", "")
-        rid     = room.get("id", "")
-        # Tooltip text for hover
-        _area   = abs(sum(
-            (geo[i][0]*geo[(i+1)%len(geo)][1] - geo[(i+1)%len(geo)][0]*geo[i][1])
-            for i in range(len(geo))
-        )) / 2
-        _tip    = f"{label}&#10;Area: {_area:.1f} m²" if label else ""
-        parts.append(
-            f'<polygon data-room="{rid}" data-name="{label}" '
-            f'points="{pts_str}" fill="{ROOM}" fill-opacity="0.88" '
-            f'stroke="{FG}" stroke-opacity="0.22" stroke-width="0.8" '
-            f'vector-effect="non-scaling-stroke" style="cursor:pointer">'
-            + (f'<title>{_tip}</title>' if _tip else "")
-            + f'</polygon>'
-        )
-        if label and w > u * 3:
-            parts.append(
-                f'<text x="{cx}" y="{fy(cy)}" text-anchor="middle" '
-                f'dominant-baseline="central" font-family="monospace" '
-                f'font-size="{u*1.05}" fill="{FG}" fill-opacity="0.55" '
-                f'pointer-events="none">{label}</text>'
-            )
-        if el_status:
-            _rxs = [p[0] for p in geo]; _rys = [p[1] for p in geo]
-            _rx0, _rx1 = min(_rxs), max(_rxs)
-            _ry0, _ry1 = min(_rys), max(_rys)
-            _rpad = max(_rx1-_rx0, _ry1-_ry0, 0.1) * 0.12
-            _near = []
-            for _el in _all_structure:
-                _eg = _el.get("geometry", [])
-                _eid2 = _el.get("id", "")
-                if _eid2 not in el_status:
-                    continue
-                if len(_eg) == 1:
-                    if (_rx0-_rpad) <= _eg[0][0] <= (_rx1+_rpad) and (_ry0-_rpad) <= _eg[0][1] <= (_ry1+_rpad):
-                        _near.append(el_status[_eid2])
-                elif len(_eg) == 2:
-                    _mx = (_eg[0][0]+_eg[1][0])/2; _my = (_eg[0][1]+_eg[1][1])/2
-                    if (_rx0-_rpad) <= _mx <= (_rx1+_rpad) and (_ry0-_rpad) <= _my <= (_ry1+_rpad):
-                        _near.append(el_status[_eid2])
-            if _near:
-                _rs = sum(1 for s in _near if s == "pass") / len(_near)
-                _sc = "#40d090" if _rs >= 0.9 else ("#ffaa22" if _rs >= 0.5 else "#ff5050")
-                _badge_y = fy(cy) + (u * 1.4 if label else 0)
-                parts.append(
-                    f'<text x="{cx}" y="{_badge_y}" text-anchor="middle" '
-                    f'dominant-baseline="central" font-family="monospace" font-weight="700" '
-                    f'font-size="{u*2.0}" fill="{_sc}" fill-opacity="0.72">'
-                    f'{_rs:.2f}</text>'
-                )
-
-    # ── OUTLINE ────────────────────────────────────────────────────────────────
-    outline = get_outline(layout, level_key)
-    if len(outline) > 1:
-        parts.append(
-            f'<polyline points="{_svg_poly_points(outline, fy)}" fill="none" '
-            f'stroke="{ACCENT}" stroke-opacity="0.8" stroke-width="1.5" '
-            f'stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'
-        )
-
-    # ── DOORS ──────────────────────────────────────────────────────────────────
-    for door in layout.get("doors", []):
-        geo = door.get("geometry", [])
-        if len(geo) < 2:
-            continue
-        a, b = geo[0], geo[-1]
-        ax, ay = a[0], fy(a[1])
-        arc_pts = _door_swing_points(a, b, fy)
-        arc_end = arc_pts.split(" ")[-1].split(",")
-        parts.append(
-            f'<line x1="{ax}" y1="{ay}" x2="{b[0]}" y2="{fy(b[1])}" '
-            f'stroke="{BG}" stroke-width="4" vector-effect="non-scaling-stroke"/>'
-        )
-        parts.append(
-            f'<polyline points="{arc_pts}" fill="none" stroke="{FG}" stroke-opacity="0.5" '
-            f'stroke-width="0.8" stroke-dasharray="3 2" '
-            f'vector-effect="non-scaling-stroke"/>'
-        )
-        parts.append(
-            f'<line x1="{ax}" y1="{ay}" x2="{arc_end[0]}" y2="{arc_end[1]}" '
-            f'stroke="{FG}" stroke-opacity="0.5" stroke-width="0.8" '
-            f'vector-effect="non-scaling-stroke"/>'
-        )
-
-    # ── WINDOWS ────────────────────────────────────────────────────────────────
-    for win in layout.get("windows", []):
-        geo = win.get("geometry", [])
-        if len(geo) >= 2:
-            parts.append(
-                f'<polyline points="{_svg_poly_points(geo, fy)}" fill="none" '
-                f'stroke="{WIN_C}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>'
-            )
-
-    # ── FURNITURE ──────────────────────────────────────────────────────────────
-    for furn in layout.get("furniture", []):
-        geo = furn.get("geometry", [])
-        if len(geo) >= 3:
-            parts.append(
-                f'<polygon points="{_svg_poly_points(geo, fy)}" fill="{FG}" fill-opacity="0.06" '
-                f'stroke="{FG}" stroke-opacity="0.22" stroke-width="0.6" '
-                f'vector-effect="non-scaling-stroke"/>'
-            )
-
-    # ── BEAMS ──────────────────────────────────────────────────────────────────
-    # stroke-width values are in screen pixels (vector-effect="non-scaling-stroke")
-    structure = _all_structure
-    beams = [s for s in structure if len(s.get("geometry", [])) == 2]
-    cols  = [s for s in structure if len(s.get("geometry", [])) == 1]
-
-    for beam in beams:
-        eid    = beam["id"]
-        geo    = beam["geometry"]
-        p1, p2 = geo[0], geo[1]
-        status = el_status.get(eid, "none")
-        stroke = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
-        is_sel = eid == highlight
-        sw     = "3.5" if is_sel else "2"
-        sc     = SEL_C if is_sel else stroke
-        parts.append(
-            f'<line data-eid="{eid}" x1="{p1[0]}" y1="{fy(p1[1])}" '
-            f'x2="{p2[0]}" y2="{fy(p2[1])}" stroke="{sc}" '
-            f'stroke-width="{sw}" stroke-linecap="round" '
-            f'vector-effect="non-scaling-stroke" style="cursor:pointer"/>'
-        )
-        # Wide transparent hit area (12 px) for easy clicking
-        parts.append(
-            f'<line data-eid="{eid}" x1="{p1[0]}" y1="{fy(p1[1])}" '
-            f'x2="{p2[0]}" y2="{fy(p2[1])}" stroke="transparent" '
-            f'stroke-width="12" vector-effect="non-scaling-stroke" style="cursor:pointer"/>'
-        )
-        if labels:
-            mx = (p1[0] + p2[0]) / 2
-            my = (fy(p1[1]) + fy(p2[1])) / 2
-            parts.append(
-                f'<text x="{mx}" y="{my - u*0.6}" text-anchor="middle" '
-                f'font-size="{u*0.85}" fill="{SEL_C if is_sel else stroke}" '
-                f'font-family="monospace" pointer-events="none">{eid}</text>'
-            )
-
-    # ── COLUMNS ────────────────────────────────────────────────────────────────
-    for col_el in cols:
-        eid    = col_el["id"]
-        geo    = col_el["geometry"]
-        cx_c   = geo[0][0]
-        cy_c   = fy(geo[0][1])
-        status = el_status.get(eid, "none")
-        fill   = FAIL_C if status == "fail" else (PASS_C if status == "pass" else ACCENT)
-        is_sel = eid == highlight
-        r_c    = u * (1.0 if is_sel else 0.75)
-        parts.append(
-            f'<circle data-eid="{eid}" cx="{cx_c}" cy="{cy_c}" r="{r_c}" '
-            f'fill="{SEL_C if is_sel else fill}" fill-opacity="0.92" '
-            f'stroke="{BG}" stroke-width="1" '
-            f'vector-effect="non-scaling-stroke" style="cursor:pointer"/>'
-        )
-        if labels:
-            parts.append(
-                f'<text x="{cx_c}" y="{cy_c + r_c + u*0.8}" text-anchor="middle" '
-                f'font-size="{u*0.85}" fill="{SEL_C if is_sel else fill}" '
-                f'font-family="monospace" pointer-events="none">{eid}</text>'
-            )
-
-    # ── LEGEND ────────────────────────────────────────────────────────────────
-    if el_status:
-        lx  = vb_x + vb_w * 0.015
-        ly  = vb_y + vb_h * 0.973
-        dr  = u * 0.4
-        gap = u * 3.8
-        parts.append(
-            f'<circle cx="{lx}" cy="{ly}" r="{dr}" fill="{PASS_C}"/>'
-            f'<text x="{lx + dr*2.2}" y="{ly}" dominant-baseline="middle" '
-            f'font-size="{u*0.82}" fill="#5a9898" font-family="monospace">pass</text>'
-            f'<circle cx="{lx + gap}" cy="{ly}" r="{dr}" fill="{FAIL_C}"/>'
-            f'<text x="{lx + gap + dr*2.2}" y="{ly}" dominant-baseline="middle" '
-            f'font-size="{u*0.82}" fill="#5a9898" font-family="monospace">fail</text>'
-        )
-
-    svg_inner = "".join(parts)
-    hl_json   = json.dumps(highlight)
-
-    _tt_bg  = "rgba(20,50,50,0.92)" if not is_light else "rgba(230,245,245,0.96)"
-    _tt_clr = "#c8eeed" if not is_light else "#1a2a30"
-    _tt_brd = "#2ac0c0" if not is_light else "#088a87"
-
-    # Toolbar overlay state
-    _tb_vm_txt   = view_mode
-    _tb_lab_js   = "true"  if labels   else "false"
-    _tb_diff_js  = "true"  if diff_on  else "false"
-    _tb_auto_js  = "true"  if auto_on  else "false"
-    _tb_bg       = "rgba(7,26,26,0.82)"    if not is_light else "rgba(230,245,245,0.92)"
-    _tb_brd      = "#1a4040"               if not is_light else "#c0d8d8"
-    _tb_clr      = "#6ab8b8"              if not is_light else "#336868"
-    _tb_act_clr  = "#2ac0c0"              if not is_light else "#088a87"
-    _tb_act_bg   = "rgba(42,192,192,0.18)" if not is_light else "rgba(8,138,135,0.12)"
-
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-* {{ margin:0; padding:0; box-sizing:border-box }}
-html, body {{ background:{BG}; overflow:hidden; width:100%; height:100% }}
-svg {{ display:block; width:100%; height:{height_px}px; cursor:grab; user-select:none }}
-svg.panning {{ cursor:grabbing }}
-[data-eid] {{ cursor:pointer }}
-[data-room] {{ cursor:pointer; transition: fill-opacity .15s; }}
-[data-room]:hover {{ fill-opacity: .98 !important; filter: brightness(1.06); }}
-#tt {{
-  position:fixed; pointer-events:none; display:none;
-  background:{_tt_bg}; color:{_tt_clr}; border:1px solid {_tt_brd};
-  border-radius:6px; padding:6px 10px; font-size:11px; font-family:'Suisse Intl','Suisse Int\'l','Inter','Segoe UI',sans-serif;
-  line-height:1.5; box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:9999; max-width:180px;
-  white-space:pre-line;
-}}
-#tt .tt-name {{ font-weight:700; font-size:12px; color:{_tt_brd}; margin-bottom:2px; }}
-#vis-tb {{
-  position:fixed; top:8px; right:8px; z-index:1000;
-  display:flex; align-items:center; gap:2px;
-  background:{_tb_bg}; border:1px solid {_tb_brd};
-  border-radius:8px; padding:3px 5px;
-  backdrop-filter:blur(6px);
-}}
-.tb-btn {{
-  background:none; border:none; cursor:pointer;
-  color:{_tb_clr}; font-size:.60rem; font-family:'Suisse Intl','Suisse Int\'l','Inter','Segoe UI',sans-serif;
-  font-weight:700; letter-spacing:.6px; text-transform:uppercase;
-  padding:3px 8px; border-radius:5px;
-  transition:background .12s,color .12s;
-}}
-.tb-btn:hover {{ background:{_tb_act_bg}; color:{_tb_act_clr}; }}
-.tb-btn.tb-on {{ background:{_tb_act_bg}; color:{_tb_act_clr}; }}
-.tb-sep {{ width:1px; height:13px; background:{_tb_brd}; margin:0 3px; flex-shrink:0; }}
-</style></head>
-<body>
-<div id="tt"><span class="tt-name" id="tt-name"></span><span id="tt-body"></span></div>
-<svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="{vb_x} {vb_y} {vb_w} {vb_h}"
-     preserveAspectRatio="xMidYMid meet">
-  <rect x="{vb_x}" y="{vb_y}" width="{vb_w}" height="{vb_h}" fill="{BG}"/>
-  {svg_inner}
-</svg>
-<div id="vis-tb">
-  <button id="tb-vm"   class="tb-btn" onclick="tbToggleVM()">{_tb_vm_txt}</button>
-  <div class="tb-sep"></div>
-  <button id="tb-lab"  class="tb-btn" onclick="tbToggleLabels()">Labels</button>
-  <button id="tb-diff" class="tb-btn" onclick="tbToggleDiff()">Diff</button>
-  <button id="tb-auto" class="tb-btn" onclick="tbToggleAuto()">Auto</button>
-</div>
-<script>
-(function(){{
-  // ── Toolbar state ──────────────────────────────────────────────────────────
-  var _tbVM    = '{_tb_vm_txt}';
-  var _tbLab   = {_tb_lab_js};
-  var _tbDiff  = {_tb_diff_js};
-  var _tbAuto  = {_tb_auto_js};
-
-  function tbPost(key, val) {{
-    window.parent.postMessage({{type:'toolbar', key:key, val:String(val)}}, '*');
-  }}
-  function tbUI() {{
-    var bvm   = document.getElementById('tb-vm');
-    var blab  = document.getElementById('tb-lab');
-    var bdiff = document.getElementById('tb-diff');
-    var bauto = document.getElementById('tb-auto');
-    if(bvm)  {{ bvm.textContent = _tbVM; bvm.className  = 'tb-btn' + (_tbVM === '3D' ? ' tb-on' : ''); }}
-    if(blab)  blab.className  = 'tb-btn' + (_tbLab  ? ' tb-on' : '');
-    if(bdiff) bdiff.className = 'tb-btn' + (_tbDiff ? ' tb-on' : '');
-    if(bauto) bauto.className = 'tb-btn' + (_tbAuto ? ' tb-on' : '');
-  }}
-  function tbToggleVM()     {{ _tbVM  = _tbVM==='2D'?'3D':'2D'; tbPost('vm',    _tbVM);           tbUI(); }}
-  function tbToggleLabels() {{ _tbLab  = !_tbLab;               tbPost('labels', _tbLab?'1':'0'); tbUI(); }}
-  function tbToggleDiff()   {{ _tbDiff = !_tbDiff;              tbPost('diff',   _tbDiff?'1':'0'); tbUI(); }}
-  function tbToggleAuto()   {{ _tbAuto = !_tbAuto;              tbPost('auto',   _tbAuto?'1':'0'); tbUI(); }}
-  tbUI();
-
-  var HL = {hl_json};
-  var svg = document.querySelector('svg');
-  var tt  = document.getElementById('tt');
-  var ttName = document.getElementById('tt-name');
-  var ttBody = document.getElementById('tt-body');
-  var vbArr = svg.getAttribute('viewBox').split(' ').map(Number);
-  var origX = vbArr[0], origY = vbArr[1], origW = vbArr[2], origH = vbArr[3];
-  var vbx = origX, vby = origY, vbw = origW, vbh = origH;
-
-  function setVB(){{ svg.setAttribute('viewBox', vbx+' '+vby+' '+vbw+' '+vbh); }}
-
-  // Restore highlight for already-selected element
-  if(HL) {{
-    document.querySelectorAll('[data-eid="'+HL+'"]').forEach(function(el){{
-      if(el.getAttribute('stroke') !== 'transparent')
-        el.style.filter = 'brightness(1.8) drop-shadow(0 0 3px {SEL_C})';
-    }});
-  }}
-
-  // ── Room hover tooltip ────────────────────────────────────────────────────
-  document.querySelectorAll('[data-room]').forEach(function(el){{
-    var name = el.getAttribute('data-name') || '';
-    el.addEventListener('mouseenter', function(e){{
-      if(!name) return;
-      ttName.textContent = name;
-      // Try to extract area from title
-      var titleEl = el.querySelector('title');
-      var extra = titleEl ? titleEl.textContent.replace(name,'').replace(/^\\n/,'') : '';
-      ttBody.textContent = extra;
-      tt.style.display = 'block';
-      positionTT(e);
-    }});
-    el.addEventListener('mousemove', positionTT);
-    el.addEventListener('mouseleave', function(){{ tt.style.display = 'none'; }});
-  }});
-
-  function positionTT(e){{
-    var x = e.clientX + 12, y = e.clientY + 12;
-    var w = tt.offsetWidth, h = tt.offsetHeight;
-    if(x + w > window.innerWidth  - 8) x = e.clientX - w - 8;
-    if(y + h > window.innerHeight - 8) y = e.clientY - h - 8;
-    tt.style.left = x + 'px';
-    tt.style.top  = y + 'px';
-  }}
-
-  // ── Room click: flash highlight ───────────────────────────────────────────
-  document.querySelectorAll('[data-room]').forEach(function(el){{
-    el.addEventListener('click', function(e){{
-      if(moved) return;
-      // deselect structural elements
-      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
-      el.style.filter = 'brightness(1.12) saturate(1.4)';
-      setTimeout(function(){{ el.style.filter=''; }}, 600);
-      window.parent.postMessage({{type:'selectElement', elementId:''}}, '*');
-    }});
-  }});
-
-  // ── Zoom on wheel ─────────────────────────────────────────────────────────
-  svg.addEventListener('wheel', function(e){{
-    e.preventDefault();
-    var rect = svg.getBoundingClientRect();
-    var px = (e.clientX - rect.left) / rect.width;
-    var py = (e.clientY - rect.top)  / rect.height;
-    var factor = e.deltaY < 0 ? 0.87 : 1/0.87;
-    var cx = vbx + px*vbw, cy = vby + py*vbh;
-    vbw *= factor; vbh *= factor;
-    vbx = cx - px*vbw; vby = cy - py*vbh;
-    setVB();
-  }}, {{passive:false}});
-
-  // ── Pan on drag ───────────────────────────────────────────────────────────
-  var drag = false, moved = false, lx, ly;
-  svg.addEventListener('mousedown', function(e){{
-    drag=true; moved=false; lx=e.clientX; ly=e.clientY;
-    svg.classList.add('panning');
-    tt.style.display = 'none';
-  }});
-  document.addEventListener('mousemove', function(e){{
-    if(!drag) return;
-    var dx=e.clientX-lx, dy=e.clientY-ly;
-    if(Math.abs(dx)+Math.abs(dy) > 2) moved=true;
-    var rect=svg.getBoundingClientRect();
-    vbx -= dx*vbw/rect.width; vby -= dy*vbh/rect.height;
-    lx=e.clientX; ly=e.clientY; setVB();
-  }});
-  document.addEventListener('mouseup', function(){{ drag=false; svg.classList.remove('panning'); }});
-
-  // ── Double-click to reset zoom ────────────────────────────────────────────
-  svg.addEventListener('dblclick', function(e){{
-    if(!e.target.closest('[data-eid]') && !e.target.closest('[data-room]')){{
-      vbx=origX; vby=origY; vbw=origW; vbh=origH; setVB();
-    }}
-  }});
-
-  // ── Click structural elements ─────────────────────────────────────────────
-  document.querySelectorAll('[data-eid]').forEach(function(el){{
-    var id = el.getAttribute('data-eid');
-    el.addEventListener('click', function(e){{
-      if(moved) return;
-      e.stopPropagation();
-      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
-      document.querySelectorAll('[data-eid="'+id+'"]').forEach(function(x){{
-        if(x.getAttribute('stroke') !== 'transparent')
-          x.style.filter = 'brightness(1.8) drop-shadow(0 0 3px {SEL_C})';
-      }});
-      window.parent.postMessage({{type:'selectElement', elementId:id}}, '*');
-    }});
-  }});
-
-  // ── Click empty to deselect ───────────────────────────────────────────────
-  svg.addEventListener('click', function(e){{
-    if(!moved && !e.target.closest('[data-eid]') && !e.target.closest('[data-room]')){{
-      document.querySelectorAll('[data-eid]').forEach(function(x){{ x.style.filter=''; }});
-      window.parent.postMessage({{type:'selectElement', elementId:''}}, '*');
-    }}
-  }});
-}})();
-</script>
-</body></html>"""
-
-
-def _render_3d_viewport(
-        layout: dict,
-        eval_result: dict | None,
-        selected_el: str,
-        active_level: str,
-        is_light: bool,
-        height: int = 512,
-        before_layout: dict | None = None,
-) -> str:
-        level_keys = get_level_keys(layout)
-        if not level_keys:
-                level_keys = ["level_01"]
-
-        status_by_id: dict[str, str] = {}
-        if eval_result:
-                for b in eval_result.get("beams", []):
-                        b_ok = b.get("bend_PASS") and b.get("shear_PASS") and b.get("defl_TL_PASS") and b.get("defl_LL_PASS")
-                        status_by_id[b.get("id", "")] = "pass" if b_ok else "fail"
-                for c in eval_result.get("columns", []):
-                        c_ok = c.get("stress_PASS") and c.get("buckling_PASS")
-                        status_by_id[c.get("id", "")] = "pass" if c_ok else "fail"
-
-        # Diff vs a baseline (Compare windows): added/changed recolour, removed render as ghosts.
-        # Keys are "level|id" because element ids repeat across levels.
-        diff_by_key: dict[str, str] = {}
-        removed_payload: list[dict] = []
-        if before_layout:
-                _d = _compute_diff(before_layout, layout)
-                for _k in _d["added"]:
-                        diff_by_key[_k] = "added"
-                for _k in _d["changed"]:
-                        diff_by_key[_k] = "changed"
-                _bkeys = get_level_keys(before_layout)
-                for _k in _d["removed"]:
-                        _lvl, _, _eid = _k.partition("|")
-                        _el = next((e for e in get_structure(before_layout, _lvl)
-                                    if e.get("id") == _eid), None)
-                        if _el is None:
-                                continue
-                        removed_payload.append({
-                                "geometry": _el.get("geometry", []),
-                                "levelIdx": _bkeys.index(_lvl) if _lvl in _bkeys else 0,
-                        })
-
-        levels_payload: list[dict] = []
-        for lk in level_keys:
-                lvl_obj = _get_level_payload(layout, lk)
-                levels_payload.append(
-                        {
-                                "key": lk,
-                                "outline": get_outline(layout, lk),
-                                "structure": get_structure(layout, lk),
-                                "doors": lvl_obj.get("doors", []),
-                                "windows": lvl_obj.get("windows", []),
-                                "furniture": lvl_obj.get("furniture", []),
-                        }
-                )
-
-        payload = {
-                "levels": levels_payload,
-                "activeLevel": active_level,
-                "selected": selected_el or "",
-                "statusById": status_by_id,
-                "isLight": is_light,
-                "diffByKey": diff_by_key,
-                "removed": removed_payload,
-        }
-        data_json = json.dumps(payload)
-
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=\"utf-8\" />
-    <style>
-        html, body {{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:{'#f0f7f7' if is_light else '#071a1a'}; }}
-        #root {{ position:relative; width:100%; height:{height}px; border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; border-radius:8px; overflow:hidden; }}
-        #cnv {{ width:100%; height:100%; display:block; }}
-        #hud {{ position:absolute; top:10px; left:10px; z-index:5; color:{'#1a2a30' if is_light else '#c8eeed'}; font:600 11px/1.3 'Inter', 'Segoe UI', sans-serif; background:{'rgba(255,255,255,0.86)' if is_light else 'rgba(7,26,26,0.82)'}; border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; border-radius:6px; padding:6px 8px; }}
-        #cube {{ position:absolute; top:10px; right:10px; z-index:6; display:grid; grid-template-columns:1fr 1fr; gap:4px; }}
-        .cube-btn {{ border:1px solid {'#c0d8d8' if is_light else '#1a4040'}; background:{'rgba(255,255,255,0.9)' if is_light else 'rgba(13,40,40,0.9)'}; color:{'#1a2a30' if is_light else '#c8eeed'}; border-radius:4px; padding:4px 7px; font:700 10px/1 'Inter', sans-serif; cursor:pointer; }}
-        #err {{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:{'#c02020' if is_light else '#ff8080'}; font:600 12px/1.4 'Inter', sans-serif; background:{'rgba(255,255,255,0.92)' if is_light else 'rgba(7,26,26,0.95)'}; padding:20px; text-align:center; }}
-    </style>
-    <script type=\"importmap\">{{
-        \"imports\": {{
-            \"three\": \"https://unpkg.com/three@0.166.1/build/three.module.js\",
-            \"three/addons/\": \"https://unpkg.com/three@0.166.1/examples/jsm/\"
-        }}
-    }}</script>
-</head>
-<body>
-    <div id=\"root\">
-        <canvas id=\"cnv\"></canvas>
-        <div id=\"hud\">3D BIM View<br/>Click element to inspect</div>
-        <div id=\"cube\">
-            <button class=\"cube-btn\" data-view=\"top\">TOP</button>
-            <button class=\"cube-btn\" data-view=\"front\">FRONT</button>
-            <button class=\"cube-btn\" data-view=\"right\">RIGHT</button>
-            <button class=\"cube-btn\" data-view=\"iso\">ISO</button>
-        </div>
-        <div id=\"err\"></div>
-    </div>
-    <script type=\"module\">
-        import * as THREE from 'three';
-        import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
-
-        const DATA = {data_json};
-        const STOREY_H = 3.0;
-
-        function showError(msg) {{
-            const el = document.getElementById('err');
-            el.textContent = msg;
-            el.style.display = 'flex';
-        }}
-
-        try {{
-            const root = document.getElementById('root');
-            const canvas = document.getElementById('cnv');
-            const renderer = new THREE.WebGLRenderer({{ canvas, antialias:true, alpha:true }});
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-            renderer.setSize(root.clientWidth, root.clientHeight, false);
-
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(DATA.isLight ? 0xf0f7f7 : 0x071a1a);
-
-            const camera = new THREE.PerspectiveCamera(50, root.clientWidth / root.clientHeight, 0.01, 2000);
-            camera.position.set(16, 14, 16);
-
-            const controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.08;
-
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.95));
-            const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-            dir.position.set(12, 20, 10);
-            scene.add(dir);
-
-            const grid = new THREE.GridHelper(80, 80, DATA.isLight ? 0x9cb3b3 : 0x264848, DATA.isLight ? 0xd3e3e3 : 0x163737);
-            scene.add(grid);
-
-            const pickables = [];
-            const box = new THREE.Box3();
-            const statusById = DATA.statusById || {{}};
-
-            function matColor(mat) {{
-                const m = (mat || '').toLowerCase();
-                if (m.indexOf('steel') === 0) return 0x3f87d6;
-                if (m.indexOf('timber') === 0 || m.indexOf('wood') === 0) return 0xcf8a3c;
-                if (m.indexOf('rcc') === 0 || m.indexOf('concrete') === 0) return 0x9aa0a6;
-                // Base (no material): white in dark mode, blue in light mode.
-                return DATA.isLight ? 0x2563c0 : 0xffffff;
-            }}
-            function elColor(el, level) {{
-                // Diff (Compare): added=green, changed=orange override everything.
-                const d = (DATA.diffByKey || {{}})[level + '|' + el.id];
-                if (d === 'added')   return 0x40d090;
-                if (d === 'changed') return 0xffd060;
-                // Failing elements show red; otherwise colour by material.
-                if ((statusById[el.id] || 'none') === 'fail') return 0xff5050;
-                return matColor((el.attributes || {{}}).material);
-            }}
-
-            function levelOpacity(level) {{
-                if (DATA.activeLevel === '__ALL__') return 0.95;
-                return level === DATA.activeLevel ? 0.95 : 0.28;
-            }}
-
-            function addSlab(level, idx, outline) {{
-                if (!Array.isArray(outline) || outline.length < 3) return;
-                const shape = new THREE.Shape();
-                // Negate Y so that after the slab's -90deg X rotation (which maps shape-Y -> world -Z)
-                // the slab footprint lands on world +Z, matching how columns/beams are placed
-                // (world z = geometry y). Without this the slab is mirrored off the structure.
-                shape.moveTo(outline[0][0], -outline[0][1]);
-                for (let i = 1; i < outline.length; i++) shape.lineTo(outline[i][0], -outline[i][1]);
-                const geo = new THREE.ExtrudeGeometry(shape, {{ depth: 0.18, bevelEnabled: false }});
-                const mat = new THREE.MeshStandardMaterial({{
-                    color: DATA.isLight ? 0xe8efef : 0x0f2f2f,
-                    metalness: 0.05,
-                    roughness: 0.86,
-                    transparent: true,
-                    opacity: levelOpacity(level),
-                }});
-                const slab = new THREE.Mesh(geo, mat);
-                slab.rotation.x = -Math.PI / 2;
-                slab.position.y = idx * STOREY_H;
-                scene.add(slab);
-                box.expandByObject(slab);
-            }}
-
-            function addColumn(level, idx, el) {{
-                const pt = (el.geometry || [])[0];
-                if (!pt) return;
-                const geo = new THREE.BoxGeometry(0.32, STOREY_H, 0.32);
-                const mat = new THREE.MeshStandardMaterial({{
-                    color: elColor(el, level),
-                    transparent: true,
-                    opacity: levelOpacity(level),
-                    emissive: 0x000000,
-                }});
-                const m = new THREE.Mesh(geo, mat);
-                m.position.set(pt[0], idx * STOREY_H + STOREY_H * 0.5, pt[1]);
-                m.userData = {{ id: el.id, level, type: 'column' }};
-                scene.add(m);
-                pickables.push(m);
-                box.expandByObject(m);
-            }}
-
-            function addBeam(level, idx, el) {{
-                const g = el.geometry || [];
-                if (g.length < 2) return;
-                const p1 = new THREE.Vector3(g[0][0], 0, g[0][1]);
-                const p2 = new THREE.Vector3(g[1][0], 0, g[1][1]);
-                const span = p1.distanceTo(p2);
-                if (span <= 0.001) return;
-                const geo = new THREE.BoxGeometry(span, 0.28, 0.22);
-                const mat = new THREE.MeshStandardMaterial({{
-                    color: elColor(el, level),
-                    transparent: true,
-                    opacity: levelOpacity(level),
-                    emissive: 0x000000,
-                }});
-                const m = new THREE.Mesh(geo, mat);
-                const mid = p1.clone().add(p2).multiplyScalar(0.5);
-                m.position.set(mid.x, idx * STOREY_H + (STOREY_H - 0.25), mid.z);
-                m.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
-                m.userData = {{ id: el.id, level, type: 'beam' }};
-                scene.add(m);
-                pickables.push(m);
-                box.expandByObject(m);
-            }}
-
-            (DATA.levels || []).forEach((lvl, idx) => {{
-                addSlab(lvl.key, idx, lvl.outline || []);
-                (lvl.structure || []).forEach((el) => {{
-                    const g = el.geometry || [];
-                    if (g.length === 1) addColumn(lvl.key, idx, el);
-                    if (g.length === 2) addBeam(lvl.key, idx, el);
-                }});
-            }});
-
-            // Removed elements (Compare diff): translucent red ghosts at their old position.
-            (DATA.removed || []).forEach((r) => {{
-                const g = r.geometry || [];
-                const yBase = (r.levelIdx || 0) * STOREY_H;
-                let mesh = null;
-                if (g.length === 1) {{
-                    mesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.32, STOREY_H, 0.32),
-                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
-                    );
-                    mesh.position.set(g[0][0], yBase + STOREY_H * 0.5, g[0][1]);
-                }} else if (g.length === 2) {{
-                    const p1 = new THREE.Vector3(g[0][0], 0, g[0][1]);
-                    const p2 = new THREE.Vector3(g[1][0], 0, g[1][1]);
-                    const span = p1.distanceTo(p2);
-                    if (span <= 0.001) return;
-                    mesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(span, 0.28, 0.22),
-                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
-                    );
-                    const mid = p1.clone().add(p2).multiplyScalar(0.5);
-                    mesh.position.set(mid.x, yBase + (STOREY_H - 0.25), mid.z);
-                    mesh.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
-                }}
-                if (mesh) {{ scene.add(mesh); box.expandByObject(mesh); }}
-            }});
-
-            const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
-            const size = box.isEmpty() ? new THREE.Vector3(10, 10, 10) : box.getSize(new THREE.Vector3());
-            const radius = Math.max(size.x, size.y, size.z, 10);
-            controls.target.copy(center);
-            camera.position.set(center.x + radius * 0.9, center.y + radius * 0.7, center.z + radius * 0.9);
-            controls.update();
-
-            const ray = new THREE.Raycaster();
-            const ptr = new THREE.Vector2();
-            const hud = document.getElementById('hud');
-            const HUD_DEFAULT = '3D BIM View<br/>Click element to inspect';
-            let hovered = null;
-            let selectedObj = null;
-
-            function statusLabel(id) {{
-                const s = statusById[id] || 'none';
-                if (s === 'pass') return ['PASS', '#40d090'];
-                if (s === 'fail') return ['FAIL', '#ff5050'];
-                return ['not evaluated', DATA.isLight ? '#5a7070' : '#9ab'];
-            }}
-
-            // Instant, client-side inspector — fills the moment an element is clicked,
-            // independent of the Streamlit round-trip that syncs the full Design Data panel.
-            function showHud(obj) {{
-                if (!obj) {{ hud.innerHTML = HUD_DEFAULT; return; }}
-                const d = obj.userData || {{}};
-                const [stxt, scol] = statusLabel(d.id || '');
-                hud.innerHTML =
-                    '<div style="font-weight:700;font-size:12px;margin-bottom:1px">' + (d.id || '?') + '</div>' +
-                    '<div style="opacity:.85">' + (d.type || '') + (d.level ? ' &middot; ' + d.level : '') + '</div>' +
-                    '<div style="color:' + scol + ';font-weight:700;margin-top:1px">' + stxt + '</div>' +
-                    '<div style="opacity:.6;margin-top:2px">Full details &amp; remove in panel &rarr;</div>';
-            }}
-
-            // emissive priority: selected (amber) > hovered (indigo) > none
-            function paint(obj) {{
-                if (!obj || !obj.material) return;
-                if (obj === selectedObj) obj.material.emissive.setHex(0xffb020);
-                else if (obj === hovered) obj.material.emissive.setHex(0x4f46e5);
-                else obj.material.emissive.setHex(0x000000);
-            }}
-
-            function setHover(obj) {{
-                const prev = hovered;
-                hovered = obj;
-                paint(prev);
-                paint(hovered);
-                renderer.domElement.style.cursor = obj ? 'pointer' : 'default';
-            }}
-
-            function setSelected(obj) {{
-                const prev = selectedObj;
-                selectedObj = obj;
-                paint(prev);
-                paint(selectedObj);
-                showHud(obj);
-            }}
-
-            function pointerToNdc(evt) {{
-                const rect = renderer.domElement.getBoundingClientRect();
-                ptr.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
-                ptr.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
-            }}
-
-            renderer.domElement.addEventListener('pointermove', (evt) => {{
-                pointerToNdc(evt);
-                ray.setFromCamera(ptr, camera);
-                const hit = ray.intersectObjects(pickables, false)[0];
-                setHover(hit ? hit.object : null);
-            }});
-
-            renderer.domElement.addEventListener('click', (evt) => {{
-                pointerToNdc(evt);
-                ray.setFromCamera(ptr, camera);
-                const hit = ray.intersectObjects(pickables, false)[0];
-                if (!hit) {{
-                    setSelected(null);
-                    window.parent.postMessage({{ type:'selectElement', elementId:'', level:'' }}, '*');
-                    return;
-                }}
-                const id = hit.object.userData?.id || '';
-                const level = hit.object.userData?.level || '';
-                setSelected(hit.object);   // instant feedback, no rerun wait
-                window.parent.postMessage({{ type:'selectElement', elementId:id, level }}, '*');
-            }});
-
-            function lookFrom(v) {{
-                const start = camera.position.clone();
-                const end = center.clone().add(v.clone().multiplyScalar(radius * 1.25));
-                const t0 = performance.now();
-                const ms = 260;
-                function step(t) {{
-                    const k = Math.min((t - t0) / ms, 1);
-                    const e = 1 - Math.pow(1 - k, 3);
-                    camera.position.lerpVectors(start, end, e);
-                    controls.target.copy(center);
-                    controls.update();
-                    if (k < 1) requestAnimationFrame(step);
-                }}
-                requestAnimationFrame(step);
-            }}
-
-            document.querySelectorAll('.cube-btn').forEach((btn) => {{
-                btn.addEventListener('click', () => {{
-                    const v = btn.getAttribute('data-view');
-                    if (v === 'top') lookFrom(new THREE.Vector3(0, 1, 0.001));
-                    if (v === 'front') lookFrom(new THREE.Vector3(0, 0.1, 1));
-                    if (v === 'right') lookFrom(new THREE.Vector3(1, 0.1, 0));
-                    if (v === 'iso') lookFrom(new THREE.Vector3(1, 0.7, 1));
-                }});
-            }});
-
-            const selected = (DATA.selected || '').trim();
-            if (selected) {{
-                const target = pickables.find((m) => (m.userData?.id || '') === selected);
-                if (target) setSelected(target);
-            }}
-
-            function onResize() {{
-                const w = root.clientWidth;
-                const h = root.clientHeight;
-                camera.aspect = w / Math.max(h, 1);
-                camera.updateProjectionMatrix();
-                renderer.setSize(w, h, false);
-            }}
-            window.addEventListener('resize', onResize);
-
-            function animate() {{
-                controls.update();
-                renderer.render(scene, camera);
-                requestAnimationFrame(animate);
-            }}
-            animate();
-        }} catch (err) {{
-            showError('3D viewer failed to load. Check internet/CDN access for Three.js.');
-            console.error(err);
-        }}
-    </script>
-</body>
-</html>"""
 
 
 def _grid_option_kpis(layout_dict: dict) -> dict:
@@ -1469,388 +180,28 @@ def _grid_option_description(idx: int, kpis: dict) -> str:
 
 
 
-def _count_elements(layout: dict) -> tuple[int, int]:
-    structure = get_structure(layout)
-    cols  = sum(1 for el in structure if len(el.get("geometry", [])) == 1)
-    beams = sum(1 for el in structure if len(el.get("geometry", [])) == 2)
-    return cols, beams
 
 
-def _present_legend_items(layout: dict, is_light: bool) -> list[tuple[str, str]]:
-    """Legend entries for ONLY the element categories actually present in `layout`,
-    so we never show Doors/Windows/Furniture when the JSON doesn't contain them."""
-    items: list[tuple[str, str]] = []
-    # iter_all_structure yields (level, element) tuples.
-    struct = [e for _lvl, e in iter_all_structure(layout)] if layout else []
-    has_col  = any(len(e.get("geometry", [])) == 1 for e in struct)
-    has_beam = any(len(e.get("geometry", [])) == 2 for e in struct)
-
-    def _has(cat: str) -> bool:
-        if is_multilevel(layout):
-            return any((_get_level_payload(layout, lk).get(cat) or [])
-                       for lk in (get_level_keys(layout) or []))
-        return bool(layout.get(cat))
-
-    el_col = "#2563c0" if is_light else "#e8eef5"   # structural base: blue (light) / white (dark)
-    if get_all_rooms(layout):  items.append(("#7cb2ff", "Rooms"))  # noqa: E701
-    if has_col:                items.append((el_col, "Columns"))
-    if has_beam:               items.append(("#ffd36a", "Beams"))
-    if _has("walls"):          items.append(("#9aa7b2", "Walls"))
-    if _has("doors"):          items.append(("#ff8a7a", "Doors"))
-    if _has("windows"):        items.append(("#8ad4ff", "Windows"))
-    if _has("furniture"):      items.append(("#9b7cff", "Furniture / MEP"))
-    return items
 
 
 # ── Material colour mapping (shared by 2D, 3D and the legend) ───────────────────
 # Mid-tones chosen to read on both the light (#f0f8f8) and dark (#0c2020) canvases.
-_MATERIAL_PALETTE = {
-    "rcc":      ("#9aa0a6", "Concrete (RCC)"),
-    "concrete": ("#9aa0a6", "Concrete (RCC)"),
-    "steel":    ("#3f87d6", "Steel"),
-    "timber":   ("#cf8a3c", "Timber"),
-    "wood":     ("#cf8a3c", "Timber"),
-}
 
 
-def _material_key(material) -> str | None:
-    m = (material or "").strip().lower()
-    for k in ("concrete", "rcc", "steel", "timber", "wood"):
-        if m.startswith(k):
-            return k
-    return None
 
 
-def _material_color(material, is_light: bool) -> str:
-    """Colour an element by its material; fall back to the white/blue base colour."""
-    k = _material_key(material)
-    if k:
-        return _MATERIAL_PALETTE[k][0]
-    return "#2563c0" if is_light else "#e8eef5"
 
 
-def _materials_present(layout: dict) -> list[tuple[str, str]]:
-    """(colour, label) for each material actually used in the layout, de-duplicated."""
-    seen: dict[str, str] = {}
-    if layout:
-        for _lvl, e in iter_all_structure(layout):
-            k = _material_key((e.get("attributes") or {}).get("material"))
-            if k:
-                col, label = _MATERIAL_PALETTE[k]
-                seen[label] = col
-    return [(c, l) for l, c in seen.items()]
 
 
-def _material_legend_html(layout: dict, is_light: bool, mut: str) -> str:
-    mats = _materials_present(layout)
-    if not mats:
-        return ""
-    html = ('<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;'
-            f'margin-top:4px;font-size:.60rem;color:{mut}">'
-            '<span style="font-weight:700;text-transform:uppercase;letter-spacing:.5px">Material</span>')
-    for col, label in mats:
-        html += (
-            f'<span style="display:flex;align-items:center;gap:4px">'
-            f'<span style="width:10px;height:10px;border-radius:2px;background:{col};'
-            f'display:inline-block"></span>{label}</span>'
-        )
-    html += ('<span style="display:flex;align-items:center;gap:4px">'
-             '<span style="width:10px;height:10px;border-radius:2px;background:#ff5050;'
-             'display:inline-block"></span>Failing</span></div>')
-    return html
 
 
-def _structural_summary_text(layout: dict, eval_result: dict | None) -> str:
-    """Deterministic structural summary — used as the report body when the LLM is offline."""
-    cols = beams = 0
-    mats: dict[str, int] = {}
-    for _l, e in iter_all_structure(layout):
-        n = len(e.get("geometry", []))
-        if n == 1:
-            cols += 1
-        elif n == 2:
-            beams += 1
-        m = (e.get("attributes") or {}).get("material")
-        if m:
-            mats[str(m)] = mats.get(str(m), 0) + 1
-    lines = [
-        f"Layout {layout.get('layoutId', '?')} — {get_level_count(layout)} level(s).",
-        f"{cols} columns and {beams} beams.",
-        "Materials: " + (", ".join(f"{k} x{v}" for k, v in mats.items()) or "not yet assigned") + ".",
-    ]
-    if eval_result:
-        s = eval_result.get("summary", {})
-        lines.append(f"Evaluation: {'PASS' if s.get('overall_PASS') else 'FAIL'} — "
-                     f"{s.get('beam_failures', 0)} beam and {s.get('column_failures', 0)} column failures.")
-        fails = [b["id"] for b in eval_result.get("beams", [])
-                 if not (b.get("bend_PASS") and b.get("shear_PASS")
-                         and b.get("defl_TL_PASS") and b.get("defl_LL_PASS"))]
-        if fails:
-            lines.append("Failing beams: " + ", ".join(fails[:24]) + ".")
-            lines.append("Suggested fixes: upgrade the failing beam sections, add a midspan "
-                         "column to halve the span, or switch those members to a stiffer material.")
-    return "\n".join(lines)
 
 
-def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
-                                project: str, material: str,
-                                revisions: list | None = None,
-                                show_labels: bool = False,
-                                report_text: str | None = None) -> bytes:
-    """Render the live layout as a Revit-style structural plan sheet (A3 landscape,
-    one page per level) with plan view + title block + schedule. Returns PDF bytes.
-
-    show_labels  — draw element ids on the plan.
-    report_text  — when set, prepend a written explanation page and append
-                   shear/moment diagram pages (used for the Compare AI report)."""
-    import io as _io
-    import datetime as _dt
-    import textwrap as _tw
-    import numpy as _np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as _plt
-    from matplotlib.backends.backend_pdf import PdfPages as _PdfPages
-
-    status: dict[str, bool] = {}
-    if eval_result:
-        for _b in eval_result.get("beams", []):
-            status[_b.get("id", "")] = bool(_b.get("bend_PASS") and _b.get("shear_PASS")
-                                            and _b.get("defl_TL_PASS") and _b.get("defl_LL_PASS"))
-        for _c in eval_result.get("columns", []):
-            status[_c.get("id", "")] = bool(_c.get("stress_PASS") and _c.get("buckling_PASS"))
-
-    levels = get_level_keys(layout) or ["level_01"]
-    n_levels = len(levels)
-    layout_id = layout.get("layoutId", "—")
-    today = _dt.date.today().isoformat()
-    summary = (eval_result or {}).get("summary", {})
-    buf = _io.BytesIO()
-
-    with _PdfPages(buf) as pdf:
-        # ── Report cover / explanation page (AI report only) ──
-        if report_text:
-            cfig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")
-            cfig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
-                                           ec="#222", lw=2, transform=cfig.transFigure))
-            cax = cfig.add_axes([0.06, 0.05, 0.88, 0.9]); cax.axis("off")
-            cax.text(0.0, 1.0, "STRUCTURAL REPORT", fontsize=22, fontweight="bold",
-                     color="#111", va="top", transform=cax.transAxes)
-            cax.text(0.0, 0.955, f"{project}   ·   {layout_id}   ·   {today}",
-                     fontsize=11, color="#555", va="top", transform=cax.transAxes)
-            cax.plot([0, 1], [0.93, 0.93], color="#222", lw=1, transform=cax.transAxes)
-            _wrapped = "\n".join(_tw.fill(_ln, 108) if _ln.strip() else ""
-                                 for _ln in report_text.splitlines())
-            cax.text(0.0, 0.89, _wrapped, fontsize=9.5, color="#222", va="top",
-                     transform=cax.transAxes, family="monospace", linespacing=1.5)
-            pdf.savefig(cfig, facecolor="white")
-            _plt.close(cfig)
-
-        for si, lk in enumerate(levels, 1):
-            outline   = get_outline(layout, lk)
-            structure = get_structure(layout, lk)
-            rooms     = get_rooms(layout, lk)
-            cols  = [e for e in structure if len(e.get("geometry", [])) == 1]
-            beams = [e for e in structure if len(e.get("geometry", [])) == 2]
-
-            fig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")  # A3 landscape
-            fig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
-                                          ec="#222", lw=2, transform=fig.transFigure))
-            ax = fig.add_axes([0.05, 0.07, 0.60, 0.88]); ax.set_facecolor("white")
-
-            for r in rooms:
-                g = r.get("geometry", [])
-                if len(g) >= 3:
-                    ax.fill([p[0] for p in g], [p[1] for p in g],
-                            color="#f2f2f2", ec="#dcdcdc", lw=0.6, zorder=1)
-                    if r.get("name"):
-                        ax.text(sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g),
-                                r["name"], ha="center", va="center", fontsize=6, color="#b0b0b0", zorder=2)
-            if len(outline) >= 2:
-                ax.plot([p[0] for p in outline] + [outline[0][0]],
-                        [p[1] for p in outline] + [outline[0][1]],
-                        color="#111", lw=2.4, zorder=4)
-            for b in beams:
-                g = b.get("geometry", [])
-                if len(g) < 2:
-                    continue
-                _c = "#cc2020" if status.get(b.get("id")) is False else \
-                     _material_color((b.get("attributes") or {}).get("material"), True)
-                ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=_c, lw=2.4,
-                        zorder=5, solid_capstyle="round")
-            for c in cols:
-                g = c.get("geometry", [])
-                if not g:
-                    continue
-                _c = "#cc2020" if status.get(c.get("id")) is False else \
-                     _material_color((c.get("attributes") or {}).get("material"), True)
-                ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
-                                            facecolor=_c, edgecolor="#111", lw=0.7, zorder=6))
-            if show_labels:
-                for b in beams:
-                    g = b.get("geometry", [])
-                    if len(g) >= 2:
-                        ax.text((g[0][0] + g[1][0]) / 2, (g[0][1] + g[1][1]) / 2,
-                                b.get("id", ""), fontsize=4.5, color="#3a3a3a",
-                                ha="center", va="center", zorder=8)
-                for c in cols:
-                    g = c.get("geometry", [])
-                    if g:
-                        ax.text(g[0][0], g[0][1] - 0.34, c.get("id", ""), fontsize=4.5,
-                                color="#111", ha="center", va="top", zorder=8)
-            ax.set_aspect("equal")
-            ax.grid(True, color="#eee", lw=0.5)
-            ax.set_title(f"STRUCTURAL FRAMING PLAN — {lk.upper()}", fontsize=12,
-                         fontweight="bold", color="#111", loc="left", pad=10)
-            ax.tick_params(labelsize=6, colors="#999")
-
-            # ── Title block + schedule (right) ──
-            tb = fig.add_axes([0.67, 0.07, 0.30, 0.88]); tb.axis("off")
-            tb.add_patch(_plt.Rectangle((0, 0), 1, 1, transform=tb.transAxes,
-                                        fill=False, ec="#222", lw=1.4))
-            tb.plot([0, 1], [0.93, 0.93], transform=tb.transAxes, color="#222", lw=1.0)
-            tb.text(0.5, 0.975, "PermanenceOS — Structural Sheet", ha="center", va="top",
-                    fontsize=11, fontweight="bold", transform=tb.transAxes)
-
-            rows = [("Project", project), ("Layout ID", layout_id), ("Level", lk),
-                    ("Date", today), ("Default material", material),
-                    ("Columns", str(len(cols))), ("Beams", str(len(beams)))]
-            if eval_result:
-                rows += [("Overall", "PASS" if summary.get("overall_PASS") else "FAIL"),
-                         ("Beam failures", str(summary.get("beam_failures", 0))),
-                         ("Column failures", str(summary.get("column_failures", 0)))]
-            y = 0.88
-            for k, v in rows:
-                tb.text(0.04, y, k.upper(), fontsize=7, color="#888",
-                        transform=tb.transAxes, va="top")
-                tb.text(0.96, y, str(v), fontsize=8, color="#111", ha="right",
-                        fontweight="bold", transform=tb.transAxes, va="top")
-                y -= 0.045
-            if revisions:
-                y -= 0.01
-                tb.text(0.04, y, "REVISIONS", fontsize=7, color="#888",
-                        transform=tb.transAxes, va="top"); y -= 0.04
-                for rv in list(revisions)[-7:]:
-                    tb.text(0.04, y, f"• {str(rv)[:46]}", fontsize=6.5, color="#555",
-                            transform=tb.transAxes, va="top"); y -= 0.032
-            tb.plot([0, 1], [0.07, 0.07], transform=tb.transAxes, color="#222", lw=0.8)
-            tb.text(0.04, 0.04, "SCALE: NTS", fontsize=7.5, color="#555", transform=tb.transAxes)
-            tb.text(0.96, 0.04, f"S-{si:02d} / {n_levels:02d}", fontsize=10,
-                    fontweight="bold", ha="right", transform=tb.transAxes)
-
-            pdf.savefig(fig, facecolor="white")
-            _plt.close(fig)
-
-        # ── Shear / moment diagram pages (AI report only; failing beams first) ──
-        if report_text and eval_result:
-            _bev_all = eval_result.get("beams", [])
-
-            def _b_ok(bb):
-                return bool(bb.get("bend_PASS") and bb.get("shear_PASS")
-                            and bb.get("defl_TL_PASS") and bb.get("defl_LL_PASS"))
-            for _bd in sorted(_bev_all, key=_b_ok)[:8]:
-                L = max(float(_bd.get("span_m", 0) or 0), 0.001)
-                w = float(_bd.get("w_total_kNm", 0) or 0)
-                mmax = float(_bd.get("M_max_kNm", 0) or 0) or w * L * L / 8.0
-                x = _np.linspace(0, L, 60); V = w * (L / 2 - x); M = w * x * (L - x) / 2
-                dfig, dax = _plt.subplots(2, 1, figsize=(11.69, 8.27), facecolor="white",
-                                          gridspec_kw=dict(hspace=0.35))
-                dfig.suptitle(f"Beam {_bd.get('id','?')} — {'PASS' if _b_ok(_bd) else 'FAIL'}"
-                              f"   ·   L={L:.2f} m   ·   w={w:.2f} kN/m   ·   Mmax={mmax:.1f} kN·m",
-                              fontsize=12, fontweight="bold",
-                              color="#111" if _b_ok(_bd) else "#cc2020")
-                dax[0].fill_between(x, V, color="#1a8050", alpha=0.3); dax[0].plot(x, V, color="#1a8050")
-                dax[0].axhline(0, color="#222", lw=0.8); dax[0].set_title("Shear Force V (kN)", fontsize=10)
-                dax[1].fill_between(x, M, color="#cf8a3c", alpha=0.3); dax[1].plot(x, M, color="#cf8a3c")
-                dax[1].axhline(0, color="#222", lw=0.8); dax[1].set_title("Bending Moment M (kN·m)", fontsize=10)
-                dax[1].set_xlabel("x (m)")
-                pdf.savefig(dfig, facecolor="white")
-                _plt.close(dfig)
-    return buf.getvalue()
 
 
-@st.cache_data(show_spinner="Building structural sheet…")
-def _sheet_pdf_bytes(layout_json: str, eval_json: str, project: str,
-                     material: str, revs: tuple, show_labels: bool = False,
-                     report_text: str = "") -> bytes:
-    """Cached wrapper — rebuilds only when any input changes, so download_button
-    can render every run without rebuilding the PDF each time."""
-    return _build_structural_sheet_pdf(
-        json.loads(layout_json),
-        json.loads(eval_json) if eval_json else None,
-        project, material, list(revs),
-        show_labels=show_labels,
-        report_text=report_text or None,
-    )
 
 
-@st.cache_data(show_spinner=False)
-def _beam_diagram_png(span: float, w: float, m_max: float, label: str, is_light: bool) -> bytes:
-    """Shear-force + bending-moment diagram for a simply-supported beam under a UDL.
-    Computed from first principles (V = w(L/2 − x), M = w·x(L−x)/2) — no LLM needed."""
-    import io as _io
-    import numpy as _np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as _plt
-
-    L = max(float(span or 0.0), 0.001)
-    w = float(w or 0.0)
-    if not m_max:
-        m_max = w * L * L / 8.0
-    x = _np.linspace(0, L, 60)
-    V = w * (L / 2.0 - x)
-    M = w * x * (L - x) / 2.0
-
-    fg  = "#1a3535" if is_light else "#c8eeed"
-    bg  = "#ffffff" if is_light else "#0c2020"
-    acc = "#3f87d6"
-    mom = "#cf8a3c"
-    she = "#1a8050" if is_light else "#40d090"
-
-    fig, axes = _plt.subplots(3, 1, figsize=(4.6, 5.0), facecolor=bg,
-                              gridspec_kw=dict(height_ratios=[1, 1.2, 1.2], hspace=0.55))
-    for ax in axes:
-        ax.set_facecolor(bg)
-        for s in ax.spines.values():
-            s.set_color(fg)
-
-    a0 = axes[0]
-    a0.plot([0, L], [0, 0], color=fg, lw=2)
-    a0.plot([0, L], [0.55, 0.55], color=acc, lw=1)
-    for xi in _np.linspace(0, L, 11):
-        a0.annotate("", xy=(xi, 0), xytext=(xi, 0.55),
-                    arrowprops=dict(arrowstyle="->", color=acc, lw=1))
-    a0.plot([0], [0], marker="^", color=fg, ms=11)
-    a0.plot([L], [0], marker="^", color=fg, ms=11)
-    a0.set_title(f"{label}   ·   L = {L:.2f} m   ·   w = {w:.2f} kN/m",
-                 color=fg, fontsize=8.5, fontweight="bold")
-    a0.set_ylim(-0.35, 0.95)
-    a0.axis("off")
-
-    a1 = axes[1]
-    a1.fill_between(x, V, color=she, alpha=0.30)
-    a1.plot(x, V, color=she, lw=1.6)
-    a1.axhline(0, color=fg, lw=0.8)
-    a1.set_title("Shear Force  V (kN)", color=fg, fontsize=8.5)
-    a1.tick_params(colors=fg, labelsize=6)
-    a1.text(0, w * L / 2, f"+{w * L / 2:.1f}", color=she, fontsize=7, va="bottom")
-    a1.text(L, -w * L / 2, f"−{w * L / 2:.1f}", color=she, fontsize=7, va="top", ha="right")
-
-    a2 = axes[2]
-    a2.fill_between(x, M, color=mom, alpha=0.30)
-    a2.plot(x, M, color=mom, lw=1.6)
-    a2.axhline(0, color=fg, lw=0.8)
-    a2.set_title("Bending Moment  M (kN·m)", color=fg, fontsize=8.5)
-    a2.tick_params(colors=fg, labelsize=6)
-    a2.set_xlabel("x (m)", color=fg, fontsize=7)
-    a2.annotate(f"Mmax = {m_max:.1f}", xy=(L / 2, M.max() if len(M) else m_max),
-                color=mom, fontsize=7, ha="center", va="bottom", fontweight="bold")
-
-    buf = _io.BytesIO()
-    fig.savefig(buf, format="png", dpi=130, facecolor=bg, bbox_inches="tight")
-    _plt.close(fig)
-    return buf.getvalue()
 
 
 def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
@@ -2013,23 +364,6 @@ def _get_failure_alternatives(eval_result: dict, material: str) -> list[str]:
         return []
 
 
-def _run_comparison(before_str: str, after_str: str) -> str:
-    try:
-        from _runtime.bootstrap import bootstrap
-        from nodes.comparison import build_comparison_node
-        ctx  = bootstrap()
-        node = build_comparison_node(ctx.llm)
-        state: dict = {
-            "layout_json_string":   after_str,
-            "layout_before_change": before_str,
-            "came_from":            "structural_change",
-            "messages":             [],
-            "cycle":                0,
-        }
-        out = node(state)
-        return out.get("comparison_result", "")
-    except Exception:
-        return ""
 
 
 
@@ -2042,8 +376,14 @@ def _apply_alternative(alt: str, layout_str: str, material: str,
     )
     from nodes.evaluate import evaluate_structure
 
-    if re.match(r"Auto-upgrade \d+ failing beam", alt, re.IGNORECASE):
+    if re.match(r"(Increase the|Auto-upgrade) \d+ failing beam", alt, re.IGNORECASE):
         ev = st.session_state.eval_result or {}
+        _orig_sec = {b["id"]: b.get("section_mm", "") for b in ev.get("beams", [])}
+        _gov0 = {}  # id -> governing failing check (for transparency)
+        for b in ev.get("beams", []):
+            if not (b["bend_PASS"] and b["shear_PASS"] and b["defl_TL_PASS"] and b["defl_LL_PASS"]):
+                _gov0[b["id"]] = ("bending" if not b["bend_PASS"] else "shear" if not b["shear_PASS"]
+                                  else "deflection")
         for _ in range(8):
             fails = [b for b in ev.get("beams", [])
                      if not (b["bend_PASS"] and b["shear_PASS"]
@@ -2059,9 +399,15 @@ def _apply_alternative(alt: str, layout_str: str, material: str,
                     nxt, _, _ = BEAM_DIM_UPGRADE[cur]
                     layout_str = upgrade_element_section(layout_str, b["id"], nxt)
             ev = evaluate_structure(layout_str, ll_kNm2=ll, sdl_kNm2=sdl)
+        _final = {b["id"]: b.get("section_mm", "") for b in (ev or {}).get("beams", [])}
+        st.session_state["_last_fix_log"] = [
+            {"id": i, "kind": "beam", "from": _orig_sec.get(i, "?"),
+             "to": _final.get(i, "?"), "gov": _gov0.get(i, "—")}
+            for i in _gov0 if _orig_sec.get(i) != _final.get(i)
+        ]
         return layout_str, ev
 
-    if re.match(r"Auto-upgrade \d+ failing col", alt, re.IGNORECASE):
+    if re.match(r"(Increase the|Auto-upgrade) \d+ failing col", alt, re.IGNORECASE):
         ev = st.session_state.eval_result or {}
         for _ in range(8):
             fails = [c for c in ev.get("columns", [])
@@ -2287,7 +633,9 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 if _cname == "set_material":
                     _mt = str(_cinput.get("material") or _cinput.get("value") or "").upper()
                     if _mt:
-                        return f"APPLY_MATERIAL:{_mt}"
+                        _lvl = str(_cinput.get("level") or "").strip()
+                        _et = str(_cinput.get("element_type") or "").strip()
+                        return f"APPLY_MATERIAL:{_mt}|{_lvl}|{_et}"
                 if _cname == "modify_structure":
                     _ms_action = _cinput.get("action", "")
                     _ms_eid    = _cinput.get("element_id", "")
@@ -2548,7 +896,7 @@ ACTIONS:
 - REMOVE any element: set action="tool", call remove_element with the exact element_id. Include advisory in final_response.
 - ADD midspan column: set action="tool", call add_midspan_column with the beam_id. Include advisory in final_response.
 - UPGRADE a section: set action="tool", call upgrade_element_section with element_id (and new_section if known). Include advisory in final_response.
-- CHANGE MATERIAL of the whole structure (e.g. "switch to timber", "change material to concrete/RCC", "make it steel"): set action="tool", call set_material with {{"material": "RCC"|"STEEL"|"TIMBER"}}. Do NOT use upgrade_element_section for material changes.
+- CHANGE MATERIAL (e.g. "switch to timber", "change material to concrete/RCC", "make it steel"): set action="tool", call set_material with {{"material": "RCC"|"STEEL"|"TIMBER"}}. To scope it, add "level" (e.g. "level_02") and/or "element_type" ("column" or "beam") — e.g. "change all columns and beams of level 2 to timber" → {{"material":"TIMBER","level":"level_02"}}. Do NOT use upgrade_element_section for material changes.
 - GENERATE structural grid: set action="tool", call tag_and_audit. Include advisory in final_response.
 
 ALWAYS include the real element_id from the layout context in tool_calls. Never emit a tool call with an empty or placeholder element_id — if you don't know the id, ask for it in final_response with action="final".
@@ -2624,12 +972,29 @@ button>div,button p,button span:not([data-testid="stIconMaterial"]){{
 html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{{
   background:{_BG}!important;font-family:{_F}!important;font-size:13px!important;
   letter-spacing:.01em!important}}
-[data-testid="block-container"]{{padding:.3rem 1rem .2rem!important}}
+[data-testid="block-container"]{{padding:.3rem 1rem .2rem!important;max-width:100%!important}}
 section[data-testid="stSidebar"]{{
   background:{_SB}!important;border-right:1px solid {_BORD}!important;
-  width:380px!important;min-width:380px!important;
-  flex:0 0 380px!important}}
+  width:clamp(280px,24vw,380px)!important;min-width:280px!important;
+  flex:0 1 clamp(280px,24vw,380px)!important}}
 section[data-testid="stSidebar"]>div:first-child{{padding:14px 14px 10px!important}}
+/* ── Responsive: never clip text; reflow on smaller / zoomed screens ───────── */
+.page-hdr,.plan-legend{{flex-wrap:wrap!important}}
+.stat-chip,.hdr-lid{{white-space:normal!important;overflow:visible!important}}
+/* buttons & download buttons wrap their labels rather than truncating */
+.stButton>button,[data-testid="stDownloadButton"]>button,[data-testid="stPopover"]>button{{
+  white-space:normal!important;height:auto!important;line-height:1.25!important;min-height:0!important}}
+@media (max-width:1500px){{
+  html,body,[data-testid="stAppViewContainer"]{{font-size:12px!important}}
+  section[data-testid="stSidebar"]{{width:clamp(260px,22vw,340px)!important;min-width:260px!important;
+    flex:0 1 clamp(260px,22vw,340px)!important;max-width:340px!important}}
+}}
+@media (max-width:1200px){{
+  html,body,[data-testid="stAppViewContainer"]{{font-size:11px!important}}
+  [data-testid="block-container"]{{padding:.3rem .5rem!important}}
+  section[data-testid="stSidebar"]{{width:clamp(240px,30vw,300px)!important;min-width:240px!important;
+    flex:0 1 clamp(240px,30vw,300px)!important;max-width:300px!important}}
+}}
 .react-resizable-handle{{display:none!important;pointer-events:none!important}}
 [data-testid="stSidebarHeader"]{{display:none!important;height:0!important;padding:0!important;margin:0!important}}
 section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label{{color:{_TEXT}!important;font-family:{_F}!important}}
@@ -2801,10 +1166,10 @@ button[aria-label="Open sidebar"],
 button[aria-label="collapse"],
 button[aria-label="expand"]{{display:none!important;pointer-events:none!important}}
 section[data-testid="stSidebar"]{{
-  width:380px!important;min-width:380px!important;max-width:380px!important;
+  width:clamp(280px,24vw,380px)!important;min-width:280px!important;max-width:380px!important;
   transform:translateX(0)!important;transition:none!important;visibility:visible!important}}
 section[data-testid="stSidebar"]>div:first-child{{
-  width:380px!important;padding:12px 16px 10px!important;overflow-y:auto!important}}
+  width:100%!important;padding:12px 16px 10px!important;overflow-y:auto!important}}
 .inp-toggle button{{
   padding:1px 6px!important;min-height:unset!important;font-size:.70rem!important;
   background:transparent!important;border:1px solid {_BORD}!important;
@@ -2861,13 +1226,12 @@ if st.session_state.currentLayout is None and EDITED_LAYOUT_PATH.exists():
         st.session_state.setupDone = True   # disk file = previously committed
 
 layout_obj      = st.session_state.currentLayout or {}
-# Capture a Diff baseline the first time we have a structural layout, so the Diff
-# toggle always has a reference even if the user never pressed Generate Grid.
-if (st.session_state.get("diff_baseline") is None
-        and layout_obj and get_structure(layout_obj)):
-    st.session_state.diff_baseline = json.loads(json.dumps(layout_obj))
+# NOTE: diff_baseline is set ONLY when a grid is generated or an option/recommendation
+# is applied (see Generate Grid / Apply Option / agent handlers). We deliberately do
+# NOT capture it from the raw uploaded layout — otherwise Diff would draw phantom
+# "removed/added" ghosts before any grid exists.
 _level_keys_now = get_level_keys(layout_obj) if layout_obj else ["level_01"]
-if st.session_state.get("active_level") not in _level_keys_now:
+if st.session_state.get("active_level") not in (_level_keys_now + ["__ALL__"]):
     st.session_state.active_level = _level_keys_now[0] if _level_keys_now else "level_01"
 n_cols, n_beams = _count_elements(layout_obj)
 er              = st.session_state.eval_result
@@ -2913,9 +1277,13 @@ if _aq_raw.strip():
     elif _aq_resp.startswith("APPLY_MATERIAL:"):
         try:
             from nodes.modify import apply_material_override
-            _aq_mt = _aq_resp.split(":", 1)[1].strip() or _mat_now
-            _push_version(json.loads(apply_material_override(json.dumps(layout_obj), _aq_mt)))
-            _aq_resp = f"Switched all framing to **{_aq_mt}**. Run analysis to check it."
+            _aqp = _aq_resp[len("APPLY_MATERIAL:"):].split("|")
+            _aq_mt = (_aqp[0].strip() or _mat_now).upper()
+            _aq_lvl = _aqp[1].strip() if len(_aqp) > 1 else ""
+            _aq_et  = _aqp[2].strip() if len(_aqp) > 2 else ""
+            _push_version(json.loads(apply_material_override(
+                json.dumps(layout_obj), _aq_mt, level=_aq_lvl or None, element_type=_aq_et or None)))
+            _aq_resp = f"Switched **{_aq_mt}**" + (f" ({_aq_et or 'all'} of {_aq_lvl})" if _aq_lvl else "") + ". Run analysis to check it."
         except Exception as _aqme:
             _aq_resp = f"Material switch failed: {_aqme}"
     elif _aq_resp in ("GENERATE_GRID", "EVALUATE", "FIX_FAILING") or _aq_resp.startswith("GENERATE_GRID"):
@@ -3100,10 +1468,22 @@ with st.sidebar:
             f'<div class="inp-sub-hdr">Define Loads</div>',
             unsafe_allow_html=True,
         )
+        with st.expander("What do these mean?", expanded=False):
+            st.markdown(
+                "- **SDL — Superimposed Dead Load**: permanent weight *on top of* the "
+                "structure's own self-weight — floor finishes, screed, partitions, ceilings, "
+                "services. Typical **2.5–3.5 kN/m²**.\n"
+                "- **LL — Live Load**: movable/occupancy load (people, furniture). Code values: "
+                "**residential ≈2.0**, **office ≈3.0**, **assembly/retail ≈5.0 kN/m²**.\n"
+                "- Higher loads → larger sections / closer columns. Pick the use that matches "
+                "your building before generating a grid."
+            )
         _sdl_opts = {1.5: "1.5", 2.5: "2.5", 3.5: "3.5", 5.0: "5.0"}
         _sdl_v = st.select_slider(
             "Dead Load SDL (kN/m²)", list(_sdl_opts.keys()),
             value=_sdl_now, format_func=lambda v: f"{v} kN/m²",
+            help="Permanent load on top of self-weight: finishes, screed, partitions, "
+                 "services. Typical 2.5–3.5 kN/m².",
         )
         if _sdl_v != _sdl_now:
             st.session_state.sdl_kNm2 = _sdl_v
@@ -3112,6 +1492,8 @@ with st.sidebar:
         _ll_v = st.select_slider(
             "Live Load LL (kN/m²)", list(_ll_opts.keys()),
             value=_ll_now, format_func=lambda v: f"{v} kN/m²",
+            help="Occupancy load (people, furniture): residential ≈2.0, office ≈3.0, "
+                 "assembly/retail ≈5.0 kN/m².",
         )
         if _ll_v != _ll_now:
             st.session_state.live_load_kNm2 = _ll_v
@@ -3129,6 +1511,9 @@ with st.sidebar:
             format_func=lambda k: _MAT_LABELS[k],
             index=list(_MAT_LABELS.keys()).index(_mat_now),
             horizontal=True, label_visibility="collapsed",
+            help="Concrete (RCC): heavy, cheap, fire-resistant, moderate spans. "
+                 "Steel: light, strong, long spans, higher cost. "
+                 "Timber: lightest & low-carbon but needs larger sections / shorter spans.",
         )
         if mat_choice != _mat_now:
             st.session_state.material     = mat_choice
@@ -3329,10 +1714,14 @@ if submitted and prompt_input.strip():
             _resp = f"Tool execution failed: {_tex}"
             st.session_state["_last_error"] = f"APPLY_TOOL: {_tex}"
     elif _resp.startswith("APPLY_MATERIAL:"):
-        _new_mat = _resp[len("APPLY_MATERIAL:"):].strip() or _mat_now
+        _mparts = _resp[len("APPLY_MATERIAL:"):].split("|")
+        _new_mat = (_mparts[0].strip() or _mat_now).upper()
+        _m_lvl = _mparts[1].strip() if len(_mparts) > 1 else ""
+        _m_et  = _mparts[2].strip() if len(_mparts) > 2 else ""
         try:
             from nodes.modify import apply_material_override
-            _ls_m = apply_material_override(json.dumps(layout_obj), _new_mat)
+            _ls_m = apply_material_override(json.dumps(layout_obj), _new_mat,
+                                            level=_m_lvl or None, element_type=_m_et or None)
             _push_version(json.loads(_ls_m))
             with st.spinner(f"Applying {_new_mat} and evaluating…"):
                 _ev_m = _run_evaluate(_ls_m, sdl=_sdl_now, ll=_ll_now)
@@ -3340,7 +1729,9 @@ if submitted and prompt_input.strip():
                 st.session_state.eval_result = _ev_m
                 st.session_state.eval_alts   = _get_failure_alternatives(_ev_m, _new_mat)
             _sm_m = (_ev_m or {}).get("summary", {})
-            _resp = (f"Switched all framing to **{_new_mat}**. "
+            _scope = (f" ({_m_et or 'all'} elements"
+                      + (f" of {_m_lvl}" if _m_lvl else "") + ")") if (_m_lvl or _m_et) else " (whole structure)"
+            _resp = (f"Switched **{_new_mat}**{_scope}. "
                      f"Result: {'PASS' if _sm_m.get('overall_PASS') else 'FAIL'} — "
                      f"{_sm_m.get('beam_failures', 0)} beam / {_sm_m.get('column_failures', 0)} column failures. "
                      f"Ask me to *fix the failing beams* if you'd like options.")
@@ -3352,7 +1743,8 @@ if submitted and prompt_input.strip():
             _ev_fix = st.session_state.eval_result or _run_evaluate(
                 json.dumps(layout_obj), sdl=_sdl_now, ll=_ll_now)
             _alts_fix = _get_failure_alternatives(_ev_fix or {}, _mat_now)
-            _auto_alt = next((a for a in _alts_fix if "upgrade" in a.lower()),
+            _auto_alt = next((a for a in _alts_fix
+                              if "increase the" in a.lower() or "upgrade" in a.lower()),
                              (_alts_fix[0] if _alts_fix else None))
             if _auto_alt:
                 _nl, _nev = _apply_alternative(_auto_alt, json.dumps(layout_obj),
@@ -3609,6 +2001,9 @@ with tab_mod:
                 icon="⚠️",
             )
         else:
+            # Remember which option is active BEFORE any _push_version (which resets it),
+            # so Run Analysis keeps the user's chosen option active (e.g. Option 3).
+            _oi_keep = st.session_state.get("selected_opt_bar_idx", -1)
             # Only seed the global material when NO element has a material yet
             # (fresh grid). If timber/steel/etc. was already applied, evaluate the
             # layout AS-IS so Run Analysis never reverts an applied material change.
@@ -3625,11 +2020,12 @@ with tab_mod:
             if _ev2:
                 st.session_state.eval_result = _ev2
                 st.session_state.eval_alts   = _get_failure_alternatives(_ev2, _mat_now)
-                # Keep the selected option's evaluation in sync so the ANALYSIS tab shows results
-                _oi_run = st.session_state.get("selected_opt_bar_idx", -1)
+                # Attach the evaluation to the option that was active before analysis,
+                # and keep that option active (don't snap back to Option 1).
                 _gopts_run = st.session_state.grid_options
-                if 0 <= _oi_run < len(_gopts_run):
-                    st.session_state.grid_options[_oi_run]["evaluation"] = _ev2
+                if 0 <= _oi_keep < len(_gopts_run):
+                    st.session_state.grid_options[_oi_keep]["evaluation"] = _ev2
+                    st.session_state["selected_opt_bar_idx"] = _oi_keep
                 elif _gopts_run:
                     st.session_state.grid_options[0]["evaluation"] = _ev2
                     st.session_state["selected_opt_bar_idx"] = 0
@@ -3711,13 +2107,12 @@ with tab_mod:
                     st.rerun()
         # Native toolbar (replaces the in-iframe JS bridge toolbar)
         _is_ml = is_multilevel(_plan_layout)
-        _tb_cols = [0.55, 0.9, 0.7, 0.6, 0.6, 3.6] if _is_ml else [0.55, 0.7, 0.6, 0.6, 4]
+        _tb_cols = [0.55, 1.1, 0.7, 0.6, 4.0] if _is_ml else [0.55, 0.7, 0.6, 4.6]
         _tb = st.columns(_tb_cols, gap="small")
         _tb1 = _tb[0]
         _tb_lvl = _tb[1] if _is_ml else None
         _tb2 = _tb[2] if _is_ml else _tb[1]
         _tb3 = _tb[3] if _is_ml else _tb[2]
-        _tb4 = _tb[4] if _is_ml else _tb[3]
         with _tb1:
             if st.button("3D" if _vm == "2D" else "2D",
                          key="tb_vm_btn", width="stretch"):
@@ -3726,14 +2121,19 @@ with tab_mod:
         if _is_ml and _tb_lvl is not None:
             with _tb_lvl:
                 _lvl_keys = get_level_keys(_plan_layout)
-                _lvl_idx = _lvl_keys.index(st.session_state.active_level) if st.session_state.active_level in _lvl_keys else 0
+                _lvl_opts = _lvl_keys + ["All levels"]
+                _cur_lvl = ("All levels" if st.session_state.active_level == "__ALL__"
+                            else st.session_state.active_level)
+                _lvl_idx = _lvl_opts.index(_cur_lvl) if _cur_lvl in _lvl_opts else 0
                 _new_level = st.selectbox(
                     "Level",
-                    _lvl_keys,
+                    _lvl_opts,
                     index=_lvl_idx,
+                    format_func=lambda x: ("Show all levels" if x == "All levels" else x),
                     label_visibility="collapsed",
                     key="tb_active_level",
                 )
+                _new_level = "__ALL__" if _new_level == "All levels" else _new_level
                 if _new_level != st.session_state.active_level:
                     st.session_state.active_level = _new_level
         with _tb2:
@@ -3746,11 +2146,16 @@ with tab_mod:
                                   key="tb_diff_tog")
             if _new_diff != st.session_state.compare_mode:
                 st.session_state.compare_mode = _new_diff
-        with _tb4:
-            _new_auto = st.toggle("Auto", value=st.session_state.get("auto_eval", True),
-                                  key="tb_auto_tog")
-            if _new_auto != st.session_state.get("auto_eval", True):
-                st.session_state["auto_eval"] = _new_auto
+
+        # If the active level has no structure yet, say so (explains "switching level
+        # shows nothing" before a grid is generated on that level).
+        _al_now = st.session_state.active_level
+        if _al_now != "__ALL__" and not get_structure(_plan_layout, _al_now):
+            st.markdown(
+                f'<div style="font-size:.62rem;color:{_MUT};margin:2px 0 4px">'
+                f'<b>{_al_now}</b> has no structural elements yet — generate a grid to populate it.</div>',
+                unsafe_allow_html=True,
+            )
 
         # Diff compares the live layout against the baseline (the applied grid/option),
         # so it shows everything you've changed since — not just the last edit.
@@ -3758,8 +2163,8 @@ with tab_mod:
                        if st.session_state.compare_mode else None)
         if st.session_state.compare_mode:
             if _before_lay:
-                _da, _dr, _dm = (("#1a8050", "#cc2020", "#c07800") if _is_light
-                                 else ("#40d090", "#ff5050", "#ffd060"))
+                _da, _dr, _dm = (("#1a8050", "#cc2020", "#7c4dff") if _is_light
+                                 else ("#40d090", "#ff5050", "#9b7cff"))
                 st.markdown(
                     f'<div style="display:flex;gap:14px;align-items:center;margin:2px 0 6px;'
                     f'font-size:.60rem;color:{_MUT}">'
@@ -3862,6 +2267,7 @@ with tab_mod:
                     is_light=_is_light,
                     height=512,
                     before_layout=_before_lay,
+                    labels=st.session_state.labels_on,
                 ),
                 height=520,
                 scrolling=False,
@@ -3908,6 +2314,25 @@ with tab_mod:
         _rt1, _rt2 = st.tabs(["  ANALYSIS  ", "  DESIGN DETAILS  "])
 
         with _rt1:
+            # Transparency: after an auto-upgrade fix, show exactly what was resized.
+            _fix_log = st.session_state.get("_last_fix_log")
+            if _fix_log:
+                _fix_rows = "".join(
+                    f'<div style="font-size:.62rem;color:{_TEXT};line-height:1.6">'
+                    f'<b>{r["id"]}</b> ({r["kind"]}): {r["from"]} → <b>{r["to"]}</b>'
+                    f' <span style="color:{_MUT}">· governed by {r["gov"]}</span></div>'
+                    for r in _fix_log[:30]
+                )
+                st.markdown(
+                    f'<div style="background:{_PASS_BG};border:1px solid {_PASS_C};border-radius:8px;'
+                    f'padding:8px 10px;margin-bottom:8px">'
+                    f'<div style="font-size:.64rem;font-weight:700;color:{_PASS_C};margin-bottom:4px">'
+                    f'✓ Auto-upgrade applied — {len(_fix_log)} element(s) resized to the next passing section</div>'
+                    f'{_fix_rows}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.session_state["_last_fix_log"] = None
+
             _sel_opt_i2 = st.session_state.get("selected_opt_bar_idx", -1)
             _gopts_main = st.session_state.grid_options
 
@@ -4093,6 +2518,45 @@ with tab_mod:
                                             _new_ev, _mat_now
                                         )
                                         st.rerun()
+
+            # ── Flexibility & alternatives (architect-facing advice) ──────────
+            if er:
+                _flex = _flexibility_rows(er)
+                if _flex:
+                    with st.expander("🧭  Flexibility & alternatives", expanded=False):
+                        st.markdown(
+                            f'<div style="font-size:.62rem;color:{_MUT};margin-bottom:6px">'
+                            f'Demand/capacity per member — which are tight (need attention) vs '
+                            f'slack (could be lighter).</div>', unsafe_allow_html=True)
+
+                        def _flex_row(r):
+                            _v = r["util"]
+                            _c = (_FAIL if _v > 100 else "#c07800" if _v >= 85
+                                  else _PASS_C if _v < 40 else _TEXT)
+                            _verdict, _sugg = _flex_advice(_v)
+                            return (
+                                f'<div style="border-top:1px solid {_BORD};padding:5px 0">'
+                                f'<div style="display:flex;justify-content:space-between;font-size:.66rem">'
+                                f'<span style="color:{_TEXT};font-weight:700">{r["id"]}</span>'
+                                f'<span style="color:{_c};font-weight:700">{_v:.0f}% · {_verdict}</span></div>'
+                                f'<div style="font-size:.58rem;color:{_MUT}">{r["kind"]} · {r["sec"] or "—"} '
+                                f'· governed by {r["gov"]} → {_sugg}</div></div>'
+                            )
+
+                        _tight = _flex[:5]
+                        _slack = [r for r in reversed(_flex) if r["util"] < 65][:5]
+                        st.markdown(
+                            f'<div style="font-size:.60rem;font-weight:700;color:{_FAIL};'
+                            f'text-transform:uppercase;letter-spacing:.5px">Most critical / tight</div>'
+                            + "".join(_flex_row(r) for r in _tight), unsafe_allow_html=True)
+                        if _slack:
+                            st.markdown(
+                                f'<div style="font-size:.60rem;font-weight:700;color:{_PASS_C};'
+                                f'text-transform:uppercase;letter-spacing:.5px;margin-top:8px">'
+                                f'Most flexible / slack</div>'
+                                + "".join(_flex_row(r) for r in _slack), unsafe_allow_html=True)
+                        st.caption("Ask the agent e.g. \"explain the flexibility of A3-A5\" "
+                                   "or \"fix the failing beams\" for actions.")
 
         with _rt2:
             if st.button("⟳  Show details for selected element", key="dd_show_details",
@@ -4729,7 +3193,7 @@ with tab_cmp:
             _baseline_layout = _normalize_layout(json.loads(_cmp_opts[0]["layout_json"]))
             _add_c = "#1a8050" if _is_light else "#40d090"
             _rem_c = "#cc2020" if _is_light else "#ff5050"
-            _mod_c = "#c07800" if _is_light else "#ffd060"
+            _mod_c = "#7c4dff" if _is_light else "#9b7cff"
             st.markdown(
                 f'<div style="display:flex;gap:14px;align-items:center;margin-bottom:8px;'
                 f'font-size:.60rem;color:{_MUT}">'
@@ -4792,6 +3256,7 @@ with tab_cmp:
                                 is_light=_is_light,
                                 height=_ph,
                                 before_layout=(_baseline_layout if _ci > 0 else None),
+                                labels=_cmp_ids,
                             ),
                             height=_ph + 8,
                             scrolling=False,

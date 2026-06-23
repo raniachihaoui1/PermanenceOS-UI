@@ -76,12 +76,16 @@ def get_action_tools() -> list[dict[str, Any]]:
         },
         {
             "name": "set_material",
-            "description": "Change the structural material of the whole layout (all beams and columns). Use this for requests like 'switch to timber', 'change material to concrete/RCC', 'make it steel'.",
+            "description": "Change the structural material. Use for 'switch to timber', 'change material to concrete/RCC', 'make it steel'. Optionally scope to one level and/or element type, e.g. 'change all columns and beams of level 2 to timber'.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "material": {"type": "string", "enum": ["RCC", "STEEL", "TIMBER"],
-                                  "description": "Target material for the whole structure."},
+                                  "description": "Target material."},
+                    "level": {"type": "string",
+                               "description": "Optional level key to limit the change to, e.g. 'level_02'. Omit for all levels."},
+                    "element_type": {"type": "string", "enum": ["column", "beam"],
+                                      "description": "Optional: limit to 'column' or 'beam'. Omit for both."},
                 },
                 "required": ["material"],
             },

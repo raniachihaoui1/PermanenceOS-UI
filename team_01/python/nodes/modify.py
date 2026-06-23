@@ -97,23 +97,70 @@ BASE_MATERIALS = ["RCC", "STEEL", "TIMBER"]
 
 # ── Layout mutation functions ─────────────────────────────────────────────────
 
-def apply_material_override(layout_json_string: str, material: str) -> str:
-    """Patch all structure elements with the given material and its default sections."""
+# Tier chains (small→large) + a depth/span factor per material. Timber & steel start
+# auto-failing at their base tier on typical spans, so we pick a span-appropriate
+# starting section for them; RCC keeps its existing fixed base (behaviour unchanged).
+_TIER_CHAINS = {
+    "RCC":    ["RCC_XS", "RCC", "RCC_M", "RCC_L", "RCC_XL", "RCC_XXL"],
+    "STEEL":  ["STEEL_XS", "STEEL", "STEEL_M", "STEEL_L", "STEEL_XL", "STEEL_XXL"],
+    "TIMBER": ["TIMBER_XS", "TIMBER", "TIMBER_M", "TIMBER_L", "TIMBER_XL", "TIMBER_XXL"],
+}
+_SPAN_DEPTH_DIVISOR = {"STEEL": 20.0, "TIMBER": 12.0}   # required beam depth ≈ span/divisor
+
+
+def _span_aware_tier(base_mat: str, span_m: float, default_key: str) -> str:
+    """Pick the smallest tier (>= the material's base) whose beam depth suits the span.
+    Only used for STEEL/TIMBER; RCC returns its default."""
+    chain = _TIER_CHAINS.get(base_mat)
+    div = _SPAN_DEPTH_DIVISOR.get(base_mat)
+    if not chain or not div or span_m <= 0:
+        return default_key
+    need_depth = span_m * 1000.0 / div
+    base_i = chain.index(default_key) if default_key in chain else 1
+    for key in chain[base_i:]:
+        if DEFAULT_SECTIONS[key]["beam_depth_mm"] >= need_depth:
+            return key
+    return chain[-1]
+
+
+def apply_material_override(layout_json_string: str, material: str,
+                            level: str | None = None,
+                            element_type: str | None = None) -> str:
+    """Patch structure elements with the given material and its default sections.
+    For STEEL/TIMBER, beams get a span-appropriate starting section so a freshly
+    generated grid is evaluable instead of failing every beam at the base tier.
+
+    Optional scope (used by the agent for requests like "change all beams of level 2
+    to timber"): `level` limits to one level key; `element_type` is "column"/"beam"."""
+    import math as _m
     from nodes._layout import is_multilevel, get_level_keys
     layout = json.loads(layout_json_string)
     sec = DEFAULT_SECTIONS.get(material, DEFAULT_SECTIONS["RCC"])
     is_steel = "STEEL" in material.upper()
+    base_mat = next((mm for mm in BASE_MATERIALS if material.upper().startswith(mm)), material)
+    default_key = base_mat if base_mat in DEFAULT_SECTIONS else "RCC"
+    _et = (element_type or "").lower().rstrip("s")   # "columns"->"column"
+
+    def _type_ok(el):
+        if _et not in ("column", "beam"):
+            return True
+        is_beam = len(el.get("geometry", [])) == 2
+        return (_et == "beam") == is_beam
 
     def _patch(el):
+        if not _type_ok(el):
+            return
         attrs = el.setdefault("attributes", {})
-        # Write base material only (strip tier suffix: STEEL_M -> STEEL)
-        base_mat = next((m for m in BASE_MATERIALS if material.upper().startswith(m)), material)
         attrs["material"] = base_mat
         if len(el.get("geometry", [])) == 2:
-            attrs["depth"] = str(sec["beam_depth_mm"])
-            attrs["width"] = str(sec["beam_width_mm"])
-            if is_steel and "beam_section" in sec:
-                attrs["section"] = sec["beam_section"]
+            geo = el.get("geometry", [])
+            _span = _m.dist(geo[0], geo[1]) if len(geo) >= 2 else 0.0
+            _key = _span_aware_tier(base_mat, _span, default_key)
+            _bsec = DEFAULT_SECTIONS.get(_key, sec)
+            attrs["depth"] = str(_bsec["beam_depth_mm"])
+            attrs["width"] = str(_bsec["beam_width_mm"])
+            if is_steel and "beam_section" in _bsec:
+                attrs["section"] = _bsec["beam_section"]
             else:
                 attrs.pop("section", None)
         else:
@@ -125,11 +172,14 @@ def apply_material_override(layout_json_string: str, material: str) -> str:
 
     if is_multilevel(layout):
         for lk in get_level_keys(layout):
+            if level and level != "__ALL__" and lk != level:
+                continue
             for el in layout["levels"][lk].get("structure", []):
                 _patch(el)
     else:
-        for el in layout.get("structure", []):
-            _patch(el)
+        if not level or level in ("level_01", "__ALL__"):
+            for el in layout.get("structure", []):
+                _patch(el)
     return json.dumps(layout)
 
 
