@@ -102,9 +102,12 @@ def _render_floor_plan_plotly(
     diff_on: bool = False,
     before_layout: dict | None = None,
     revision: int = 0,
+    clash_ids: set | None = None,
 ):
     """Return a Plotly figure of the floor plan with clickable structural elements."""
     import math as _hm
+    clash_ids = clash_ids or set()
+    CLASH_C = "#ff3df0"   # magenta — structure clashing with a door/window opening
     if is_light:
         BG = "#f0f8f8"; ROOM_F = "rgba(218,234,234,0.80)"; ROOM_L = "#a0c8c8"
         FG = "#1a3535"; ACCENT = "#088a87"
@@ -274,6 +277,8 @@ def _render_floor_plan_plotly(
             clr, lw = ADD_C, 3.0
         elif diff_on and (beam_level, eid) in _diff_changed:
             clr, lw = MOD_C, 3.0
+        elif eid in clash_ids:
+            clr, lw = CLASH_C, 3.5
         else:
             clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
             lw  = 4.5 if eid == highlight else 2.5
@@ -339,6 +344,8 @@ def _render_floor_plan_plotly(
             clr, sz = ADD_C, 12
         elif diff_on and (col_level, eid) in _diff_changed:
             clr, sz = MOD_C, 12
+        elif eid in clash_ids:
+            clr, sz = CLASH_C, 15
         else:
             clr = FAIL_C if status == "fail" else _material_color(mat, is_light)
             sz  = 16 if eid == highlight else 10
@@ -466,6 +473,12 @@ def _render_3d_viewport(
                                 "levelIdx": _bkeys.index(_lvl) if _lvl in _bkeys else 0,
                         })
 
+        # Structure↔opening clashes per level (keyed level|id; ids repeat across levels)
+        clash_by_key: dict[str, bool] = {}
+        for lk in level_keys:
+                for _cid in _opening_clashes(layout, lk):
+                        clash_by_key[f"{lk}|{_cid}"] = True
+
         levels_payload: list[dict] = []
         for lk in level_keys:
                 lvl_obj = _get_level_payload(layout, lk)
@@ -487,6 +500,7 @@ def _render_3d_viewport(
                 "statusById": status_by_id,
                 "isLight": is_light,
                 "diffByKey": diff_by_key,
+                "clashByKey": clash_by_key,
                 "removed": removed_payload,
                 "labels": bool(labels),
         }
@@ -579,6 +593,8 @@ def _render_3d_viewport(
                 const d = (DATA.diffByKey || {{}})[level + '|' + el.id];
                 if (d === 'added')   return 0x40d090;
                 if (d === 'changed') return 0x9b7cff;
+                // Clash with a door/window opening → magenta.
+                if ((DATA.clashByKey || {{}})[level + '|' + el.id]) return 0xff3df0;
                 // Failing elements show red; otherwise colour by material.
                 if ((statusById[el.id] || 'none') === 'fail') return 0xff5050;
                 return matColor((el.attributes || {{}}).material);
@@ -1277,3 +1293,88 @@ def _flex_advice(util: float) -> tuple[str, str]:
     if util < 65:
         return ("flexible", "spare capacity — a candidate for a lighter section")
     return ("efficient", "well utilised — leave as is")
+
+
+# ── Structure ↔ opening (door/window) clash detection ───────────────────────────
+def _seg_pt_dist(p, a, b) -> float:
+    """Distance from point p to segment a-b."""
+    ax, ay = a; bx, by = b; px, py = p
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    if L2 == 0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L2))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def _segs_intersect(p1, p2, p3, p4) -> bool:
+    def _ccw(a, b, c):
+        return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
+    return (_ccw(p1, p3, p4) != _ccw(p2, p3, p4)
+            and _ccw(p1, p2, p3) != _ccw(p1, p2, p4))
+
+
+def _opening_clashes(layout: dict, level_key: str | None = None, tol: float = 0.3) -> set:
+    """Return ids of structural elements that clash with a door/window opening on the
+    given level: a COLUMN sitting in/near an opening, or a BEAM crossing an opening.
+    (Beams use a true intersection test so perimeter lintel-beams aren't false-flagged.)"""
+    lvl = _get_level_payload(layout, level_key) if level_key else {}
+    openings = []
+    for o in (lvl.get("doors", []) or []) + (lvl.get("windows", []) or []):
+        g = o.get("geometry", [])
+        if len(g) >= 2:
+            openings.append((g[0], g[1]))
+    if not openings:
+        return set()
+    clash = set()
+    for el in get_structure(layout, level_key):
+        g = el.get("geometry", [])
+        if len(g) == 1:
+            if any(_seg_pt_dist(g[0], a, b) < tol for a, b in openings):
+                clash.add(el.get("id"))
+        elif len(g) == 2:
+            if any(_segs_intersect(g[0], g[1], a, b) for a, b in openings):
+                clash.add(el.get("id"))
+    return clash
+
+
+def _resolve_clashes(layout: dict, level_key: str, tol: float = 0.3):
+    """Nudge clashing columns off their door/window opening and reconnect the beams
+    that share their endpoint. Returns (new_layout, n_moved). Pure — operates on a copy."""
+    import copy as _cp
+    layout = _cp.deepcopy(layout)
+    lvl = _get_level_payload(layout, level_key)
+    openings = [(o["geometry"][0], o["geometry"][1])
+                for o in (lvl.get("doors", []) or []) + (lvl.get("windows", []) or [])
+                if len(o.get("geometry", [])) >= 2]
+    if not openings:
+        return layout, 0
+    struct = get_structure(layout, level_key)   # reference into the copied layout
+
+    def _clashes(p):
+        return any(_seg_pt_dist(p, a, b) < tol for a, b in openings)
+
+    # candidate nudges: rings of increasing radius, axis dirs first
+    offsets = [(dx, dy) for d in (0.4, 0.6, 0.8, 1.0)
+               for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d),
+                              (d, d), (-d, -d), (d, -d), (-d, d))]
+    moved = 0
+    for el in struct:
+        g = el.get("geometry", [])
+        if len(g) != 1 or not _clashes(g[0]):
+            continue
+        old = [g[0][0], g[0][1]]
+        for dx, dy in offsets:
+            cand = [round(old[0] + dx, 3), round(old[1] + dy, 3)]
+            if not _clashes(cand):
+                el["geometry"][0] = cand
+                # reconnect any beam endpoint that sat on the old column point
+                for b in struct:
+                    bg = b.get("geometry", [])
+                    if len(bg) == 2:
+                        for i in (0, 1):
+                            if abs(bg[i][0] - old[0]) < 0.02 and abs(bg[i][1] - old[1]) < 0.02:
+                                bg[i] = cand
+                moved += 1
+                break
+    return layout, moved
