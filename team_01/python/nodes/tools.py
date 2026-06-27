@@ -75,6 +75,21 @@ def get_action_tools() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "move_element",
+            "description": "Move a column (or beam) to clear a window/door clash or fine-tune grid spacing. Use dx/dy in metres to nudge it, or absolute x/y to place it. Keep moves axis-aligned (dx OR dy) so the grid stays orthogonal. Beams joined to a moved column follow it automatically.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "element_id": {"type": "string", "description": "ID of the column or beam to move."},
+                    "dx": {"type": "number", "description": "Metres to move along X (east +, west -). 0 or omit for none."},
+                    "dy": {"type": "number", "description": "Metres to move along Y (north +, south -). 0 or omit for none."},
+                    "x": {"type": "number", "description": "Optional absolute X position in metres (overrides dx)."},
+                    "y": {"type": "number", "description": "Optional absolute Y position in metres (overrides dy)."},
+                },
+                "required": ["element_id"],
+            },
+        },
+        {
             "name": "set_material",
             "description": "Change the structural material. Use for 'switch to timber', 'change material to concrete/RCC', 'make it steel'. Optionally scope to one level and/or element type, e.g. 'change all columns and beams of level 2 to timber'.",
             "inputSchema": {

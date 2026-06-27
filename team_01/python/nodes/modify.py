@@ -527,6 +527,60 @@ def remove_element(layout_json_string: str, element_id: str, force: bool = False
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
+def move_element(layout_json_string: str, element_id: str,
+                 dx: float = 0.0, dy: float = 0.0,
+                 x: float | None = None, y: float | None = None) -> str:
+    """Move a structural element and reconnect everything joined to it.
+
+    Columns (1-pt geometry): translate the point by (dx, dy) metres, or place it
+    at absolute (x, y). Every beam endpoint sitting on the old column point follows
+    it, so beams stay connected. Keep the move axis-aligned (only dx OR only dy) to
+    preserve an orthogonal grid — this is the precise way to clear a window/door
+    clash or fine-tune column spacing.
+
+    Beams (2-pt geometry): the whole beam is translated by (dx, dy).
+
+    Returns the updated layout JSON (unchanged if the id is not found)."""
+    from nodes._layout import is_multilevel, find_element_in_layout
+    data = json.loads(layout_json_string)
+    dx = float(dx or 0.0)
+    dy = float(dy or 0.0)
+
+    if is_multilevel(data):
+        level_key, target = find_element_in_layout(data, element_id)
+        if target is None:
+            return layout_json_string
+        struct = data["levels"][level_key].get("structure", [])
+    else:
+        struct = data.get("structure", [])
+        target = next((e for e in struct if e.get("id") == element_id), None)
+        if target is None:
+            return layout_json_string
+
+    g = target.get("geometry", [])
+    if len(g) == 1:
+        old = [g[0][0], g[0][1]]
+        nx = round(float(x) if x is not None else old[0] + dx, 3)
+        ny = round(float(y) if y is not None else old[1] + dy, 3)
+        target["geometry"][0] = [nx, ny]
+        # reconnect any beam endpoint that sat on the old column point
+        for b in struct:
+            bg = b.get("geometry", [])
+            if len(bg) == 2:
+                for i in (0, 1):
+                    if abs(bg[i][0] - old[0]) < 0.02 and abs(bg[i][1] - old[1]) < 0.02:
+                        bg[i] = [nx, ny]
+    elif len(g) == 2:
+        ddx = (float(x) - g[0][0]) if x is not None else dx
+        ddy = (float(y) - g[0][1]) if y is not None else dy
+        target["geometry"][0] = [round(g[0][0] + ddx, 3), round(g[0][1] + ddy, 3)]
+        target["geometry"][1] = [round(g[1][0] + ddx, 3), round(g[1][1] + ddy, 3)]
+    else:
+        return layout_json_string
+
+    return json.dumps(data, indent=2, ensure_ascii=False)
+
+
 # ── Modify node ───────────────────────────────────────────────────────────────
 
 def build_modify_node(mcp_client, allowed_tools, edited_layout_path, evaluate_fn=None):

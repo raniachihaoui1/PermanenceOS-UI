@@ -437,6 +437,7 @@ def _render_3d_viewport(
         height: int = 512,
         before_layout: dict | None = None,
         labels: bool = False,
+        footings: bool = False,
 ) -> str:
         level_keys = get_level_keys(layout)
         if not level_keys:
@@ -503,6 +504,7 @@ def _render_3d_viewport(
                 "clashByKey": clash_by_key,
                 "removed": removed_payload,
                 "labels": bool(labels),
+                "footings": bool(footings),
         }
         data_json = json.dumps(payload)
 
@@ -535,6 +537,7 @@ def _render_3d_viewport(
             <button class=\"cube-btn\" data-view=\"front\">FRONT</button>
             <button class=\"cube-btn\" data-view=\"right\">RIGHT</button>
             <button class=\"cube-btn\" data-view=\"iso\">ISO</button>
+            <button class=\"cube-btn\" id=\"measureBtn\" style=\"grid-column:1 / 3\">📏 MEASURE</button>
         </div>
         <div id=\"err\"></div>
     </div>
@@ -646,6 +649,7 @@ def _render_3d_viewport(
                 spr.position.set(x, y, z);
                 spr.renderOrder = 999;
                 scene.add(spr);
+                return spr;
             }}
             function labelOn(level) {{
                 return DATA.labels && (DATA.activeLevel === '__ALL__' || level === DATA.activeLevel);
@@ -667,7 +671,30 @@ def _render_3d_viewport(
                 scene.add(m);
                 pickables.push(m);
                 box.expandByObject(m);
+                if (DATA.footings && idx === 0) addFooting(level, idx, el);
                 if (labelOn(level)) makeLabel(el.id, pt[0], idx * STOREY_H + STOREY_H + 0.35, pt[1]);
+            }}
+
+            // Footing: a foundation box under a ground-floor column, 1.0 m square and
+            // 0.5 m deep below the slab — drawn as a wireframe (+ faint fill) like the
+            // reference notebook so the architect can see the foundation footprint.
+            function addFooting(level, idx, el) {{
+                const pt = (el.geometry || [])[0];
+                if (!pt) return;
+                const SZ = 1.0, H = 0.5;
+                const cy = idx * STOREY_H - H / 2;     // sits below the ground slab
+                const c = elColor(el, level);
+                const geo = new THREE.BoxGeometry(SZ, H, SZ);
+                geo.translate(pt[0], cy, pt[1]);
+                const fill = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({{
+                    color: c, transparent: true, opacity: 0.16 }}));
+                scene.add(fill);
+                const edges = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(geo),
+                    new THREE.LineBasicMaterial({{ color: c }}));
+                edges.renderOrder = 997;
+                scene.add(edges);
+                box.expandByObject(fill);
             }}
 
             function addBeam(level, idx, el) {{
@@ -795,7 +822,83 @@ def _render_3d_viewport(
                 ptr.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
             }}
 
+            // ── Measure tool: click two points → distance + Δx/Δy in metres ──
+            const measureBtn = document.getElementById('measureBtn');
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            let measureMode = false;
+            let measurePts = [];
+            let measureIsCol = [];
+            let measureObjs = [];
+            function clearMeasure() {{
+                measureObjs.forEach((o) => scene.remove(o));
+                measureObjs = [];
+                measurePts = [];
+                measureIsCol = [];
+            }}
+            function measureMarker(p) {{
+                const s = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.13, 14, 14),
+                    new THREE.MeshBasicMaterial({{ color: 0xffcc33, depthTest: false }}));
+                s.position.copy(p); s.renderOrder = 998;
+                scene.add(s); measureObjs.push(s);
+            }}
+            function measurePoint(evt) {{
+                pointerToNdc(evt);
+                ray.setFromCamera(ptr, camera);
+                const hit = ray.intersectObjects(pickables, false)[0];
+                let p, isCol = false;
+                if (hit) {{
+                    const o = hit.object;
+                    if ((o.userData || {{}}).type === 'column') {{
+                        // Snap to the column's CENTRAL VERTICAL AXIS (its grid point),
+                        // at mid-height — so spacing is measured centre-to-centre, not
+                        // off the column face.
+                        p = new THREE.Vector3(o.position.x, o.position.y, o.position.z);
+                        isCol = true;
+                    }} else {{
+                        p = hit.point.clone();
+                    }}
+                }} else {{ p = new THREE.Vector3(); if (!ray.ray.intersectPlane(groundPlane, p)) return; }}
+                if (measurePts.length >= 2) clearMeasure();
+                measureMarker(p);
+                measurePts.push(p);
+                measureIsCol.push(isCol);
+                if (measurePts.length === 2) {{
+                    const a = measurePts[0], b = measurePts[1];
+                    const dxm = b.x - a.x;          // world X = layout X
+                    const dym = b.z - a.z;          // world Z = layout Y
+                    const dist = Math.hypot(dxm, dym);   // plan (centre-to-centre) distance
+                    const lg = new THREE.BufferGeometry().setFromPoints([a, b]);
+                    const ln = new THREE.Line(lg, new THREE.LineBasicMaterial({{ color: 0xffcc33, depthTest: false }}));
+                    ln.renderOrder = 998; scene.add(ln); measureObjs.push(ln);
+                    const mid = a.clone().add(b).multiplyScalar(0.5);
+                    const lbl = makeLabel(dist.toFixed(2) + ' m', mid.x, mid.y + 0.4, mid.z);
+                    if (lbl) measureObjs.push(lbl);
+                    const ax = Math.abs(dxm) >= Math.abs(dym) ? 'x' : 'y';
+                    const amt = (ax === 'x' ? dxm : dym).toFixed(2);
+                    const c2c = (measureIsCol[0] && measureIsCol[1]) ? ' (centre&#8209;to&#8209;centre)' : '';
+                    hud.innerHTML =
+                        '<div style="font-weight:700;font-size:12px">Distance ' + dist.toFixed(2) + ' m' + c2c + '</div>' +
+                        '<div style="opacity:.85">Δx ' + dxm.toFixed(2) + ' m &middot; Δy ' + dym.toFixed(2) + ' m</div>' +
+                        '<div style="opacity:.6;margin-top:2px">Ask agent: &ldquo;move &lt;col&gt; by ' + amt + ' m in ' + ax + '&rdquo;</div>';
+                }} else {{
+                    hud.innerHTML = '<div style="font-weight:700">Measure</div><div style="opacity:.7">Click the second point&hellip;</div>';
+                }}
+            }}
+            function setMeasureMode(on) {{
+                measureMode = on;
+                clearMeasure();
+                measureBtn.style.background = on ? (DATA.isLight ? '#ffe39a' : '#3a5e2e') : '';
+                measureBtn.style.color = on ? (DATA.isLight ? '#5a3d00' : '#cfe8b0') : '';
+                renderer.domElement.style.cursor = on ? 'crosshair' : 'default';
+                hud.innerHTML = on
+                    ? '<div style="font-weight:700">Measure mode</div><div style="opacity:.7">Click two points</div>'
+                    : HUD_DEFAULT;
+            }}
+            measureBtn.addEventListener('click', () => setMeasureMode(!measureMode));
+
             renderer.domElement.addEventListener('pointermove', (evt) => {{
+                if (measureMode) return;
                 pointerToNdc(evt);
                 ray.setFromCamera(ptr, camera);
                 const hit = ray.intersectObjects(pickables, false)[0];
@@ -803,6 +906,7 @@ def _render_3d_viewport(
             }});
 
             renderer.domElement.addEventListener('click', (evt) => {{
+                if (measureMode) {{ measurePoint(evt); return; }}
                 pointerToNdc(evt);
                 ray.setFromCamera(ptr, camera);
                 const hit = ray.intersectObjects(pickables, false)[0];
@@ -1338,43 +1442,3 @@ def _opening_clashes(layout: dict, level_key: str | None = None, tol: float = 0.
     return clash
 
 
-def _resolve_clashes(layout: dict, level_key: str, tol: float = 0.3):
-    """Nudge clashing columns off their door/window opening and reconnect the beams
-    that share their endpoint. Returns (new_layout, n_moved). Pure — operates on a copy."""
-    import copy as _cp
-    layout = _cp.deepcopy(layout)
-    lvl = _get_level_payload(layout, level_key)
-    openings = [(o["geometry"][0], o["geometry"][1])
-                for o in (lvl.get("doors", []) or []) + (lvl.get("windows", []) or [])
-                if len(o.get("geometry", [])) >= 2]
-    if not openings:
-        return layout, 0
-    struct = get_structure(layout, level_key)   # reference into the copied layout
-
-    def _clashes(p):
-        return any(_seg_pt_dist(p, a, b) < tol for a, b in openings)
-
-    # candidate nudges: rings of increasing radius, axis dirs first
-    offsets = [(dx, dy) for d in (0.4, 0.6, 0.8, 1.0)
-               for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d),
-                              (d, d), (-d, -d), (d, -d), (-d, d))]
-    moved = 0
-    for el in struct:
-        g = el.get("geometry", [])
-        if len(g) != 1 or not _clashes(g[0]):
-            continue
-        old = [g[0][0], g[0][1]]
-        for dx, dy in offsets:
-            cand = [round(old[0] + dx, 3), round(old[1] + dy, 3)]
-            if not _clashes(cand):
-                el["geometry"][0] = cand
-                # reconnect any beam endpoint that sat on the old column point
-                for b in struct:
-                    bg = b.get("geometry", [])
-                    if len(bg) == 2:
-                        for i in (0, 1):
-                            if abs(bg[i][0] - old[0]) < 0.02 and abs(bg[i][1] - old[1]) < 0.02:
-                                bg[i] = cand
-                moved += 1
-                break
-    return layout, moved
