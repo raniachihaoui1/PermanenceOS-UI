@@ -34,3 +34,5 @@ class AppState:
     logo_dark: str = ""
     edited_layout_path: Any = None
     repo_root: Any = None
+    user_name: str = ""
+    user_email: str = ""

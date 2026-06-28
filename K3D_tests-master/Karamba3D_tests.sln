@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34723.18
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KarambaCommon_tests", "KarambaCommon_tests\KarambaCommon_tests.csproj", "{B0134664-FDA7-42C9-856F-32B681C9952F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B0134664-FDA7-42C9-856F-32B681C9952F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B0134664-FDA7-42C9-856F-32B681C9952F}.Debug|x64.Build.0 = Debug|Any CPU
+		{B0134664-FDA7-42C9-856F-32B681C9952F}.Release|x64.ActiveCfg = Release|Any CPU
+		{B0134664-FDA7-42C9-856F-32B681C9952F}.Release|x64.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {81F8B6BF-0400-4544-B914-E52254EB03E6}
+	EndGlobalSection
+EndGlobal

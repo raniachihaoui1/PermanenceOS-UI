@@ -14,6 +14,8 @@ def render_header(s: AppState) -> None:
     n_beams = s.n_beams
     _has_fail = s.has_fail
     _mat_now = s.mat_now
+    _user_name = s.user_name
+    _user_email = s.user_email
     _f = s.fns
     _sheet_pdf_bytes = _f["sheet_pdf_bytes"]
     _count_elements = _f["count_elements"]
@@ -32,13 +34,15 @@ def render_header(s: AppState) -> None:
                       if _has_fail else "")
         _cost_chip = (f'<span class="stat-chip">net <b>${_cf_h["net_cost_usd"]:+,.0f}</b></span>'
                       if _cf_h else "")
+        _user_chip = (f'<span class="stat-chip" title="{_user_email}">👤 <b>{_user_name}</b></span>'
+                      if _user_name else "")
         st.markdown(
             f'<div class="page-hdr">'
             f'<span class="hdr-lid">{_lid}</span>'
             f'<span class="stat-chip"><b>{n_cols}</b> col</span>'
             f'<span class="stat-chip"><b>{n_beams}</b> beam</span>'
             f'<span class="stat-chip"><b>{_mat_now}</b></span>'
-            f'{_cost_chip}{_rev_chip}</div>',
+            f'{_cost_chip}{_rev_chip}{_user_chip}</div>',
             unsafe_allow_html=True,
         )
     with _hcols[1]:
@@ -95,9 +99,10 @@ def render_header(s: AppState) -> None:
                                     key="exp_design_sel")
             _exp_lbl = st.checkbox("Show element labels", value=True, key="exp_show_labels")
             _exp_lj, _exp_ej = _export_choices.get(_exp_sel, (json.dumps(layout_obj), ""))
+            _prep = (f"{_user_name} ({_user_email})" if _user_name else "")
             try:
                 _exp_data = _sheet_pdf_bytes(_exp_lj, _exp_ej, str(_lid), str(_mat_now),
-                                             _revs, _exp_lbl, "")
+                                             _revs, _exp_lbl, "", "", _prep)
                 st.download_button(
                     "⤓ Download sheet (PDF)", data=_exp_data,
                     file_name=f"{_lid}_{_exp_sel.replace(' ', '_')}.pdf",
@@ -110,10 +115,23 @@ def render_header(s: AppState) -> None:
             st.markdown(
                 f'<div style="font-size:.72rem;font-weight:700;color:#c8eeed;'
                 f'margin-bottom:6px">PermanenceOS</div>'
-                f'<div style="font-size:.65rem;color:#5a9090">AI Structural Design</div>',
+                f'<div style="font-size:.65rem;color:#5a9090">AI Structural Design</div>'
+                + (f'<div style="font-size:.62rem;color:#5a9090;margin-top:4px">'
+                   f'Signed in: <b style="color:#c8eeed">{_user_name}</b><br>{_user_email}</div>'
+                   if _user_name else ""),
                 unsafe_allow_html=True,
             )
             st.divider()
+            if _user_name and st.button("Sign out", key="btn_sign_out", width="stretch"):
+                # work is already persisted per-email; just drop the session identity
+                st.session_state.user_name = ""
+                st.session_state.user_email = ""
+                st.rerun()
+            if _user_name and st.button("🗑 Clear my saved work", key="btn_clear_work",
+                                        width="stretch",
+                                        help="Delete your saved layout & snapshots and start fresh (stays signed in)."):
+                _f["clear_user_store"]()
+                st.rerun()
             if st.button("Rerun", key="btn_menu_rerun", width="stretch"):
                 st.rerun()
             _theme_lbl = "Switch to Light" if not _is_light else "Switch to Dark"

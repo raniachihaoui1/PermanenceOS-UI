@@ -208,10 +208,6 @@ def render_sidebar(s: AppState):
                      type="primary", key="btn_gen_main", disabled=_gate_off):
             with st.spinner("Computing grid options…"):
                 st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
-            for _gi, _gopt_g in enumerate(st.session_state.grid_options, 1):
-                (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
-                    json.dumps(_gopt_g["layout"], indent=2, ensure_ascii=False),
-                    encoding="utf-8")
             # Auto-apply option 1 so structure is immediately available
             if st.session_state.grid_options:
                 _auto_opt = st.session_state.grid_options[0].get("layout", {})

@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net7.0-windows</TargetFrameworks>
+        <ProjectGuid>{B0134664-FDA7-42C9-856F-32B681C9952F}</ProjectGuid>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>KarambaCommon_tests</AssemblyName>
+        <Product>KarambaCommon_tests</Product>
+        <Copyright>Copyright ©2024</Copyright>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <Platform>x64</Platform>
+        <PlatformTarget Condition="'$(Platform)' == 'x64'">x64</PlatformTarget>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <DefineConstants>ALL_TESTS;TRACE;_TEST_CAN_THROW_EXCEPTION</DefineConstants>
+        <Configurations>Debug;Release;ReleasePRO;ReleaseFREE;ReleaseFULL;ReleaseTRIAL;ReleaseYAK</Configurations>
+        <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+        <!-- Avoid duplicate main funcitons under .NetCore (see https://andrewlock.net/fixing-the-error-program-has-more-than-one-entry-point-defined-for-console-apps-containing-xunit-tests/). -->
+        <GenerateProgramFile>false</GenerateProgramFile>
+        <!-- Avoid language resource folders -->
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <NoWarn>1701;1702;CS0612;SA1312;NS2002</NoWarn>
+    </PropertyGroup>
+
+    <!-- Package references. -->
+    <ItemGroup>
+        <PackageReference Include="KarambaCommon" Version="3.1.40531" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+        <PackageReference Include="NSubstitute" Version="5.1.0" />
+        <PackageReference Include="NSubstitute.Analyzers.CSharp" Version="1.0.17">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="NUnit" Version="4.1.0" />
+        <PackageReference Include="NUnit.Analyzers" Version="4.1.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+        <PackageReference Include="NUnitLite" Version="4.1.0" />
+        <PackageReference Include="ObjectDumper.NET" Version="4.1.17" />
+        <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+</Project>

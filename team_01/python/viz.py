@@ -13,19 +13,29 @@ from nodes._layout import (
 )
 
 
+def _el_spec(el: dict) -> tuple:
+    """Material + section/dimensions signature of an element — the only attributes a
+    'changed' diff should care about (NOT geometry/position)."""
+    a = el.get("attributes") or {}
+    return (
+        str(a.get("material") or ""),
+        str(a.get("section") or ""),
+        str(a.get("dimensions") or ""),
+        str(a.get("width") or ""), str(a.get("depth") or ""),
+        str(a.get("col_dims") or ""),
+    )
+
+
 def _compute_diff(before: dict, after: dict) -> dict:
-    """Return sets of 'level|id' keys: added, removed, changed (geometry OR attributes).
-    Keyed per-level because element ids repeat across levels in multilevel layouts."""
+    """Return sets of 'level|id' keys: added, removed, changed.
+    'changed' = a MATERIAL or SECTION/dimension change ONLY (moving a column is not a
+    'change' for diff purposes). Keyed per-level because ids repeat across levels."""
     b_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(before)}
     a_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(after)}
     added   = set(a_els) - set(b_els)
     removed = set(b_els) - set(a_els)
-    changed = set()
-    for k in (set(a_els) & set(b_els)):
-        ae, be = a_els[k], b_els[k]
-        if (json.dumps(ae.get("geometry"),   sort_keys=True) != json.dumps(be.get("geometry"),   sort_keys=True)
-                or json.dumps(ae.get("attributes"), sort_keys=True) != json.dumps(be.get("attributes"), sort_keys=True)):
-            changed.add(k)
+    changed = {k for k in (set(a_els) & set(b_els))
+               if _el_spec(a_els[k]) != _el_spec(b_els[k])}
     return {"added": added, "removed": removed, "changed": changed}
 
 
@@ -157,11 +167,9 @@ def _render_floor_plan_plotly(
         _before_el_map = _bef_map
         _diff_removed  = set(_bef_map) - set(_cur_map)
         _diff_added    = set(_cur_map) - set(_bef_map)
-        import json as _j
+        # 'changed' = material/section change only (not a moved column) — matches _compute_diff
         for _key in set(_cur_map) & set(_bef_map):
-            _ce, _be = _cur_map[_key], _bef_map[_key]
-            if (_j.dumps(_ce.get("geometry"),   sort_keys=True) != _j.dumps(_be.get("geometry"),   sort_keys=True)
-                    or _j.dumps(_ce.get("attributes"), sort_keys=True) != _j.dumps(_be.get("attributes"), sort_keys=True)):
+            if _el_spec(_cur_map[_key]) != _el_spec(_bef_map[_key]):
                 _diff_changed.add(_key)
 
     traces: list = []
@@ -438,6 +446,7 @@ def _render_3d_viewport(
         before_layout: dict | None = None,
         labels: bool = False,
         footings: bool = False,
+        show_conflicts: bool = False,
 ) -> str:
         level_keys = get_level_keys(layout)
         if not level_keys:
@@ -474,11 +483,13 @@ def _render_3d_viewport(
                                 "levelIdx": _bkeys.index(_lvl) if _lvl in _bkeys else 0,
                         })
 
-        # Structure↔opening clashes per level (keyed level|id; ids repeat across levels)
+        # Structure↔opening clashes per level (keyed level|id; ids repeat across levels).
+        # Only when show_conflicts is on, so magenta is off by default.
         clash_by_key: dict[str, bool] = {}
-        for lk in level_keys:
-                for _cid in _opening_clashes(layout, lk):
-                        clash_by_key[f"{lk}|{_cid}"] = True
+        if show_conflicts:
+                for lk in level_keys:
+                        for _cid in _opening_clashes(layout, lk):
+                                clash_by_key[f"{lk}|{_cid}"] = True
 
         levels_payload: list[dict] = []
         for lk in level_keys:
@@ -1123,21 +1134,25 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
                                 project: str, material: str,
                                 revisions: list | None = None,
                                 show_labels: bool = False,
-                                report_text: str | None = None) -> bytes:
-    """Render the live layout as a Revit-style structural plan sheet (A3 landscape,
-    one page per level) with plan view + title block + schedule. Returns PDF bytes.
+                                report_text: str | None = None,
+                                before_layout: dict | None = None,
+                                prepared_by: str = "") -> bytes:
+    """Revit-style structural sheet (A3 landscape, one page per level): plan + title block.
 
-    show_labels  — draw element ids on the plan.
-    report_text  — when set, prepend a written explanation page and append
-                   shear/moment diagram pages (used for the Compare AI report)."""
+    report_text   — when set, prepend a written cover page (AI / intervention report).
+    before_layout — when set, switch to INTERVENTION mode: each page shows the ORIGINAL
+                    plan beside the INTERVENTION plan, diff-coloured (added=green,
+                    removed=red dashed, changed=purple with a material/section note).
+    No force/moment diagrams are produced (removed as not useful on the sheet)."""
     import io as _io
     import datetime as _dt
     import textwrap as _tw
-    import numpy as _np
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as _plt
     from matplotlib.backends.backend_pdf import PdfPages as _PdfPages
+
+    GREEN, RED, PURPLE = "#1a8050", "#cc2020", "#7c4dff"
 
     status: dict[str, bool] = {}
     if eval_result:
@@ -1152,21 +1167,126 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
     layout_id = layout.get("layoutId", "—")
     today = _dt.date.today().isoformat()
     summary = (eval_result or {}).get("summary", {})
-    # The design's own material wins over the passed-in global default, so exporting a
-    # specific option/snapshot (e.g. a timber one) shows its real material, not the sidebar's.
     _meta_mat = (layout.get("meta") or {}).get("material") or material
-    buf = _io.BytesIO()
 
+    # ── Diff + per-change material/section description (intervention mode) ──
+    diff = _compute_diff(before_layout, layout) if before_layout else None
+    chg_desc: dict[str, str] = {}
+    if before_layout and diff:
+        _bmap = {f"{lk}|{e['id']}": e for lk, e in iter_all_structure(before_layout)}
+        _amap = {f"{lk}|{e['id']}": e for lk, e in iter_all_structure(layout)}
+        for k in diff["changed"]:
+            ba = (_bmap[k].get("attributes") or {}); aa = (_amap[k].get("attributes") or {})
+            if str(ba.get("material") or "") != str(aa.get("material") or ""):
+                chg_desc[k] = f"mat {ba.get('material') or '—'}→{aa.get('material') or '—'}"
+            else:
+                _bs = (ba.get("section") or ba.get("dimensions") or ba.get("col_dims")
+                       or f"{ba.get('width','')}x{ba.get('depth','')}")
+                _as = (aa.get("section") or aa.get("dimensions") or aa.get("col_dims")
+                       or f"{aa.get('width','')}x{aa.get('depth','')}")
+                chg_desc[k] = f"sec {_bs}→{_as}"
+
+    def _lvl_material(lay, lk):
+        cnt: dict = {}
+        for e in get_structure(lay, lk):
+            m = (e.get("attributes") or {}).get("material")
+            if m:
+                cnt[str(m)] = cnt.get(str(m), 0) + 1
+        return max(cnt, key=cnt.get) if cnt else _meta_mat
+
+    def _draw_plan(ax, lay, lk, title, diff_mode=False):
+        outline = get_outline(lay, lk); rooms = get_rooms(lay, lk)
+        structure = get_structure(lay, lk)
+        cols  = [e for e in structure if len(e.get("geometry", [])) == 1]
+        beams = [e for e in structure if len(e.get("geometry", [])) == 2]
+        lvl_mat = _lvl_material(lay, lk)
+        for r in rooms:
+            g = r.get("geometry", [])
+            if len(g) >= 3:
+                ax.fill([p[0] for p in g], [p[1] for p in g], color="#f2f2f2",
+                        ec="#dcdcdc", lw=0.6, zorder=1)
+                if r.get("name") and not diff_mode:
+                    ax.text(sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g),
+                            r["name"], ha="center", va="center", fontsize=6, color="#b0b0b0", zorder=2)
+        if len(outline) >= 2:
+            ax.plot([p[0] for p in outline] + [outline[0][0]],
+                    [p[1] for p in outline] + [outline[0][1]], color="#111", lw=2.2, zorder=4)
+        # Removed elements (intervention only): dashed red ghosts from the original.
+        if diff_mode and diff and before_layout:
+            for k in diff["removed"]:
+                _lvl, _, _eid = k.partition("|")
+                if _lvl != lk:
+                    continue
+                _re = next((e for e in get_structure(before_layout, _lvl) if e.get("id") == _eid), None)
+                g = _re.get("geometry", []) if _re else []
+                if len(g) == 1:
+                    ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
+                                                facecolor="none", edgecolor=RED, lw=1.2, ls="--", zorder=6))
+                elif len(g) == 2:
+                    ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=RED, lw=1.8, ls="--", zorder=5)
+
+        def _col(el):
+            k = f"{lk}|{el.get('id')}"
+            if diff_mode and diff:
+                if k in diff["added"]:   return GREEN
+                if k in diff["changed"]: return PURPLE
+            if status.get(el.get("id")) is False:
+                return RED
+            return _material_color((el.get("attributes") or {}).get("material") or lvl_mat, True)
+
+        for b in beams:
+            g = b.get("geometry", [])
+            if len(g) < 2:
+                continue
+            ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=_col(b), lw=2.4,
+                    zorder=5, solid_capstyle="round")
+        for c in cols:
+            g = c.get("geometry", [])
+            if not g:
+                continue
+            ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
+                                        facecolor=_col(c), edgecolor="#111", lw=0.7, zorder=6))
+        if show_labels and not diff_mode:
+            for b in beams:
+                g = b.get("geometry", [])
+                if len(g) >= 2:
+                    ax.text((g[0][0] + g[1][0]) / 2, (g[0][1] + g[1][1]) / 2, b.get("id", ""),
+                            fontsize=4.5, color="#3a3a3a", ha="center", va="center", zorder=8)
+            for c in cols:
+                g = c.get("geometry", [])
+                if g:
+                    ax.text(g[0][0], g[0][1] - 0.34, c.get("id", ""), fontsize=4.5,
+                            color="#111", ha="center", va="top", zorder=8)
+        # Annotate changed elements with the material/section change.
+        if diff_mode and diff:
+            for k in diff["changed"]:
+                _lvl, _, _eid = k.partition("|")
+                if _lvl != lk:
+                    continue
+                _el = next((e for e in structure if e.get("id") == _eid), None)
+                g = _el.get("geometry", []) if _el else []
+                if not g:
+                    continue
+                px = g[0][0] if len(g) == 1 else (g[0][0] + g[1][0]) / 2
+                py = g[0][1] if len(g) == 1 else (g[0][1] + g[1][1]) / 2
+                ax.text(px, py + 0.22, chg_desc.get(k, ""), fontsize=3.8, color=PURPLE,
+                        ha="center", va="bottom", zorder=9)
+        ax.set_aspect("equal"); ax.grid(True, color="#eee", lw=0.5)
+        ax.set_title(title, fontsize=11, fontweight="bold", color="#111", loc="left", pad=8)
+        ax.tick_params(labelsize=6, colors="#999")
+
+    buf = _io.BytesIO()
     with _PdfPages(buf) as pdf:
-        # ── Report cover / explanation page (AI report only) ──
+        # ── Report cover / explanation page ──
         if report_text:
             cfig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")
             cfig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
                                            ec="#222", lw=2, transform=cfig.transFigure))
             cax = cfig.add_axes([0.06, 0.05, 0.88, 0.9]); cax.axis("off")
-            cax.text(0.0, 1.0, "STRUCTURAL REPORT", fontsize=22, fontweight="bold",
-                     color="#111", va="top", transform=cax.transAxes)
-            cax.text(0.0, 0.955, f"{project}   ·   {layout_id}   ·   {today}",
+            cax.text(0.0, 1.0, "INTERVENTION REPORT" if before_layout else "STRUCTURAL REPORT",
+                     fontsize=22, fontweight="bold", color="#111", va="top", transform=cax.transAxes)
+            cax.text(0.0, 0.955, f"{project}   ·   {layout_id}   ·   {today}"
+                     + (f"   ·   Prepared by: {prepared_by}" if prepared_by else ""),
                      fontsize=11, color="#555", va="top", transform=cax.transAxes)
             cax.plot([0, 1], [0.93, 0.93], color="#222", lw=1, transform=cax.transAxes)
             _wrapped = "\n".join(_tw.fill(_ln, 108) if _ln.strip() else ""
@@ -1177,149 +1297,81 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
             _plt.close(cfig)
 
         for si, lk in enumerate(levels, 1):
-            outline   = get_outline(layout, lk)
-            structure = get_structure(layout, lk)
-            rooms     = get_rooms(layout, lk)
-            cols  = [e for e in structure if len(e.get("geometry", [])) == 1]
-            beams = [e for e in structure if len(e.get("geometry", [])) == 2]
-
-            # Per-level material: dominant per-element material on this level, else the
-            # design material. Used both for colour fallback and the title-block row.
-            _lvl_counts: dict = {}
-            for _e in cols + beams:
-                _m = (_e.get("attributes") or {}).get("material")
-                if _m:
-                    _lvl_counts[str(_m)] = _lvl_counts.get(str(_m), 0) + 1
-            _lvl_mat = max(_lvl_counts, key=_lvl_counts.get) if _lvl_counts else _meta_mat
-
             fig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")  # A3 landscape
             fig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
                                           ec="#222", lw=2, transform=fig.transFigure))
-            ax = fig.add_axes([0.05, 0.07, 0.60, 0.88]); ax.set_facecolor("white")
 
-            for r in rooms:
-                g = r.get("geometry", [])
-                if len(g) >= 3:
-                    ax.fill([p[0] for p in g], [p[1] for p in g],
-                            color="#f2f2f2", ec="#dcdcdc", lw=0.6, zorder=1)
-                    if r.get("name"):
-                        ax.text(sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g),
-                                r["name"], ha="center", va="center", fontsize=6, color="#b0b0b0", zorder=2)
-            if len(outline) >= 2:
-                ax.plot([p[0] for p in outline] + [outline[0][0]],
-                        [p[1] for p in outline] + [outline[0][1]],
-                        color="#111", lw=2.4, zorder=4)
-            for b in beams:
-                g = b.get("geometry", [])
-                if len(g) < 2:
-                    continue
-                _c = "#cc2020" if status.get(b.get("id")) is False else \
-                     _material_color((b.get("attributes") or {}).get("material") or _lvl_mat, True)
-                ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=_c, lw=2.4,
-                        zorder=5, solid_capstyle="round")
-            for c in cols:
-                g = c.get("geometry", [])
-                if not g:
-                    continue
-                _c = "#cc2020" if status.get(c.get("id")) is False else \
-                     _material_color((c.get("attributes") or {}).get("material") or _lvl_mat, True)
-                ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
-                                            facecolor=_c, edgecolor="#111", lw=0.7, zorder=6))
-            if show_labels:
-                for b in beams:
-                    g = b.get("geometry", [])
-                    if len(g) >= 2:
-                        ax.text((g[0][0] + g[1][0]) / 2, (g[0][1] + g[1][1]) / 2,
-                                b.get("id", ""), fontsize=4.5, color="#3a3a3a",
-                                ha="center", va="center", zorder=8)
-                for c in cols:
-                    g = c.get("geometry", [])
-                    if g:
-                        ax.text(g[0][0], g[0][1] - 0.34, c.get("id", ""), fontsize=4.5,
-                                color="#111", ha="center", va="top", zorder=8)
-            ax.set_aspect("equal")
-            ax.grid(True, color="#eee", lw=0.5)
-            ax.set_title(f"STRUCTURAL FRAMING PLAN — {lk.upper()}", fontsize=12,
-                         fontweight="bold", color="#111", loc="left", pad=10)
-            ax.tick_params(labelsize=6, colors="#999")
-
-            # ── Title block + schedule (right) ──
-            tb = fig.add_axes([0.67, 0.07, 0.30, 0.88]); tb.axis("off")
-            tb.add_patch(_plt.Rectangle((0, 0), 1, 1, transform=tb.transAxes,
-                                        fill=False, ec="#222", lw=1.4))
-            tb.plot([0, 1], [0.93, 0.93], transform=tb.transAxes, color="#222", lw=1.0)
-            tb.text(0.5, 0.975, "PermanenceOS — Structural Sheet", ha="center", va="top",
-                    fontsize=11, fontweight="bold", transform=tb.transAxes)
-
-            rows = [("Project", project), ("Layout ID", layout_id), ("Level", lk),
-                    ("Date", today), ("Material", _lvl_mat),
-                    ("Columns", str(len(cols))), ("Beams", str(len(beams)))]
-            if eval_result:
-                rows += [("Overall", "PASS" if summary.get("overall_PASS") else "FAIL"),
-                         ("Beam failures", str(summary.get("beam_failures", 0))),
-                         ("Column failures", str(summary.get("column_failures", 0)))]
-            y = 0.88
-            for k, v in rows:
-                tb.text(0.04, y, k.upper(), fontsize=7, color="#888",
-                        transform=tb.transAxes, va="top")
-                tb.text(0.96, y, str(v), fontsize=8, color="#111", ha="right",
-                        fontweight="bold", transform=tb.transAxes, va="top")
-                y -= 0.045
-            if revisions:
-                y -= 0.01
-                tb.text(0.04, y, "REVISIONS", fontsize=7, color="#888",
-                        transform=tb.transAxes, va="top"); y -= 0.04
-                for rv in list(revisions)[-7:]:
-                    tb.text(0.04, y, f"• {str(rv)[:46]}", fontsize=6.5, color="#555",
-                            transform=tb.transAxes, va="top"); y -= 0.032
-            tb.plot([0, 1], [0.07, 0.07], transform=tb.transAxes, color="#222", lw=0.8)
-            tb.text(0.04, 0.04, "SCALE: NTS", fontsize=7.5, color="#555", transform=tb.transAxes)
-            tb.text(0.96, 0.04, f"S-{si:02d} / {n_levels:02d}", fontsize=10,
-                    fontweight="bold", ha="right", transform=tb.transAxes)
+            if before_layout:
+                # Intervention: ORIGINAL (left) beside INTERVENTION diff (right).
+                axL = fig.add_axes([0.04, 0.10, 0.44, 0.80]); axL.set_facecolor("white")
+                axR = fig.add_axes([0.53, 0.10, 0.44, 0.80]); axR.set_facecolor("white")
+                _draw_plan(axL, before_layout, lk, f"ORIGINAL — {lk.upper()}", diff_mode=False)
+                _draw_plan(axR, layout, lk, f"INTERVENTION — {lk.upper()}", diff_mode=True)
+                fig.text(0.04, 0.945, "INTERVENTION PLAN", fontsize=15, fontweight="bold", color="#111")
+                fig.text(0.53, 0.05, "■ added", color=GREEN, fontsize=9, fontweight="bold")
+                fig.text(0.62, 0.05, "▦ removed (dashed)", color=RED, fontsize=9, fontweight="bold")
+                fig.text(0.80, 0.05, "■ changed (mat/sec)", color=PURPLE, fontsize=9, fontweight="bold")
+                fig.text(0.965, 0.05, f"S-{si:02d}/{n_levels:02d}", fontsize=9, ha="right", color="#555")
+            else:
+                # Normal sheet: plan (left) + title block (right).
+                ax = fig.add_axes([0.05, 0.07, 0.60, 0.88]); ax.set_facecolor("white")
+                _draw_plan(ax, layout, lk, f"STRUCTURAL FRAMING PLAN — {lk.upper()}")
+                _structure = get_structure(layout, lk)
+                _ncol = sum(1 for e in _structure if len(e.get("geometry", [])) == 1)
+                _nbm  = sum(1 for e in _structure if len(e.get("geometry", [])) == 2)
+                tb = fig.add_axes([0.67, 0.07, 0.30, 0.88]); tb.axis("off")
+                tb.add_patch(_plt.Rectangle((0, 0), 1, 1, transform=tb.transAxes,
+                                            fill=False, ec="#222", lw=1.4))
+                tb.plot([0, 1], [0.93, 0.93], transform=tb.transAxes, color="#222", lw=1.0)
+                tb.text(0.5, 0.975, "PermanenceOS — Structural Sheet", ha="center", va="top",
+                        fontsize=11, fontweight="bold", transform=tb.transAxes)
+                rows = [("Project", project), ("Layout ID", layout_id), ("Level", lk),
+                        ("Date", today), ("Material", _lvl_material(layout, lk)),
+                        ("Columns", str(_ncol)), ("Beams", str(_nbm))]
+                if prepared_by:
+                    rows.insert(4, ("Prepared by", prepared_by))
+                if eval_result:
+                    rows += [("Overall", "PASS" if summary.get("overall_PASS") else "FAIL"),
+                             ("Beam failures", str(summary.get("beam_failures", 0))),
+                             ("Column failures", str(summary.get("column_failures", 0)))]
+                y = 0.88
+                for k, v in rows:
+                    tb.text(0.04, y, k.upper(), fontsize=7, color="#888", transform=tb.transAxes, va="top")
+                    tb.text(0.96, y, str(v), fontsize=8, color="#111", ha="right",
+                            fontweight="bold", transform=tb.transAxes, va="top")
+                    y -= 0.045
+                if revisions:
+                    y -= 0.01
+                    tb.text(0.04, y, "REVISIONS", fontsize=7, color="#888", transform=tb.transAxes, va="top"); y -= 0.04
+                    for rv in list(revisions)[-7:]:
+                        tb.text(0.04, y, f"• {str(rv)[:46]}", fontsize=6.5, color="#555",
+                                transform=tb.transAxes, va="top"); y -= 0.032
+                tb.plot([0, 1], [0.07, 0.07], transform=tb.transAxes, color="#222", lw=0.8)
+                tb.text(0.04, 0.04, "SCALE: NTS", fontsize=7.5, color="#555", transform=tb.transAxes)
+                tb.text(0.96, 0.04, f"S-{si:02d} / {n_levels:02d}", fontsize=10,
+                        fontweight="bold", ha="right", transform=tb.transAxes)
 
             pdf.savefig(fig, facecolor="white")
             _plt.close(fig)
-
-        # ── Shear / moment diagram pages (AI report only; failing beams first) ──
-        if report_text and eval_result:
-            _bev_all = eval_result.get("beams", [])
-
-            def _b_ok(bb):
-                return bool(bb.get("bend_PASS") and bb.get("shear_PASS")
-                            and bb.get("defl_TL_PASS") and bb.get("defl_LL_PASS"))
-            for _bd in sorted(_bev_all, key=_b_ok)[:8]:
-                L = max(float(_bd.get("span_m", 0) or 0), 0.001)
-                w = float(_bd.get("w_total_kNm", 0) or 0)
-                mmax = float(_bd.get("M_max_kNm", 0) or 0) or w * L * L / 8.0
-                x = _np.linspace(0, L, 60); V = w * (L / 2 - x); M = w * x * (L - x) / 2
-                dfig, dax = _plt.subplots(2, 1, figsize=(11.69, 8.27), facecolor="white",
-                                          gridspec_kw=dict(hspace=0.35))
-                dfig.suptitle(f"Beam {_bd.get('id','?')} — {'PASS' if _b_ok(_bd) else 'FAIL'}"
-                              f"   ·   L={L:.2f} m   ·   w={w:.2f} kN/m   ·   Mmax={mmax:.1f} kN·m",
-                              fontsize=12, fontweight="bold",
-                              color="#111" if _b_ok(_bd) else "#cc2020")
-                dax[0].fill_between(x, V, color="#1a8050", alpha=0.3); dax[0].plot(x, V, color="#1a8050")
-                dax[0].axhline(0, color="#222", lw=0.8); dax[0].set_title("Shear Force V (kN)", fontsize=10)
-                dax[1].fill_between(x, M, color="#cf8a3c", alpha=0.3); dax[1].plot(x, M, color="#cf8a3c")
-                dax[1].axhline(0, color="#222", lw=0.8); dax[1].set_title("Bending Moment M (kN·m)", fontsize=10)
-                dax[1].set_xlabel("x (m)")
-                pdf.savefig(dfig, facecolor="white")
-                _plt.close(dfig)
     return buf.getvalue()
 
 
 @st.cache_data(show_spinner="Building structural sheet…")
 def _sheet_pdf_bytes(layout_json: str, eval_json: str, project: str,
                      material: str, revs: tuple, show_labels: bool = False,
-                     report_text: str = "") -> bytes:
-    """Cached wrapper — rebuilds only when any input changes, so download_button
-    can render every run without rebuilding the PDF each time."""
+                     report_text: str = "", before_json: str = "",
+                     prepared_by: str = "") -> bytes:
+    """Cached wrapper — rebuilds only when any input changes (incl. the exact layout
+    JSON, so the sheet always matches the version being exported). `before_json` set →
+    intervention report (original + diff plan)."""
     return _build_structural_sheet_pdf(
         json.loads(layout_json),
         json.loads(eval_json) if eval_json else None,
         project, material, list(revs),
         show_labels=show_labels,
         report_text=report_text or None,
+        before_layout=json.loads(before_json) if before_json else None,
+        prepared_by=prepared_by,
     )
 
 

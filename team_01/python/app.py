@@ -16,6 +16,7 @@ REPO_ROOT           = Path(__file__).resolve().parents[2]
 DEFAULT_LAYOUT_PATH = REPO_ROOT / "layout_input" / "layout_schema.json"
 EDITED_LAYOUT_PATH  = REPO_ROOT / "team_01_edited_layout.json"
 BEFORE_LAYOUT_PATH  = REPO_ROOT / "team_01_edited_layout_before.json"
+USER_DATA_DIR       = REPO_ROOT / "user_data"   # per-user saved work (keyed by email)
 VIEWER_BASE_URL     = "http://127.0.0.1:8000/layout_viewer.html"
 PLAN_VIEWER_URL     = "http://127.0.0.1:8000/plan_viewer.html"
 PYTHON_DIR           = Path(__file__).resolve().parent
@@ -95,18 +96,25 @@ def _push_version(new_layout: dict) -> None:
     st.session_state.currentLayout  = new_layout
     st.session_state["selected_opt_bar_idx"] = -1
 
-    # Keep the selection bridge consistent after a layout change so Design Details
-    # reliably updates for the next click: drop a now-removed selection, and resync the
-    # URL-bridge guards to the current URL so a stale _sel can't clobber the next click.
-    _sel_now = st.session_state.get("selected_el", "")
-    if _sel_now and find_element_in_layout(new_layout, _sel_now)[1] is None:
-        st.session_state.selected_el = ""
-        st.session_state.active_element_level = ""
-    st.session_state["_last_url_sel"] = st.query_params.get("_sel", "\x00")
-    st.session_state["_last_url_lvl"] = st.query_params.get("_lvl", "\x00")
+    # After ANY layout change, reset the selection AND its URL bridge to a clean slate so
+    # the next click always registers — nothing stays "stuck" (e.g. an add-column
+    # reference). Re-click the element to see its updated details.
+    st.session_state.selected_el = ""
+    st.session_state.active_element_level = ""
+    try:
+        if "_sel" in st.query_params:
+            del st.query_params["_sel"]
+        if "_lvl" in st.query_params:
+            del st.query_params["_lvl"]
+    except Exception:
+        pass
+    st.session_state["_last_url_sel"] = ""
+    st.session_state["_last_url_lvl"] = ""
 
+    # Single working file only — version history lives in session_state.versionHistory
+    # (we no longer litter the repo with one layout_v{n}.json per change).
     _write_json(EDITED_LAYOUT_PATH, new_layout)
-    _write_json(REPO_ROOT / f"layout_v{v}.json", new_layout)
+    _save_user_store()   # persist this change to the user's saved work
     _sync_viewers()
 
 
@@ -126,6 +134,78 @@ def _load_working_layout() -> dict:
     if EDITED_LAYOUT_PATH.exists():
         return _normalize_layout(_read_json(EDITED_LAYOUT_PATH))
     return {}
+
+
+# ── Per-user saved work (keyed by email) ───────────────────────────────────────
+
+def _user_store_path():
+    """Path to the logged-in user's saved-work bundle, or None if not logged in."""
+    import hashlib
+    em = (st.session_state.get("user_email") or "").strip().lower()
+    if not em:
+        return None
+    USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return USER_DATA_DIR / (hashlib.md5(em.encode()).hexdigest()[:12] + ".json")
+
+
+def _save_user_store() -> None:
+    """Persist the current user's layout + snapshots + settings so it's there next login."""
+    p = _user_store_path()
+    if not p:
+        return
+    try:
+        p.write_text(json.dumps({
+            "name":           st.session_state.get("user_name", ""),
+            "email":          st.session_state.get("user_email", ""),
+            "currentLayout":  st.session_state.get("currentLayout"),
+            "currentVersion": st.session_state.get("currentVersion", 0),
+            "versionHistory": st.session_state.get("versionHistory", []),
+            "snapshots":      st.session_state.get("snapshots", []),
+            "material":       st.session_state.get("material"),
+            "sdl_kNm2":       st.session_state.get("sdl_kNm2"),
+            "live_load_kNm2": st.session_state.get("live_load_kNm2"),
+            "setupDone":      st.session_state.get("setupDone", False),
+        }, ensure_ascii=False), encoding="utf-8")
+    except Exception as _e:
+        st.session_state["_last_error"] = f"save user store: {_e}"
+
+
+def _load_user_store() -> None:
+    """Restore a user's saved work into session_state on login (if any exists)."""
+    p = _user_store_path()
+    if not p or not p.exists():
+        return
+    try:
+        b = json.loads(p.read_text(encoding="utf-8"))
+        for _k in ("currentLayout", "currentVersion", "versionHistory", "snapshots",
+                   "material", "sdl_kNm2", "live_load_kNm2", "setupDone"):
+            if b.get(_k) is not None:
+                st.session_state[_k] = b[_k]
+    except Exception as _e:
+        st.session_state["_last_error"] = f"load user store: {_e}"
+
+
+def _clear_user_store() -> None:
+    """Delete the current user's saved work + reset the workspace (keeps them signed in)."""
+    p = _user_store_path()
+    try:
+        if p and p.exists():
+            p.unlink()
+    except Exception:
+        pass
+    try:
+        if EDITED_LAYOUT_PATH.exists():
+            EDITED_LAYOUT_PATH.unlink()
+    except Exception:
+        pass
+    for _k, _v in {
+        "currentLayout": None, "versionHistory": [], "currentVersion": 0,
+        "setupDone": False, "eval_result": None, "eval_alts": [], "grid_options": [],
+        "selected_grid": None, "snapshots": [], "cmp_sel_indices": [], "history": [],
+        "selected_el": "", "active_element_level": "", "selected_opt_bar_idx": -1,
+        "diff_baseline": None, "cost_flexibility": None,
+    }.items():
+        st.session_state[_k] = _v
 
 
 @st.cache_data(ttl=5)
@@ -394,6 +474,88 @@ def _get_failure_alternatives(eval_result: dict, material: str) -> list[str]:
         return _build_failure_alternatives(eval_result, [], material)
     except Exception:
         return []
+
+
+def _auto_eval_after_change(new_layout: dict) -> str:
+    """Re-evaluate the structure right after an edit so the user sees its effect
+    immediately. Sets eval_result/eval_alts and returns a short PASS/FAIL status."""
+    try:
+        _ls = json.dumps(new_layout)
+        if not any((e.get("attributes") or {}).get("material")
+                   for _l, e in iter_all_structure(new_layout)):
+            from nodes.modify import apply_material_override
+            _ls = apply_material_override(_ls, _mat_now)
+        with st.spinner("Re-evaluating…"):
+            _ev = _run_evaluate(_ls, sdl=_sdl_now, ll=_ll_now)
+        if _ev:
+            st.session_state.eval_result = _ev
+            st.session_state.eval_alts = _get_failure_alternatives(_ev, _mat_now)
+            _s = _ev.get("summary", {})
+            if _s.get("overall_PASS"):
+                return "now **PASS** ✓"
+            return (f"still **FAIL** — {_s.get('beam_failures', 0)} beam / "
+                    f"{_s.get('column_failures', 0)} column failure(s)")
+    except Exception as _aee:
+        st.session_state["_last_error"] = f"auto-eval: {_aee}"
+    st.session_state.eval_result = None
+    return "added (run analysis to evaluate)"
+
+
+def _intervention_report_text(before: dict, after: dict, ev: dict | None) -> str:
+    """Plain-text intervention summary: what changed vs the original, the change type
+    (material/section) per element, a complexity rating, and the resulting cost."""
+    d = _compute_diff(before, after)
+    _bmap = {f"{lk}|{e['id']}": e for lk, e in iter_all_structure(before)}
+    _amap = {f"{lk}|{e['id']}": e for lk, e in iter_all_structure(after)}
+    n_mat = n_sec = 0
+    chg_lines: list[str] = []
+    for k in sorted(d["changed"]):
+        be, ae = _bmap[k], _amap[k]
+        ba = be.get("attributes") or {}; aa = ae.get("attributes") or {}
+        _id = k.split("|", 1)[1]
+        if str(ba.get("material") or "") != str(aa.get("material") or ""):
+            chg_lines.append(f"  - {_id}: material {ba.get('material') or '—'} -> {aa.get('material') or '—'}")
+            n_mat += 1
+        else:
+            _bs = (ba.get("section") or ba.get("dimensions") or ba.get("col_dims")
+                   or f"{ba.get('width','')}x{ba.get('depth','')}")
+            _as = (aa.get("section") or aa.get("dimensions") or aa.get("col_dims")
+                   or f"{aa.get('width','')}x{aa.get('depth','')}")
+            chg_lines.append(f"  - {_id}: section {_bs} -> {_as}")
+            n_sec += 1
+    added = sorted(d["added"]); removed = sorted(d["removed"])
+    n_add, n_rem, n_chg = len(added), len(removed), len(d["changed"])
+    n_total = n_add + n_rem + n_chg
+    if n_rem > 0 or n_add >= 3:
+        complexity = "HIGH (members added/removed — structural intervention)"
+    elif n_add > 0 or n_mat > 0:
+        complexity = "MEDIUM (material swap or new member)"
+    elif n_total > 0:
+        complexity = "LOW (section resizing only)"
+    else:
+        complexity = "NONE (identical to the original)"
+    _w, _c = _eval_weight_cost(ev or {})
+    L = ["INTERVENTION SUMMARY  (vs the original design you started with)", ""]
+    L.append(f"Changes: {n_add} added, {n_rem} removed, {n_chg} changed "
+             f"({n_mat} material, {n_sec} section).")
+    L.append(f"Intervention complexity: {complexity}.")
+    if _c:
+        L.append(f"Resulting design cost: ${_c:,.0f}   ({_w:.0f} kN total weight).")
+    if ev:
+        s = ev.get("summary", {})
+        L.append(f"Structural result: {'PASS' if s.get('overall_PASS') else 'FAIL'} — "
+                 f"{s.get('beam_failures', 0)} beam / {s.get('column_failures', 0)} column failure(s).")
+    L.append("")
+    if added:
+        L.append("Added:   " + ", ".join(k.split('|', 1)[1] for k in added[:40]))
+    if removed:
+        L.append("Removed: " + ", ".join(k.split('|', 1)[1] for k in removed[:40]))
+    if chg_lines:
+        L.append("Changed:")
+        L.extend(chg_lines[:50])
+    if n_total == 0:
+        L.append("No structural changes vs the original — modify the design to create an intervention.")
+    return "\n".join(L)
 
 
 
@@ -692,7 +854,13 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             if _ha and not _ha.startswith(_SIGNAL_PREFIXES):
                 _hist_msgs.append({"role": "assistant", "content": _ha[:400]})
 
-        result = call_llm(ctx.llm, SYSTEM_PROMPT, _hist_msgs + [context_msg], tool_catalog)
+        try:
+            result = call_llm(ctx.llm, SYSTEM_PROMPT, _hist_msgs + [context_msg], tool_catalog)
+        except Exception as _llm_err:
+            # Malformed/unparseable model output → don't crash; fall through to the
+            # deterministic intent parser below (handles add/remove/move/material/etc.).
+            st.session_state["_last_error"] = f"LLM parse fallback: {_llm_err}"
+            result = {"action": "final", "final_response": ""}
 
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
@@ -875,7 +1043,8 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             if _is_removal and not _is_explicit_whatif:
                 if _ids_in_prompt:
                     _eid_exec = _rid(_ids_in_prompt[0])
-                    return f"APPLY_TOOL:{json.dumps({'name': 'remove_element', 'input': {'element_id': _eid_exec}})}"
+                    _force_rm = "force" in _lower   # "force remove G3" overrides perimeter lock
+                    return f"APPLY_TOOL:{json.dumps({'name': 'remove_element', 'input': {'element_id': _eid_exec, 'force': _force_rm}})}"
                 _id_list = ", ".join(el["id"] for el in structure[:15])
                 return (
                     f"Could not find that element ID. "
@@ -977,6 +1146,9 @@ def _ensure_session() -> None:
         "labels_on":       False,
         "footings_on":     True,
         "respect_openings": False,   # opt-in: keep Generate Grid's clean perimeter-following grid
+        "show_conflicts":  False,    # magenta window/door clashes only when toggled on
+        "user_name":       "",       # set at the launch gate
+        "user_email":      "",
         "auto_eval":       True,
         "snapshots":       [],
         "theme":           "dark",
@@ -1087,19 +1259,48 @@ _CSS = build_css(_t)
 
 st.markdown(f"<style>{_CSS}</style>", unsafe_allow_html=True)
 
+# ─── Launch gate: lightweight name + email (no password) ───────────────────────
+# Gates the workspace until a name + email are entered; loads that user's saved work.
+if not st.session_state.get("user_email"):
+    _lg1, _lg2, _lg3 = st.columns([1, 1.25, 1])
+    with _lg2:
+        st.markdown("<div style='height:8vh'></div>", unsafe_allow_html=True)
+        _active_logo = _logo_b64_light if _is_light else _logo_b64_dark
+        if _active_logo:
+            st.markdown(
+                f'<img src="data:image/png;base64,{_active_logo}" '
+                f'style="width:62%;max-height:120px;object-fit:contain;display:block;'
+                f'margin:0 auto 6px">', unsafe_allow_html=True)
+        st.markdown(
+            "<div class='sb-brand' style='text-align:center'>PermanenceOS</div>"
+            "<div class='sb-sub' style='text-align:center;margin-bottom:14px'>"
+            "AI-Powered Structural Design</div>", unsafe_allow_html=True)
+        with st.form("login_gate", clear_on_submit=False):
+            _ln = st.text_input("Your name", placeholder="e.g. Rania Chihaoui")
+            _le = st.text_input("Your email", placeholder="e.g. rania@studio.com")
+            _lgo = st.form_submit_button("Continue  ▶", width="stretch", type="primary")
+        if _lgo:
+            if _ln.strip() and "@" in _le and "." in _le.split("@")[-1]:
+                st.session_state.user_name  = _ln.strip()
+                st.session_state.user_email = _le.strip()
+                _load_user_store()           # restore this user's saved work
+                st.rerun()
+            else:
+                st.error("Please enter your name and a valid email address.")
+        st.markdown(
+            f"<div style='text-align:center;font-size:.6rem;color:{_MUT};margin-top:10px'>"
+            "Your work is saved per email and restored next time you sign in.</div>",
+            unsafe_allow_html=True)
+    st.stop()
+
 # ─── JS bridge ────────────────────────────────────────────────────────────────
 st.html(SELECTION_BRIDGE_JS, unsafe_allow_javascript=True, width="content")
 
 
 # ─── layout data ──────────────────────────────────────────────────────────────
-# currentLayout in session state is the authoritative source.
-# On first load after a browser refresh we recover from disk (if the user had
-# previously uploaded) so they don't lose work on an accidental refresh.
-if st.session_state.currentLayout is None and EDITED_LAYOUT_PATH.exists():
-    _recovered = _load_working_layout()
-    if _recovered:
-        st.session_state.currentLayout = _recovered
-        st.session_state.setupDone = True   # disk file = previously committed
+# currentLayout in session state is the authoritative source. Cross-session recovery
+# is per-user via _load_user_store() (run at the launch gate), so we no longer recover
+# from the shared working file (which could leak another user's layout).
 
 layout_obj      = st.session_state.currentLayout or {}
 _lid            = layout_obj.get("layoutId", "")
@@ -1137,12 +1338,15 @@ _S = AppState(
         "is_multilevel": is_multilevel,
         "get_level_count": get_level_count,
         "llm_is_reachable": _llm_is_reachable,
+        "clear_user_store": _clear_user_store,
     },
     is_light=_is_light, layout_obj=layout_obj, eval_result=er, lid=_lid,
     n_cols=n_cols, n_beams=n_beams, has_fail=_has_fail, mat_now=_mat_now,
     sdl_now=_sdl_now, ll_now=_ll_now,
     logo_light=_logo_b64_light, logo_dark=_logo_b64_dark,
     edited_layout_path=EDITED_LAYOUT_PATH, repo_root=REPO_ROOT,
+    user_name=st.session_state.get("user_name", ""),
+    user_email=st.session_state.get("user_email", ""),
 )
 
 # ─── agent drawer: process query + inject global slide-out panel ───────────────
@@ -1247,9 +1451,6 @@ if submitted and prompt_input.strip():
         _gen_advisory = _resp[len("GENERATE_GRID"):].strip()
         with st.spinner("Generating structural grid options…"):
             st.session_state.grid_options = _run_grid_options(layout_obj, _mat_now)
-        for _gi, _gopt in enumerate(st.session_state.grid_options, 1):
-            (REPO_ROOT / f"team_01_option_{_gi}.json").write_text(
-                json.dumps(_gopt["layout"], indent=2, ensure_ascii=False), encoding="utf-8")
         # Auto-apply option 1 to the working layout
         if st.session_state.grid_options:
             _ag_opt = st.session_state.grid_options[0].get("layout", {})
@@ -1319,10 +1520,12 @@ if submitted and prompt_input.strip():
                                                  _cdx, _cdy, _mat_now))
                     if _count_elements(_new_l) != _count_elements(layout_obj):
                         _push_version(_new_l)
-                        st.session_state.eval_result = None
+                        _status = _auto_eval_after_change(_new_l)   # see effect immediately
                         _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
-                                 + f"Added a column at ({_cdx:+g}, {_cdy:+g}) m from **{_rid_c}**. "
-                                   "Add a beam to connect it, then re-run analysis.")
+                                 + f"Added a column at ({_cdx:+g}, {_cdy:+g}) m from **{_rid_c}** — {_status}. "
+                                 "Note: a free-standing column carries no load until a **beam sits on it** — "
+                                 "to actually fix a failing beam, put the column under it "
+                                 "(*\"add a midspan column on <beam>\"*) or connect it (*\"add a beam between …\"*).")
                     else:
                         _resp = f"Couldn't add the column — **{_rid_c}** not found."
             elif _tn == "add_beam":
@@ -1332,9 +1535,9 @@ if submitted and prompt_input.strip():
                     _new_l = json.loads(_add_beam(json.dumps(layout_obj), _ca, _cb, None, _mat_now))
                     if _count_elements(_new_l) != _count_elements(layout_obj):
                         _push_version(_new_l)
-                        st.session_state.eval_result = None
+                        _status = _auto_eval_after_change(_new_l)
                         _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
-                                 + f"Added a beam between **{_ca}** and **{_cb}**. Re-run analysis to check it.")
+                                 + f"Added a beam between **{_ca}** and **{_cb}** — {_status}.")
                     else:
                         _resp = (f"Couldn't add a beam between **{_ca}** and **{_cb}** — they must share "
                                  "an X or a Y (I never create diagonal beams). Pick two columns in the "
@@ -1514,6 +1717,7 @@ with tab_mod:
                                     else layout_obj
                                 ),
         })
+        _save_user_store()   # persist snapshots to the user's saved work
         st.rerun()
 
     if _run_clicked:
@@ -1631,14 +1835,15 @@ with tab_mod:
                     st.rerun()
         # Native toolbar (replaces the in-iframe JS bridge toolbar)
         _is_ml = is_multilevel(_plan_layout)
-        _tb_cols = ([0.55, 1.1, 0.7, 0.6, 0.85, 3.2] if _is_ml
-                    else [0.55, 0.7, 0.6, 0.85, 3.8])
+        _tb_cols = ([0.55, 1.1, 0.7, 0.6, 0.85, 1.0, 2.2] if _is_ml
+                    else [0.55, 0.7, 0.6, 0.85, 1.0, 2.8])
         _tb = st.columns(_tb_cols, gap="small")
         _tb1 = _tb[0]
         _tb_lvl = _tb[1] if _is_ml else None
         _tb2 = _tb[2] if _is_ml else _tb[1]
         _tb3 = _tb[3] if _is_ml else _tb[2]
         _tb4 = _tb[4] if _is_ml else _tb[3]
+        _tb5 = _tb[5] if _is_ml else _tb[4]
         with _tb1:
             if st.button("3D" if _vm == "2D" else "2D",
                          key="tb_vm_btn", width="stretch"):
@@ -1678,6 +1883,12 @@ with tab_mod:
                                   help="Show foundation footing boxes under ground-floor columns (3D).")
             if _new_foot != st.session_state.footings_on:
                 st.session_state.footings_on = _new_foot
+        with _tb5:
+            _new_conf = st.toggle("Conflicts", value=st.session_state.show_conflicts,
+                                  key="tb_conf_tog",
+                                  help="Highlight columns/beams that clash with a window or door (magenta). Off by default.")
+            if _new_conf != st.session_state.show_conflicts:
+                st.session_state.show_conflicts = _new_conf
 
         # If the active level has no structure yet, say so (explains "switching level
         # shows nothing" before a grid is generated on that level).
@@ -1690,12 +1901,14 @@ with tab_mod:
             )
 
         # ── Structure ↔ opening (window/door) clash detection ──
-        if _al_now == "__ALL__":
-            _clash_ids = set()
-            for _lk in get_level_keys(_plan_layout):
-                _clash_ids |= _opening_clashes(_plan_layout, _lk)
-        else:
-            _clash_ids = _opening_clashes(_plan_layout, _al_now)
+        # Only computed/shown when the "Conflicts" toggle is on (magenta off by default).
+        _clash_ids = set()
+        if st.session_state.get("show_conflicts", False):
+            if _al_now == "__ALL__":
+                for _lk in get_level_keys(_plan_layout):
+                    _clash_ids |= _opening_clashes(_plan_layout, _lk)
+            else:
+                _clash_ids = _opening_clashes(_plan_layout, _al_now)
         if _clash_ids:
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:6px;margin:6px 0 0;'
@@ -1804,6 +2017,7 @@ with tab_mod:
                     before_layout=_before_lay,
                     labels=st.session_state.labels_on,
                     footings=st.session_state.footings_on,
+                    show_conflicts=st.session_state.show_conflicts,
                 ),
                 height=520,
                 scrolling=False,
@@ -2622,23 +2836,31 @@ with tab_cmp:
             # Direct button (NOT inside a popover — a popover closes on the rerun and the
             # result would never show). The report renders in a persistent panel below.
             if st.button("🧾 AI Report", key="cmp_gen_report", width="stretch",
-                         help="Generate a structural report (shown below) + a downloadable PDF."):
-                with st.spinner("Writing structural report…"):
-                    _rep = ""
-                    if _llm_is_reachable():
-                        try:
-                            _rep = _run_agent_chat(
-                                "Write a concise structural report for this layout: summarise the "
-                                "framing system, materials, spans, any failing elements and the "
-                                "recommended fixes. Plain prose, no JSON.",
-                                layout_obj, er,
-                            )
-                        except Exception as _rerr:
-                            st.session_state["_last_error"] = f"AI report: {_rerr}"
-                            _rep = ""
-                    if (not _rep) or _rep.startswith(("APPLY_TOOL:", "APPLY_MATERIAL:",
-                                                      "GENERATE_GRID", "EVALUATE", "FIX_FAILING")):
-                        _rep = _structural_summary_text(layout_obj, er)
+                         help="Generate an intervention report (shown below) + a downloadable PDF."):
+                with st.spinner("Writing intervention report…"):
+                    # If we have the original baseline, produce a CHANGE-focused intervention
+                    # report (what changed, type, complexity, cost) + a diff plan in the PDF.
+                    _orig = st.session_state.get("diff_baseline")
+                    if _orig:
+                        _rep = _intervention_report_text(_orig, layout_obj, er)
+                        st.session_state["_cmp_report_before"] = json.dumps(_orig)
+                    else:
+                        st.session_state["_cmp_report_before"] = ""
+                        _rep = ""
+                        if _llm_is_reachable():
+                            try:
+                                _rep = _run_agent_chat(
+                                    "Write a concise structural report for this layout: summarise the "
+                                    "framing system, materials, spans, any failing elements and the "
+                                    "recommended fixes. Plain prose, no JSON.",
+                                    layout_obj, er,
+                                )
+                            except Exception as _rerr:
+                                st.session_state["_last_error"] = f"AI report: {_rerr}"
+                                _rep = ""
+                        if (not _rep) or _rep.startswith(("APPLY_TOOL:", "APPLY_MATERIAL:",
+                                                          "GENERATE_GRID", "EVALUATE", "FIX_FAILING")):
+                            _rep = _structural_summary_text(layout_obj, er)
                 st.session_state["_cmp_report_txt"] = _rep
                 st.rerun()
         with _rp4:
@@ -2663,6 +2885,10 @@ with tab_cmp:
                         tuple((h.get("prompt") or h.get("label") or "")
                               for h in st.session_state.get("history", [])[-7:]),
                         True, _rep_txt,
+                        st.session_state.get("_cmp_report_before", ""),
+                        (f"{st.session_state.get('user_name','')} "
+                         f"({st.session_state.get('user_email','')})"
+                         if st.session_state.get("user_name") else ""),
                     )
                     _rpc1, _rpc2 = st.columns(2, gap="small")
                     with _rpc1:

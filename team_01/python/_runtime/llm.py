@@ -195,24 +195,36 @@ def _parse_llm_json(content: str) -> dict[str, Any]:
             raise RuntimeError("LLM JSON response must be an object")
         return parsed
     except json.JSONDecodeError as exc:
-        if "Extra data" not in str(exc):
-            raise
+        # JSONL (one tool_call per line) — handled below for the "Extra data" case.
+        if "Extra data" in str(exc):
+            lines = [line.strip() for line in content.splitlines() if line.strip()]
+            try:
+                tool_calls: list[dict[str, Any]] = []
+                for line in lines:
+                    parsed_line = json.loads(line)
+                    tc = parsed_line.get("tool_call") if isinstance(parsed_line, dict) else None
+                    if isinstance(tc, dict):
+                        tool_calls.append(tc)
+                if tool_calls:
+                    return {"tool_calls": tool_calls}
+            except Exception:
+                pass
 
-    lines = [line.strip() for line in content.splitlines() if line.strip()]
-    if not lines:
-        raise RuntimeError("LLM response was empty")
-
-    tool_calls: list[dict[str, Any]] = []
-    for line in lines:
-        parsed_line = json.loads(line)
-        if not isinstance(parsed_line, dict):
-            raise RuntimeError("Each JSON line must be an object")
-        tool_call = parsed_line.get("tool_call")
-        if not isinstance(tool_call, dict):
-            raise RuntimeError("Each JSON line must contain 'tool_call'")
-        tool_calls.append(tool_call)
-
-    return {"tool_calls": tool_calls}
+    # Lenient recovery for weaker local models: extract the first {...} object and try
+    # strict JSON, then Python-literal (handles single-quoted 'action'/'name' keys) +
+    # trailing prose after the object.
+    import ast as _ast
+    a, b = content.find("{"), content.rfind("}")
+    if a != -1 and b > a:
+        frag = content[a:b + 1]
+        for _loader in (json.loads, _ast.literal_eval):
+            try:
+                p = _loader(frag)
+                if isinstance(p, dict):
+                    return p
+            except Exception:
+                pass
+    raise RuntimeError("Could not parse LLM JSON response")
 
 
 def _normalize_llm_decision(parsed: dict[str, Any]) -> dict[str, Any]:
