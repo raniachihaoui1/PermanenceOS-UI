@@ -198,10 +198,11 @@ def render_sidebar(s: AppState):
         _gopts_sb  = st.session_state.grid_options
         _gate_off  = not st.session_state.get("setupDone", False)
         st.checkbox(
-            "Respect openings", value=st.session_state.get("respect_openings", True),
+            "Respect openings", value=st.session_state.get("respect_openings", False),
             key="respect_openings",
-            help="When generating a grid, slide whole grid-lines so columns/beams clear "
-                 "doors & windows. Stays orthogonal and keeps columns stacked.",
+            help="Optional: nudge INTERNAL grid-lines off doors/windows when generating "
+                 "(perimeter columns are never moved). Off = the clean grid that follows "
+                 "the building outline exactly.",
         )
         if st.button("⊕  Generate Grid", width="stretch",
                      type="primary", key="btn_gen_main", disabled=_gate_off):

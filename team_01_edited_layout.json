@@ -770,7 +770,7 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -802,7 +802,7 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -818,7 +818,7 @@
           "geometry": [
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -850,7 +850,7 @@
           "geometry": [
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -866,7 +866,7 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -882,7 +882,7 @@
           "geometry": [
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -898,7 +898,7 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -929,7 +929,7 @@
           "name": "Col_E1",
           "geometry": [
             [
-              5.6,
+              5.25,
               0
             ]
           ],
@@ -945,7 +945,7 @@
           "name": "Col_E2",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ]
           ],
@@ -961,8 +961,8 @@
           "name": "Col_E4",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -977,7 +977,7 @@
           "name": "Col_E6",
           "geometry": [
             [
-              5.6,
+              5.25,
               7.0
             ]
           ],
@@ -993,8 +993,8 @@
           "name": "Col_E7",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -1009,7 +1009,7 @@
           "name": "Col_E8",
           "geometry": [
             [
-              5.6,
+              5.25,
               10.0
             ]
           ],
@@ -1058,23 +1058,7 @@
           "geometry": [
             [
               7.85,
-              4.1
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "F5",
-          "name": "Col_F5",
-          "geometry": [
-            [
-              7.85,
-              6.2
+              4.5
             ]
           ],
           "attributes": {
@@ -1106,7 +1090,7 @@
           "geometry": [
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -1154,7 +1138,7 @@
           "geometry": [
             [
               11.7,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1170,7 +1154,23 @@
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
+          }
+        },
+        {
+          "id": "G6",
+          "name": "Col_G6",
+          "geometry": [
+            [
+              11.7,
+              7.0
             ]
           ],
           "attributes": {
@@ -1186,7 +1186,7 @@
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -1217,8 +1217,8 @@
           "name": "Col_H7",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -1233,7 +1233,7 @@
           "name": "Col_H8",
           "geometry": [
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -1266,7 +1266,7 @@
           "geometry": [
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -1282,7 +1282,7 @@
           "geometry": [
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -1298,7 +1298,7 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ],
             [
               0.45,
@@ -1322,11 +1322,11 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ],
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -1370,11 +1370,11 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ],
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -1394,11 +1394,11 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ],
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1418,11 +1418,11 @@
           "geometry": [
             [
               1,
-              6.2
+              6.5
             ],
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -1446,7 +1446,7 @@
             ],
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1469,7 +1469,7 @@
               0
             ],
             [
-              5.6,
+              5.25,
               0
             ]
           ],
@@ -1490,11 +1490,11 @@
           "geometry": [
             [
               1.45,
-              4.1
+              4.5
             ],
             [
               3.95,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1514,11 +1514,11 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ],
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -1538,11 +1538,11 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ],
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -1562,7 +1562,7 @@
           "geometry": [
             [
               3.95,
-              6.2
+              6.5
             ],
             [
               3.95,
@@ -1590,7 +1590,7 @@
             ],
             [
               3.95,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -1613,7 +1613,7 @@
               7.0
             ],
             [
-              5.6,
+              5.25,
               7.0
             ]
           ],
@@ -1634,7 +1634,7 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ],
             [
               3.95,
@@ -1658,11 +1658,11 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ],
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -1681,11 +1681,11 @@
           "name": "Beam_E1-E2",
           "geometry": [
             [
-              5.6,
+              5.25,
               0
             ],
             [
-              5.6,
+              5.25,
               2.1
             ]
           ],
@@ -1705,12 +1705,12 @@
           "name": "Beam_E2-E4",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ],
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -1729,7 +1729,7 @@
           "name": "Beam_E2-F2",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ],
             [
@@ -1753,11 +1753,11 @@
           "name": "Beam_E4-E6",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ],
             [
-              5.6,
+              5.25,
               7.0
             ]
           ],
@@ -1777,12 +1777,12 @@
           "name": "Beam_E4-F4",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ],
             [
               7.85,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1801,7 +1801,7 @@
           "name": "Beam_E6-F6",
           "geometry": [
             [
-              5.6,
+              5.25,
               7.0
             ],
             [
@@ -1825,11 +1825,11 @@
           "name": "Beam_E7-E8",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ],
             [
-              5.6,
+              5.25,
               10.0
             ]
           ],
@@ -1849,12 +1849,12 @@
           "name": "Beam_E7-F7",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ],
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -1873,7 +1873,7 @@
           "name": "Beam_E8-F8",
           "geometry": [
             [
-              5.6,
+              5.25,
               10.0
             ],
             [
@@ -1926,7 +1926,7 @@
             ],
             [
               7.85,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -1965,21 +1965,21 @@
           }
         },
         {
-          "id": "F4-F5",
-          "name": "Beam_F4-F5",
+          "id": "F4-F6",
+          "name": "Beam_F4-F6",
           "geometry": [
             [
               7.85,
-              4.1
+              4.5
             ],
             [
               7.85,
-              6.2
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.0,
+            "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -1994,59 +1994,11 @@
           "geometry": [
             [
               7.85,
-              4.1
+              4.5
             ],
             [
               11.7,
-              4.1
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F5-F6",
-          "name": "Beam_F5-F6",
-          "geometry": [
-            [
-              7.85,
-              6.2
-            ],
-            [
-              7.85,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 0.5,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F5-G5",
-          "name": "Beam_F5-G5",
-          "geometry": [
-            [
-              7.85,
-              6.2
-            ],
-            [
-              11.7,
-              6.2
+              4.5
             ]
           ],
           "attributes": {
@@ -2070,7 +2022,7 @@
             ],
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -2085,12 +2037,36 @@
           }
         },
         {
+          "id": "F6-G6",
+          "name": "Beam_F6-G6",
+          "geometry": [
+            [
+              7.85,
+              7.0
+            ],
+            [
+              11.7,
+              7.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
           "id": "F7-F8",
           "name": "Beam_F7-F8",
           "geometry": [
             [
               7.85,
-              8.6
+              8.25
             ],
             [
               7.85,
@@ -2142,7 +2118,7 @@
             ],
             [
               11.7,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -2186,11 +2162,11 @@
           "geometry": [
             [
               11.7,
-              4.1
+              4.5
             ],
             [
               11.7,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -2205,21 +2181,21 @@
           }
         },
         {
-          "id": "G5-G7",
-          "name": "Beam_G5-G7",
+          "id": "G5-G6",
+          "name": "Beam_G5-G6",
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
             ],
             [
               11.7,
-              8.6
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 1.75,
+            "length": 0.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -2234,11 +2210,11 @@
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
             ],
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -2253,12 +2229,36 @@
           }
         },
         {
+          "id": "G6-G7",
+          "name": "Beam_G6-G7",
+          "geometry": [
+            [
+              11.7,
+              7.0
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 1.25,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
           "id": "G7-G8",
           "name": "Beam_G7-G8",
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ],
             [
               11.7,
@@ -2282,11 +2282,11 @@
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ],
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -2309,7 +2309,7 @@
               10.0
             ],
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -2329,11 +2329,11 @@
           "name": "Beam_H7-H8",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ],
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -2353,12 +2353,12 @@
           "name": "Beam_H7-I7",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ],
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -2382,7 +2382,7 @@
             ],
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -2402,11 +2402,11 @@
           "geometry": [
             [
               15.6,
-              6.2
+              6.5
             ],
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -3191,7 +3191,7 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3223,7 +3223,7 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3239,7 +3239,7 @@
           "geometry": [
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3271,7 +3271,7 @@
           "geometry": [
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3287,7 +3287,7 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3303,7 +3303,7 @@
           "geometry": [
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3319,7 +3319,7 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -3350,7 +3350,7 @@
           "name": "Col_E1",
           "geometry": [
             [
-              5.6,
+              5.25,
               0
             ]
           ],
@@ -3366,7 +3366,7 @@
           "name": "Col_E2",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ]
           ],
@@ -3382,8 +3382,8 @@
           "name": "Col_E4",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -3398,7 +3398,7 @@
           "name": "Col_E6",
           "geometry": [
             [
-              5.6,
+              5.25,
               7.0
             ]
           ],
@@ -3414,8 +3414,8 @@
           "name": "Col_E7",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -3430,7 +3430,7 @@
           "name": "Col_E8",
           "geometry": [
             [
-              5.6,
+              5.25,
               10.0
             ]
           ],
@@ -3479,23 +3479,7 @@
           "geometry": [
             [
               7.85,
-              4.1
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "F5",
-          "name": "Col_F5",
-          "geometry": [
-            [
-              7.85,
-              6.2
+              4.5
             ]
           ],
           "attributes": {
@@ -3527,7 +3511,7 @@
           "geometry": [
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -3575,7 +3559,7 @@
           "geometry": [
             [
               11.7,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3591,7 +3575,23 @@
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
+          }
+        },
+        {
+          "id": "G6",
+          "name": "Col_G6",
+          "geometry": [
+            [
+              11.7,
+              7.0
             ]
           ],
           "attributes": {
@@ -3607,7 +3607,7 @@
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -3638,8 +3638,8 @@
           "name": "Col_H7",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -3654,7 +3654,7 @@
           "name": "Col_H8",
           "geometry": [
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -3687,7 +3687,7 @@
           "geometry": [
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3703,7 +3703,7 @@
           "geometry": [
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -3719,7 +3719,7 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ],
             [
               0.45,
@@ -3743,11 +3743,11 @@
           "geometry": [
             [
               0.45,
-              6.2
+              6.5
             ],
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3791,11 +3791,11 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ],
             [
               1,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3815,11 +3815,11 @@
           "geometry": [
             [
               1,
-              4.1
+              4.5
             ],
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3839,11 +3839,11 @@
           "geometry": [
             [
               1,
-              6.2
+              6.5
             ],
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3867,7 +3867,7 @@
             ],
             [
               1.45,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3890,7 +3890,7 @@
               0
             ],
             [
-              5.6,
+              5.25,
               0
             ]
           ],
@@ -3911,11 +3911,11 @@
           "geometry": [
             [
               1.45,
-              4.1
+              4.5
             ],
             [
               3.95,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -3935,11 +3935,11 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ],
             [
               3.95,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -3959,11 +3959,11 @@
           "geometry": [
             [
               3.95,
-              4.1
+              4.5
             ],
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -3983,7 +3983,7 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ],
             [
               3.95,
@@ -4007,11 +4007,11 @@
           "geometry": [
             [
               3.95,
-              8.6
+              8.25
             ],
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -4030,11 +4030,11 @@
           "name": "Beam_E1-E2",
           "geometry": [
             [
-              5.6,
+              5.25,
               0
             ],
             [
-              5.6,
+              5.25,
               2.1
             ]
           ],
@@ -4054,12 +4054,12 @@
           "name": "Beam_E2-E4",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ],
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ]
           ],
           "attributes": {
@@ -4078,7 +4078,7 @@
           "name": "Beam_E2-F2",
           "geometry": [
             [
-              5.6,
+              5.25,
               2.1
             ],
             [
@@ -4102,11 +4102,11 @@
           "name": "Beam_E4-E6",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ],
             [
-              5.6,
+              5.25,
               7.0
             ]
           ],
@@ -4126,12 +4126,12 @@
           "name": "Beam_E4-F4",
           "geometry": [
             [
-              5.6,
-              4.1
+              5.25,
+              4.5
             ],
             [
               7.85,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -4150,7 +4150,7 @@
           "name": "Beam_E6-F6",
           "geometry": [
             [
-              5.6,
+              5.25,
               7.0
             ],
             [
@@ -4174,11 +4174,11 @@
           "name": "Beam_E7-E8",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ],
             [
-              5.6,
+              5.25,
               10.0
             ]
           ],
@@ -4198,12 +4198,12 @@
           "name": "Beam_E7-F7",
           "geometry": [
             [
-              5.6,
-              8.6
+              5.25,
+              8.25
             ],
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -4222,7 +4222,7 @@
           "name": "Beam_E8-F8",
           "geometry": [
             [
-              5.6,
+              5.25,
               10.0
             ],
             [
@@ -4275,7 +4275,7 @@
             ],
             [
               7.85,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -4314,21 +4314,21 @@
           }
         },
         {
-          "id": "F4-F5",
-          "name": "Beam_F4-F5",
+          "id": "F4-F6",
+          "name": "Beam_F4-F6",
           "geometry": [
             [
               7.85,
-              4.1
+              4.5
             ],
             [
               7.85,
-              6.2
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.0,
+            "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -4343,59 +4343,11 @@
           "geometry": [
             [
               7.85,
-              4.1
+              4.5
             ],
             [
               11.7,
-              4.1
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F5-F6",
-          "name": "Beam_F5-F6",
-          "geometry": [
-            [
-              7.85,
-              6.2
-            ],
-            [
-              7.85,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 0.5,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F5-G5",
-          "name": "Beam_F5-G5",
-          "geometry": [
-            [
-              7.85,
-              6.2
-            ],
-            [
-              11.7,
-              6.2
+              4.5
             ]
           ],
           "attributes": {
@@ -4419,7 +4371,7 @@
             ],
             [
               7.85,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -4434,12 +4386,36 @@
           }
         },
         {
+          "id": "F6-G6",
+          "name": "Beam_F6-G6",
+          "geometry": [
+            [
+              7.85,
+              7.0
+            ],
+            [
+              11.7,
+              7.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
           "id": "F7-F8",
           "name": "Beam_F7-F8",
           "geometry": [
             [
               7.85,
-              8.6
+              8.25
             ],
             [
               7.85,
@@ -4491,7 +4467,7 @@
             ],
             [
               11.7,
-              4.1
+              4.5
             ]
           ],
           "attributes": {
@@ -4535,11 +4511,11 @@
           "geometry": [
             [
               11.7,
-              4.1
+              4.5
             ],
             [
               11.7,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -4554,21 +4530,21 @@
           }
         },
         {
-          "id": "G5-G7",
-          "name": "Beam_G5-G7",
+          "id": "G5-G6",
+          "name": "Beam_G5-G6",
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
             ],
             [
               11.7,
-              8.6
+              7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 1.75,
+            "length": 0.5,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -4583,11 +4559,11 @@
           "geometry": [
             [
               11.7,
-              6.2
+              6.5
             ],
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -4602,12 +4578,36 @@
           }
         },
         {
+          "id": "G6-G7",
+          "name": "Beam_G6-G7",
+          "geometry": [
+            [
+              11.7,
+              7.0
+            ],
+            [
+              11.7,
+              8.25
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 1.25,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
           "id": "G7-G8",
           "name": "Beam_G7-G8",
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ],
             [
               11.7,
@@ -4631,11 +4631,11 @@
           "geometry": [
             [
               11.7,
-              8.6
+              8.25
             ],
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ]
           ],
           "attributes": {
@@ -4658,7 +4658,7 @@
               10.0
             ],
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -4678,11 +4678,11 @@
           "name": "Beam_H7-H8",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ],
             [
-              14.6,
+              14.25,
               10.0
             ]
           ],
@@ -4702,12 +4702,12 @@
           "name": "Beam_H7-I7",
           "geometry": [
             [
-              14.6,
-              8.6
+              14.25,
+              8.25
             ],
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {
@@ -4731,7 +4731,7 @@
             ],
             [
               15.6,
-              6.2
+              6.5
             ]
           ],
           "attributes": {
@@ -4751,11 +4751,11 @@
           "geometry": [
             [
               15.6,
-              6.2
+              6.5
             ],
             [
               15.6,
-              8.6
+              8.25
             ]
           ],
           "attributes": {

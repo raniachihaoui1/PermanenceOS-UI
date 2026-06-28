@@ -976,7 +976,7 @@ def _ensure_session() -> None:
         "compare_mode":    False,
         "labels_on":       False,
         "footings_on":     True,
-        "respect_openings": True,
+        "respect_openings": False,   # opt-in: keep Generate Grid's clean perimeter-following grid
         "auto_eval":       True,
         "snapshots":       [],
         "theme":           "dark",
