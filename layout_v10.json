@@ -770,7 +770,7 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -802,7 +802,7 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -818,7 +818,7 @@
           "geometry": [
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -850,7 +850,7 @@
           "geometry": [
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -866,7 +866,7 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -882,7 +882,7 @@
           "geometry": [
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -898,7 +898,7 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -929,7 +929,7 @@
           "name": "Col_E1",
           "geometry": [
             [
-              5.25,
+              5.6,
               0
             ]
           ],
@@ -945,7 +945,7 @@
           "name": "Col_E2",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ]
           ],
@@ -961,8 +961,8 @@
           "name": "Col_E4",
           "geometry": [
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
@@ -977,7 +977,7 @@
           "name": "Col_E6",
           "geometry": [
             [
-              5.25,
+              5.6,
               7.0
             ]
           ],
@@ -993,8 +993,8 @@
           "name": "Col_E7",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ]
           ],
           "attributes": {
@@ -1009,7 +1009,7 @@
           "name": "Col_E8",
           "geometry": [
             [
-              5.25,
+              5.6,
               10.0
             ]
           ],
@@ -1042,27 +1042,11 @@
           "geometry": [
             [
               7.85,
-              2.85
+              0.85
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
-          "id": "F4",
-          "name": "Col_F4",
-          "geometry": [
-            [
-              7.85,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
             "material": "RCC",
             "conflict": null,
             "dimensions": "175x175"
@@ -1090,11 +1074,27 @@
           "geometry": [
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
+          }
+        },
+        {
+          "id": "F8",
+          "name": "Col_F8",
+          "geometry": [
+            [
+              7.85,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
             "material": "RCC",
             "conflict": null,
             "dimensions": "175x175"
@@ -1117,28 +1117,12 @@
           }
         },
         {
-          "id": "G4",
-          "name": "Col_G4",
-          "geometry": [
-            [
-              11.7,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
           "id": "G5",
           "name": "Col_G5",
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1154,7 +1138,7 @@
           "geometry": [
             [
               11.7,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -1165,28 +1149,12 @@
           }
         },
         {
-          "id": "G8",
-          "name": "Col_G8",
-          "geometry": [
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "material": "RCC",
-            "conflict": null,
-            "dimensions": "175x175"
-          }
-        },
-        {
           "id": "H7",
           "name": "Col_H7",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ]
           ],
           "attributes": {
@@ -1201,7 +1169,7 @@
           "name": "Col_H8",
           "geometry": [
             [
-              14.25,
+              14.6,
               10.0
             ]
           ],
@@ -1234,7 +1202,7 @@
           "geometry": [
             [
               15.6,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1250,7 +1218,7 @@
           "geometry": [
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -1266,7 +1234,7 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ],
             [
               0.45,
@@ -1290,11 +1258,11 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ],
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1338,11 +1306,11 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ],
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1362,11 +1330,11 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ],
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -1386,11 +1354,11 @@
           "geometry": [
             [
               1,
-              6.5
+              6.2
             ],
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1414,7 +1382,7 @@
             ],
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -1437,7 +1405,7 @@
               0
             ],
             [
-              5.25,
+              5.6,
               0
             ]
           ],
@@ -1458,11 +1426,11 @@
           "geometry": [
             [
               1.45,
-              4.5
+              4.1
             ],
             [
               3.95,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -1482,11 +1450,11 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ],
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -1506,11 +1474,11 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ],
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
@@ -1530,7 +1498,7 @@
           "geometry": [
             [
               3.95,
-              6.5
+              6.2
             ],
             [
               3.95,
@@ -1558,7 +1526,7 @@
             ],
             [
               3.95,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -1581,7 +1549,7 @@
               7.0
             ],
             [
-              5.25,
+              5.6,
               7.0
             ]
           ],
@@ -1602,7 +1570,7 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ],
             [
               3.95,
@@ -1626,11 +1594,11 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ],
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ]
           ],
           "attributes": {
@@ -1649,11 +1617,11 @@
           "name": "Beam_E1-E2",
           "geometry": [
             [
-              5.25,
+              5.6,
               0
             ],
             [
-              5.25,
+              5.6,
               2.1
             ]
           ],
@@ -1673,12 +1641,12 @@
           "name": "Beam_E2-E4",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ],
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
@@ -1697,7 +1665,7 @@
           "name": "Beam_E2-F2",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ],
             [
@@ -1721,11 +1689,11 @@
           "name": "Beam_E4-E6",
           "geometry": [
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ],
             [
-              5.25,
+              5.6,
               7.0
             ]
           ],
@@ -1741,35 +1709,11 @@
           }
         },
         {
-          "id": "E4-F4",
-          "name": "Beam_E4-F4",
-          "geometry": [
-            [
-              5.25,
-              4.5
-            ],
-            [
-              7.85,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 2.6,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "E6-F6",
           "name": "Beam_E6-F6",
           "geometry": [
             [
-              5.25,
+              5.6,
               7.0
             ],
             [
@@ -1793,11 +1737,11 @@
           "name": "Beam_E7-E8",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ],
             [
-              5.25,
+              5.6,
               10.0
             ]
           ],
@@ -1817,16 +1761,40 @@
           "name": "Beam_E7-F7",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ],
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "internal",
+            "length": 2.6,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "E8-F8",
+          "name": "Beam_E8-F8",
+          "geometry": [
+            [
+              5.6,
+              10.0
+            ],
+            [
+              7.85,
+              10.0
+            ]
+          ],
+          "attributes": {
+            "type": "perimeter",
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
@@ -1846,7 +1814,7 @@
             ],
             [
               7.85,
-              2.85
+              0.85
             ]
           ],
           "attributes": {
@@ -1861,36 +1829,12 @@
           }
         },
         {
-          "id": "F3-F4",
-          "name": "Beam_F3-F4",
-          "geometry": [
-            [
-              7.85,
-              2.85
-            ],
-            [
-              7.85,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.65,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "F3-G3",
           "name": "Beam_F3-G3",
           "geometry": [
             [
               7.85,
-              2.85
+              0.85
             ],
             [
               11.7,
@@ -1899,54 +1843,6 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F4-F6",
-          "name": "Beam_F4-F6",
-          "geometry": [
-            [
-              7.85,
-              4.5
-            ],
-            [
-              7.85,
-              7.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 2.5,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "F4-G4",
-          "name": "Beam_F4-G4",
-          "geometry": [
-            [
-              7.85,
-              4.5
-            ],
-            [
-              11.7,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
@@ -1966,7 +1862,7 @@
             ],
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -1981,45 +1877,21 @@
           }
         },
         {
-          "id": "F7-G7",
-          "name": "Beam_F7-G7",
+          "id": "F7-F8",
+          "name": "Beam_F7-F8",
           "geometry": [
             [
               7.85,
-              8.25
+              8.6
             ],
             [
-              11.7,
-              8.25
+              7.85,
+              10.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G3-G4",
-          "name": "Beam_G3-G4",
-          "geometry": [
-            [
-              11.7,
-              2.85
-            ],
-            [
-              11.7,
-              4.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.65,
+            "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
@@ -2053,40 +1925,16 @@
           }
         },
         {
-          "id": "G4-G5",
-          "name": "Beam_G4-G5",
-          "geometry": [
-            [
-              11.7,
-              4.5
-            ],
-            [
-              11.7,
-              6.5
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 2.0,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "G5-G7",
           "name": "Beam_G5-G7",
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ],
             [
               11.7,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -2106,11 +1954,11 @@
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ],
             [
               15.6,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -2125,68 +1973,20 @@
           }
         },
         {
-          "id": "G7-G8",
-          "name": "Beam_G7-G8",
-          "geometry": [
-            [
-              11.7,
-              8.25
-            ],
-            [
-              11.7,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 1.75,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "G7-H7",
           "name": "Beam_G7-H7",
           "geometry": [
             [
               11.7,
-              8.25
+              8.6
             ],
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.55,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
-          "id": "G8-H8",
-          "name": "Beam_G8-H8",
-          "geometry": [
-            [
-              11.7,
-              10.0
-            ],
-            [
-              14.25,
-              10.0
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
@@ -2201,11 +2001,11 @@
           "name": "Beam_H7-H8",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ],
             [
-              14.25,
+              14.6,
               10.0
             ]
           ],
@@ -2225,12 +2025,12 @@
           "name": "Beam_H7-I7",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ],
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -2245,40 +2045,16 @@
           }
         },
         {
-          "id": "I3-I5",
-          "name": "Beam_I3-I5",
-          "geometry": [
-            [
-              15.6,
-              2.85
-            ],
-            [
-              15.6,
-              6.5
-            ]
-          ],
-          "attributes": {
-            "type": "perimeter",
-            "length": 3.65,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "RCC",
-            "conflict": null,
-            "depth": "250",
-            "width": "175"
-          }
-        },
-        {
           "id": "I5-I7",
           "name": "Beam_I5-I7",
           "geometry": [
             [
               15.6,
-              6.5
+              6.2
             ],
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -2293,27 +2069,75 @@
           }
         },
         {
-          "id": "E8-F8",
-          "name": "Beam_E8-F8",
+          "id": "F8-G8",
+          "name": "Beam_F8-G8",
           "geometry": [
             [
-              5.25,
+              7.85,
               10.0
             ],
             [
-              11.7,
+              14.6,
               10.0
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "length": 6.45,
+            "length": 6.75,
             "isWallAligned": null,
             "structuralRole": null,
             "material": "RCC",
             "conflict": null,
-            "depth": "350",
-            "width": "225"
+            "depth": "400",
+            "width": "250"
+          }
+        },
+        {
+          "id": "G3-G4",
+          "name": "Beam_G3-G4",
+          "geometry": [
+            [
+              11.7,
+              2.85
+            ],
+            [
+              11.7,
+              6.2
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.35,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-F6",
+          "name": "Beam_F5-F6",
+          "geometry": [
+            [
+              7.85,
+              7.0
+            ],
+            [
+              7.85,
+              0.85
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 4.15,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
           }
         }
       ]
@@ -3087,14 +2911,14 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3108,9 +2932,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3119,14 +2943,14 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3135,14 +2959,14 @@
           "geometry": [
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3156,9 +2980,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3167,14 +2991,14 @@
           "geometry": [
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3183,14 +3007,14 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3199,14 +3023,14 @@
           "geometry": [
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3215,14 +3039,14 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3236,9 +3060,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3246,15 +3070,15 @@
           "name": "Col_E1",
           "geometry": [
             [
-              5.25,
+              5.6,
               0
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3262,15 +3086,15 @@
           "name": "Col_E2",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3278,15 +3102,15 @@
           "name": "Col_E4",
           "geometry": [
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3294,15 +3118,15 @@
           "name": "Col_E6",
           "geometry": [
             [
-              5.25,
+              5.6,
               7.0
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3310,15 +3134,15 @@
           "name": "Col_E7",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3326,15 +3150,15 @@
           "name": "Col_E8",
           "geometry": [
             [
-              5.25,
+              5.6,
               10.0
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3348,9 +3172,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3364,9 +3188,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3375,14 +3199,30 @@
           "geometry": [
             [
               7.85,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
+          }
+        },
+        {
+          "id": "F5",
+          "name": "Col_F5",
+          "geometry": [
+            [
+              7.85,
+              6.2
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "material": "RCC",
+            "conflict": null,
+            "dimensions": "175x175"
           }
         },
         {
@@ -3396,9 +3236,9 @@
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3407,14 +3247,14 @@
           "geometry": [
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3428,9 +3268,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3444,9 +3284,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3455,14 +3295,14 @@
           "geometry": [
             [
               11.7,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3471,14 +3311,14 @@
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3487,14 +3327,14 @@
           "geometry": [
             [
               11.7,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "internal",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "120x120"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3508,9 +3348,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3518,15 +3358,15 @@
           "name": "Col_H7",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3534,15 +3374,15 @@
           "name": "Col_H8",
           "geometry": [
             [
-              14.25,
+              14.6,
               10.0
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3556,9 +3396,9 @@
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3567,14 +3407,14 @@
           "geometry": [
             [
               15.6,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3583,14 +3423,14 @@
           "geometry": [
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
             "type": "perimeter",
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "dimensions": "100x100"
+            "dimensions": "175x175"
           }
         },
         {
@@ -3599,7 +3439,7 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ],
             [
               0.45,
@@ -3611,10 +3451,10 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "300",
-            "width": "120"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3623,11 +3463,11 @@
           "geometry": [
             [
               0.45,
-              6.5
+              6.2
             ],
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -3635,10 +3475,10 @@
             "length": 0.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3659,10 +3499,10 @@
             "length": 3.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "300",
-            "width": "120"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3671,11 +3511,11 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ],
             [
               1,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -3683,10 +3523,10 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3695,11 +3535,11 @@
           "geometry": [
             [
               1,
-              4.5
+              4.1
             ],
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -3707,10 +3547,10 @@
             "length": 0.45,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3719,11 +3559,11 @@
           "geometry": [
             [
               1,
-              6.5
+              6.2
             ],
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -3731,10 +3571,10 @@
             "length": 2.95,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "300",
-            "width": "120"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3747,7 +3587,7 @@
             ],
             [
               1.45,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -3755,10 +3595,10 @@
             "length": 4.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "480",
-            "width": "200"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3770,7 +3610,7 @@
               0
             ],
             [
-              5.25,
+              5.6,
               0
             ]
           ],
@@ -3779,10 +3619,10 @@
             "length": 3.8,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3791,11 +3631,11 @@
           "geometry": [
             [
               1.45,
-              4.5
+              4.1
             ],
             [
               3.95,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -3803,10 +3643,10 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3815,11 +3655,11 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ],
             [
               3.95,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -3827,10 +3667,10 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3839,11 +3679,11 @@
           "geometry": [
             [
               3.95,
-              4.5
+              4.1
             ],
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
@@ -3851,10 +3691,10 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3863,7 +3703,7 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ],
             [
               3.95,
@@ -3875,10 +3715,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3887,11 +3727,11 @@
           "geometry": [
             [
               3.95,
-              8.25
+              8.6
             ],
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ]
           ],
           "attributes": {
@@ -3899,10 +3739,10 @@
             "length": 1.3,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3910,11 +3750,11 @@
           "name": "Beam_E1-E2",
           "geometry": [
             [
-              5.25,
+              5.6,
               0
             ],
             [
-              5.25,
+              5.6,
               2.1
             ]
           ],
@@ -3923,10 +3763,10 @@
             "length": 2.1,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3934,12 +3774,12 @@
           "name": "Beam_E2-E4",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ],
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ]
           ],
           "attributes": {
@@ -3947,10 +3787,10 @@
             "length": 2.4,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3958,7 +3798,7 @@
           "name": "Beam_E2-F2",
           "geometry": [
             [
-              5.25,
+              5.6,
               2.1
             ],
             [
@@ -3971,10 +3811,10 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -3982,11 +3822,11 @@
           "name": "Beam_E4-E6",
           "geometry": [
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ],
             [
-              5.25,
+              5.6,
               7.0
             ]
           ],
@@ -3995,10 +3835,10 @@
             "length": 2.5,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4006,12 +3846,12 @@
           "name": "Beam_E4-F4",
           "geometry": [
             [
-              5.25,
-              4.5
+              5.6,
+              4.1
             ],
             [
               7.85,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -4019,10 +3859,10 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4030,7 +3870,7 @@
           "name": "Beam_E6-F6",
           "geometry": [
             [
-              5.25,
+              5.6,
               7.0
             ],
             [
@@ -4043,10 +3883,10 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4054,11 +3894,11 @@
           "name": "Beam_E7-E8",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ],
             [
-              5.25,
+              5.6,
               10.0
             ]
           ],
@@ -4067,10 +3907,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4078,12 +3918,12 @@
           "name": "Beam_E7-F7",
           "geometry": [
             [
-              5.25,
-              8.25
+              5.6,
+              8.6
             ],
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -4091,10 +3931,10 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4102,7 +3942,7 @@
           "name": "Beam_E8-F8",
           "geometry": [
             [
-              5.25,
+              5.6,
               10.0
             ],
             [
@@ -4115,10 +3955,10 @@
             "length": 2.6,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "350",
-            "width": "225"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4139,10 +3979,10 @@
             "length": 0.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4155,7 +3995,7 @@
             ],
             [
               7.85,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -4163,10 +4003,10 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4187,34 +4027,34 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
-          "id": "F4-F6",
-          "name": "Beam_F4-F6",
+          "id": "F4-F5",
+          "name": "Beam_F4-F5",
           "geometry": [
             [
               7.85,
-              4.5
+              4.1
             ],
             [
               7.85,
-              7.0
+              6.2
             ]
           ],
           "attributes": {
             "type": "internal",
-            "length": 2.5,
+            "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4223,11 +4063,11 @@
           "geometry": [
             [
               7.85,
-              4.5
+              4.1
             ],
             [
               11.7,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -4235,10 +4075,58 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-F6",
+          "name": "Beam_F5-F6",
+          "geometry": [
+            [
+              7.85,
+              6.2
+            ],
+            [
+              7.85,
+              7.0
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 0.5,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
+          }
+        },
+        {
+          "id": "F5-G5",
+          "name": "Beam_F5-G5",
+          "geometry": [
+            [
+              7.85,
+              6.2
+            ],
+            [
+              11.7,
+              6.2
+            ]
+          ],
+          "attributes": {
+            "type": "internal",
+            "length": 3.85,
+            "isWallAligned": null,
+            "structuralRole": null,
+            "material": "RCC",
+            "conflict": null,
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4251,7 +4139,7 @@
             ],
             [
               7.85,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -4259,10 +4147,10 @@
             "length": 1.25,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4271,7 +4159,7 @@
           "geometry": [
             [
               7.85,
-              8.25
+              8.6
             ],
             [
               7.85,
@@ -4283,34 +4171,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
-          }
-        },
-        {
-          "id": "F7-G7",
-          "name": "Beam_F7-G7",
-          "geometry": [
-            [
-              7.85,
-              8.25
-            ],
-            [
-              11.7,
-              8.25
-            ]
-          ],
-          "attributes": {
-            "type": "internal",
-            "length": 3.85,
-            "isWallAligned": null,
-            "structuralRole": null,
-            "material": "TIMBER",
-            "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4331,10 +4195,10 @@
             "length": 3.85,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "400",
+            "width": "250"
           }
         },
         {
@@ -4347,7 +4211,7 @@
             ],
             [
               11.7,
-              4.5
+              4.1
             ]
           ],
           "attributes": {
@@ -4355,10 +4219,10 @@
             "length": 1.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4379,10 +4243,10 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4391,11 +4255,11 @@
           "geometry": [
             [
               11.7,
-              4.5
+              4.1
             ],
             [
               11.7,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -4403,10 +4267,10 @@
             "length": 2.0,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4415,11 +4279,11 @@
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ],
             [
               11.7,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -4427,10 +4291,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4439,11 +4303,11 @@
           "geometry": [
             [
               11.7,
-              6.5
+              6.2
             ],
             [
               15.6,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -4451,10 +4315,10 @@
             "length": 3.9,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4463,7 +4327,7 @@
           "geometry": [
             [
               11.7,
-              8.25
+              8.6
             ],
             [
               11.7,
@@ -4475,10 +4339,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4487,11 +4351,11 @@
           "geometry": [
             [
               11.7,
-              8.25
+              8.6
             ],
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ]
           ],
           "attributes": {
@@ -4499,10 +4363,10 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4514,7 +4378,7 @@
               10.0
             ],
             [
-              14.25,
+              14.6,
               10.0
             ]
           ],
@@ -4523,10 +4387,10 @@
             "length": 2.55,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4534,11 +4398,11 @@
           "name": "Beam_H7-H8",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ],
             [
-              14.25,
+              14.6,
               10.0
             ]
           ],
@@ -4547,10 +4411,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4558,12 +4422,12 @@
           "name": "Beam_H7-I7",
           "geometry": [
             [
-              14.25,
-              8.25
+              14.6,
+              8.6
             ],
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -4571,10 +4435,10 @@
             "length": 1.35,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4587,7 +4451,7 @@
             ],
             [
               15.6,
-              6.5
+              6.2
             ]
           ],
           "attributes": {
@@ -4595,10 +4459,10 @@
             "length": 3.65,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "360",
-            "width": "150"
+            "depth": "250",
+            "width": "175"
           }
         },
         {
@@ -4607,11 +4471,11 @@
           "geometry": [
             [
               15.6,
-              6.5
+              6.2
             ],
             [
               15.6,
-              8.25
+              8.6
             ]
           ],
           "attributes": {
@@ -4619,10 +4483,10 @@
             "length": 1.75,
             "isWallAligned": null,
             "structuralRole": null,
-            "material": "TIMBER",
+            "material": "RCC",
             "conflict": null,
-            "depth": "240",
-            "width": "100"
+            "depth": "250",
+            "width": "175"
           }
         }
       ]

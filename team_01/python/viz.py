@@ -654,6 +654,11 @@ def _render_3d_viewport(
             function labelOn(level) {{
                 return DATA.labels && (DATA.activeLevel === '__ALL__' || level === DATA.activeLevel);
             }}
+            // Element label is floor-aware when there is more than one level, so the same
+            // id on different floors reads distinctly (e.g. L1·C1 vs L2·C1).
+            function elLabel(el, idx) {{
+                return ((DATA.levels || []).length > 1) ? ('L' + (idx + 1) + '·' + el.id) : el.id;
+            }}
 
             function addColumn(level, idx, el) {{
                 const pt = (el.geometry || [])[0];
@@ -672,7 +677,7 @@ def _render_3d_viewport(
                 pickables.push(m);
                 box.expandByObject(m);
                 if (DATA.footings && idx === 0) addFooting(level, idx, el);
-                if (labelOn(level)) makeLabel(el.id, pt[0], idx * STOREY_H + STOREY_H + 0.35, pt[1]);
+                if (labelOn(level)) makeLabel(elLabel(el, idx), pt[0], idx * STOREY_H + STOREY_H + 0.35, pt[1]);
             }}
 
             // Footing: a foundation box under a ground-floor column, 1.0 m square and
@@ -719,7 +724,7 @@ def _render_3d_viewport(
                 scene.add(m);
                 pickables.push(m);
                 box.expandByObject(m);
-                if (labelOn(level)) makeLabel(el.id, mid.x, idx * STOREY_H + STOREY_H - 0.05, mid.z);
+                if (labelOn(level)) makeLabel(elLabel(el, idx), mid.x, idx * STOREY_H + STOREY_H - 0.05, mid.z);
             }}
 
             (DATA.levels || []).forEach((lvl, idx) => {{
@@ -731,31 +736,36 @@ def _render_3d_viewport(
                 }});
             }});
 
-            // Removed elements (Compare diff): translucent red ghosts at their old position.
+            // Removed elements (Compare diff): bold red ghosts (+ red wireframe) at their
+            // old position so deletions read clearly as "removed in red".
             (DATA.removed || []).forEach((r) => {{
                 const g = r.geometry || [];
                 const yBase = (r.levelIdx || 0) * STOREY_H;
-                let mesh = null;
+                let geo = null, pos = null, rotY = 0;
                 if (g.length === 1) {{
-                    mesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.32, STOREY_H, 0.32),
-                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
-                    );
-                    mesh.position.set(g[0][0], yBase + STOREY_H * 0.5, g[0][1]);
+                    geo = new THREE.BoxGeometry(0.34, STOREY_H, 0.34);
+                    pos = new THREE.Vector3(g[0][0], yBase + STOREY_H * 0.5, g[0][1]);
                 }} else if (g.length === 2) {{
                     const p1 = new THREE.Vector3(g[0][0], 0, g[0][1]);
                     const p2 = new THREE.Vector3(g[1][0], 0, g[1][1]);
                     const span = p1.distanceTo(p2);
                     if (span <= 0.001) return;
-                    mesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(span, 0.28, 0.22),
-                        new THREE.MeshStandardMaterial({{ color:0xff5050, transparent:true, opacity:0.30 }}),
-                    );
+                    geo = new THREE.BoxGeometry(span, 0.30, 0.24);
                     const mid = p1.clone().add(p2).multiplyScalar(0.5);
-                    mesh.position.set(mid.x, yBase + (STOREY_H - 0.25), mid.z);
-                    mesh.rotation.y = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+                    pos = new THREE.Vector3(mid.x, yBase + (STOREY_H - 0.25), mid.z);
+                    rotY = Math.atan2(p2.z - p1.z, p2.x - p1.x);
                 }}
-                if (mesh) {{ scene.add(mesh); box.expandByObject(mesh); }}
+                if (geo) {{
+                    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({{
+                        color:0xff3030, transparent:true, opacity:0.45 }}));
+                    mesh.position.copy(pos); mesh.rotation.y = rotY;
+                    scene.add(mesh); box.expandByObject(mesh);
+                    const edges = new THREE.LineSegments(
+                        new THREE.EdgesGeometry(geo),
+                        new THREE.LineBasicMaterial({{ color:0xff3030 }}));
+                    edges.position.copy(pos); edges.rotation.y = rotY; edges.renderOrder = 996;
+                    scene.add(edges);
+                }}
             }});
 
             const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
@@ -764,6 +774,17 @@ def _render_3d_viewport(
             controls.target.copy(center);
             camera.position.set(center.x + radius * 0.9, center.y + radius * 0.7, center.z + radius * 0.9);
             controls.update();
+
+            // Orientation gizmo: X (red) and Y (green) ground axes at the model corner,
+            // so you can read which way x/y run inside the viewport. World Z = layout Y.
+            const _amin = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.min.clone();
+            _amin.y = 0;
+            const _aLen = Math.max(2.0, radius * 0.16);
+            const _aHead = _aLen * 0.22;
+            scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), _amin, _aLen, 0xff5050, _aHead, _aHead * 0.6));
+            scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), _amin, _aLen, 0x40d090, _aHead, _aHead * 0.6));
+            makeLabel('X', _amin.x + _aLen + 0.3, 0.1, _amin.z);
+            makeLabel('Y', _amin.x, 0.1, _amin.z + _aLen + 0.3);
 
             const ray = new THREE.Raycaster();
             const ptr = new THREE.Vector2();
@@ -1131,6 +1152,9 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
     layout_id = layout.get("layoutId", "—")
     today = _dt.date.today().isoformat()
     summary = (eval_result or {}).get("summary", {})
+    # The design's own material wins over the passed-in global default, so exporting a
+    # specific option/snapshot (e.g. a timber one) shows its real material, not the sidebar's.
+    _meta_mat = (layout.get("meta") or {}).get("material") or material
     buf = _io.BytesIO()
 
     with _PdfPages(buf) as pdf:
@@ -1159,6 +1183,15 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
             cols  = [e for e in structure if len(e.get("geometry", [])) == 1]
             beams = [e for e in structure if len(e.get("geometry", [])) == 2]
 
+            # Per-level material: dominant per-element material on this level, else the
+            # design material. Used both for colour fallback and the title-block row.
+            _lvl_counts: dict = {}
+            for _e in cols + beams:
+                _m = (_e.get("attributes") or {}).get("material")
+                if _m:
+                    _lvl_counts[str(_m)] = _lvl_counts.get(str(_m), 0) + 1
+            _lvl_mat = max(_lvl_counts, key=_lvl_counts.get) if _lvl_counts else _meta_mat
+
             fig = _plt.figure(figsize=(16.54, 11.69), facecolor="white")  # A3 landscape
             fig.add_artist(_plt.Rectangle((0.012, 0.02), 0.976, 0.96, fill=False,
                                           ec="#222", lw=2, transform=fig.transFigure))
@@ -1181,7 +1214,7 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
                 if len(g) < 2:
                     continue
                 _c = "#cc2020" if status.get(b.get("id")) is False else \
-                     _material_color((b.get("attributes") or {}).get("material"), True)
+                     _material_color((b.get("attributes") or {}).get("material") or _lvl_mat, True)
                 ax.plot([g[0][0], g[1][0]], [g[0][1], g[1][1]], color=_c, lw=2.4,
                         zorder=5, solid_capstyle="round")
             for c in cols:
@@ -1189,7 +1222,7 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
                 if not g:
                     continue
                 _c = "#cc2020" if status.get(c.get("id")) is False else \
-                     _material_color((c.get("attributes") or {}).get("material"), True)
+                     _material_color((c.get("attributes") or {}).get("material") or _lvl_mat, True)
                 ax.add_patch(_plt.Rectangle((g[0][0] - 0.15, g[0][1] - 0.15), 0.30, 0.30,
                                             facecolor=_c, edgecolor="#111", lw=0.7, zorder=6))
             if show_labels:
@@ -1219,7 +1252,7 @@ def _build_structural_sheet_pdf(layout: dict, eval_result: dict | None,
                     fontsize=11, fontweight="bold", transform=tb.transAxes)
 
             rows = [("Project", project), ("Layout ID", layout_id), ("Level", lk),
-                    ("Date", today), ("Default material", material),
+                    ("Date", today), ("Material", _lvl_mat),
                     ("Columns", str(len(cols))), ("Beams", str(len(beams)))]
             if eval_result:
                 rows += [("Overall", "PASS" if summary.get("overall_PASS") else "FAIL"),

@@ -55,7 +55,7 @@ from viz import (
     _render_floor_plan_plotly, _render_3d_viewport, _count_elements, _present_legend_items,
     _materials_present, _material_legend_html, _structural_summary_text,
     _sheet_pdf_bytes, _beam_diagram_png, _normalize_layout, _strip_structure,
-    _flexibility_rows, _flex_advice, _opening_clashes,
+    _flexibility_rows, _flex_advice, _opening_clashes, _compute_diff,
 )
 from ui.theme import theme_tokens, build_css
 from ui.bridge import SELECTION_BRIDGE_JS, agent_drawer_html
@@ -94,6 +94,16 @@ def _push_version(new_layout: dict) -> None:
     st.session_state.currentVersion = v
     st.session_state.currentLayout  = new_layout
     st.session_state["selected_opt_bar_idx"] = -1
+
+    # Keep the selection bridge consistent after a layout change so Design Details
+    # reliably updates for the next click: drop a now-removed selection, and resync the
+    # URL-bridge guards to the current URL so a stale _sel can't clobber the next click.
+    _sel_now = st.session_state.get("selected_el", "")
+    if _sel_now and find_element_in_layout(new_layout, _sel_now)[1] is None:
+        st.session_state.selected_el = ""
+        st.session_state.active_element_level = ""
+    st.session_state["_last_url_sel"] = st.query_params.get("_sel", "\x00")
+    st.session_state["_last_url_lvl"] = st.query_params.get("_lvl", "\x00")
 
     _write_json(EDITED_LAYOUT_PATH, new_layout)
     _write_json(REPO_ROOT / f"layout_v{v}.json", new_layout)
@@ -209,14 +219,18 @@ def _grid_option_description(idx: int, kpis: dict) -> str:
 
 
 
-def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
-    """SENSI-style element detail card with utilization bars."""
+def _el_detail_html(el_obj: dict, eval_result: dict | None,
+                    level: str | None = None, fallback_mat: str = "RCC") -> str:
+    """SENSI-style element detail card with utilization bars.
+
+    `level` disambiguates eval entries (ids repeat across floors). `fallback_mat` is
+    shown when the element has no per-element material yet (e.g. material set globally)."""
     import math as _math
     eid     = el_obj.get("id", "")
     attrs   = el_obj.get("attributes", {})
     is_beam = len(el_obj.get("geometry", [])) == 2
     el_type = "BEAM" if is_beam else "COL"
-    mat     = attrs.get("material", "RCC")
+    mat     = attrs.get("material") or fallback_mat
     sec     = (attrs.get("section") or attrs.get("dimensions", "")
                or (f"{attrs.get('width','')}x{attrs.get('depth','')}" if is_beam else ""))
     span_txt = ""
@@ -247,7 +261,7 @@ def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
 
     if is_beam and eval_result:
         for b in eval_result.get("beams", []):
-            if b.get("id") != eid:
+            if b.get("id") != eid or (level and b.get("level") and b.get("level") != level):
                 continue
             overall_pass = (b.get("bend_PASS") and b.get("shear_PASS")
                             and b.get("defl_TL_PASS") and b.get("defl_LL_PASS"))
@@ -267,7 +281,7 @@ def _el_detail_html(el_obj: dict, eval_result: dict | None) -> str:
 
     elif not is_beam and eval_result:
         for c in eval_result.get("columns", []):
-            if c.get("id") != eid:
+            if c.get("id") != eid or (level and c.get("level") and c.get("level") != level):
                 continue
             overall_pass = c.get("stress_PASS") and c.get("buckling_PASS")
             sf       = max(c.get("SF_buckling", 3.0), 0.01)
@@ -342,6 +356,10 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
             )
             return []
 
+        # Opening-aware: slide whole grid-lines so columns/beams clear doors & windows
+        # (stays orthogonal; columns stay stacked). On by default; toggle in the sidebar.
+        _respect = st.session_state.get("respect_openings", True)
+
         # Wrap each layout dict into the UI's expected format and stamp material.
         opts = []
         for lay in raw:
@@ -349,6 +367,15 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
             if "meta" not in lay_copy or not isinstance(lay_copy.get("meta"), dict):
                 lay_copy["meta"] = {}
             lay_copy["meta"]["material"] = material
+            if _respect:
+                try:
+                    from nodes.modify import resolve_clashes_orthogonal
+                    _fixed, _nmoved = resolve_clashes_orthogonal(json.dumps(lay_copy))
+                    if _nmoved:
+                        lay_copy = json.loads(_fixed)
+                        lay_copy.setdefault("meta", {})["material"] = material
+                except Exception as _rce:
+                    st.session_state["_last_error"] = f"respect_openings: {_rce}"
             opts.append({"layout": lay_copy, "evaluation": None})
 
         return opts
@@ -717,6 +744,12 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 if _cname == "move_element" and _cinput.get("element_id"):
                     return "APPLY_TOOL:" + json.dumps(
                         {"name": "move_element", "input": _cinput, "advisory": _advisory})
+                if _cname == "add_column" and _cinput.get("reference_id"):
+                    return "APPLY_TOOL:" + json.dumps(
+                        {"name": "add_column", "input": _cinput, "advisory": _advisory})
+                if _cname == "add_beam" and _cinput.get("column_a") and _cinput.get("column_b"):
+                    return "APPLY_TOOL:" + json.dumps(
+                        {"name": "add_beam", "input": _cinput, "advisory": _advisory})
 
             # The model asked for an action but the parameters were malformed
             # (e.g. empty element_id) — be honest instead of faking success.
@@ -777,6 +810,29 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             _ids_in_prompt = list(dict.fromkeys(
                 m for m in _pat if _rid(m) and len(m) <= 14
             ))
+
+            # ── ADD a beam between two columns (orthogonal only) ──────────────
+            if ("beam" in _lower and any(k in _lower for k in ("add", "connect", "between"))
+                    and len(_ids_in_prompt) >= 2):
+                return ("APPLY_TOOL:" + json.dumps(
+                    {"name": "add_beam",
+                     "input": {"column_a": _rid(_ids_in_prompt[0]),
+                               "column_b": _rid(_ids_in_prompt[1])}}))
+
+            # ── ADD a column at an offset from a reference column ──────────────
+            if (any(k in _lower for k in ("add", "put", "place")) and "column" in _lower
+                    and "from" in _lower and _ids_in_prompt):
+                _nums = _re.findall(r'(?<![A-Za-z0-9_])-?\d+(?:\.\d+)?', prompt)
+                _amt = abs(float(_nums[0])) if _nums else 1.0
+                _is_y = any(k in _lower for k in (" y", "vertical", "north", "south",
+                                                  "above", "below", "up", "down"))
+                _neg = any(k in _lower for k in ("left", "west", "south", "below",
+                                                 "down", "minus", "negative"))
+                _amt = -_amt if _neg else _amt
+                return ("APPLY_TOOL:" + json.dumps(
+                    {"name": "add_column",
+                     "input": {"reference_id": _rid(_ids_in_prompt[0]),
+                               ("dy" if _is_y else "dx"): _amt}}))
 
             # ── ADD a midspan column (split a beam) ───────────────────────────
             if (any(k in _lower for k in ("add column", "add a column", "midspan",
@@ -920,6 +976,7 @@ def _ensure_session() -> None:
         "compare_mode":    False,
         "labels_on":       False,
         "footings_on":     True,
+        "respect_openings": True,
         "auto_eval":       True,
         "snapshots":       [],
         "theme":           "dark",
@@ -993,6 +1050,8 @@ ACTIONS:
 - ADD midspan column: set action="tool", call add_midspan_column with the beam_id. Include advisory in final_response.
 - UPGRADE a section: set action="tool", call upgrade_element_section with element_id (and new_section if known). Include advisory in final_response.
 - MOVE a column to clear a window/door clash or adjust spacing (e.g. "move C4 0.5 m to the right", "shift C3 left 0.4 m", "move C2 in x by -0.6"): set action="tool", call move_element with element_id and dx/dy in metres (east/north positive). Keep it to ONE axis (dx OR dy) so the grid stays orthogonal. Beams joined to the column follow automatically. Include advisory in final_response.
+- ADD a column at a distance from a reference column (e.g. "add a column 2 m in x from C3", "put a column 1.5 m below C5"): set action="tool", call add_column with reference_id and dx/dy in metres (east/north positive; west/south negative). Measured along the axes from that column. Include advisory in final_response.
+- ADD a beam between two columns (e.g. "add a beam between C3 and C5"): set action="tool", call add_beam with column_a and column_b. The two columns MUST share an X or a Y — beams are always orthogonal; never propose a diagonal beam. Include advisory in final_response.
 - CHANGE MATERIAL (e.g. "switch to timber", "change material to concrete/RCC", "make it steel"): set action="tool", call set_material with {{"material": "RCC"|"STEEL"|"TIMBER"}}. To scope it, add "level" (e.g. "level_02") and/or "element_type" ("column" or "beam") — e.g. "change all columns and beams of level 2 to timber" → {{"material":"TIMBER","level":"level_02"}}. Do NOT use upgrade_element_section for material changes.
 - GENERATE structural grid: set action="tool", call tag_and_audit. Include advisory in final_response.
 
@@ -1127,6 +1186,27 @@ if _aq_raw.strip():
                         _aq_ti.get("x"), _aq_ti.get("y"))))
                     st.session_state.eval_result = None
                     _aq_resp = f"Moved **{_aq_mid}**. Run analysis to confirm it still holds."
+            elif _aq_tn == "add_column":
+                from nodes.modify import add_column_at_offset as _aq_addc
+                _aq_ref = _aq_ti.get("reference_id", "")
+                if _aq_ref:
+                    _push_version(json.loads(_aq_addc(
+                        json.dumps(layout_obj), _aq_ref,
+                        float(_aq_ti.get("dx") or 0.0), float(_aq_ti.get("dy") or 0.0), _mat_now)))
+                    st.session_state.eval_result = None
+                    _aq_resp = f"Added a column offset from **{_aq_ref}**. Connect it with a beam, then run analysis."
+            elif _aq_tn == "add_beam":
+                from nodes.modify import add_beam as _aq_addb
+                _aq_ca, _aq_cb = _aq_ti.get("column_a", ""), _aq_ti.get("column_b", "")
+                if _aq_ca and _aq_cb:
+                    _aq_bl = json.loads(_aq_addb(json.dumps(layout_obj), _aq_ca, _aq_cb, None, _mat_now))
+                    if _count_elements(_aq_bl) != _count_elements(layout_obj):
+                        _push_version(_aq_bl)
+                        st.session_state.eval_result = None
+                        _aq_resp = f"Added a beam between **{_aq_ca}** and **{_aq_cb}**."
+                    else:
+                        _aq_resp = (f"Can't add a beam between **{_aq_ca}** and **{_aq_cb}** — they must "
+                                    "share an X or a Y (no diagonal beams).")
         except Exception as _aq_tex:
             _aq_resp = f"Tool execution failed: {_aq_tex}"
     elif _aq_resp.startswith("APPLY_MATERIAL:"):
@@ -1229,6 +1309,36 @@ if submitted and prompt_input.strip():
                               else f"by ({_mdx:+g}, {_mdy:+g}) m")
                     _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
                              + f"Moved **{_mid}** {_where}. Re-run analysis to confirm it still holds.")
+            elif _tn == "add_column":
+                from nodes.modify import add_column_at_offset as _add_col
+                _rid_c = _ti.get("reference_id", "") or _ti.get("element_id", "")
+                if _rid_c:
+                    _cdx = float(_ti.get("dx") or 0.0)
+                    _cdy = float(_ti.get("dy") or 0.0)
+                    _new_l = json.loads(_add_col(json.dumps(layout_obj), _rid_c,
+                                                 _cdx, _cdy, _mat_now))
+                    if _count_elements(_new_l) != _count_elements(layout_obj):
+                        _push_version(_new_l)
+                        st.session_state.eval_result = None
+                        _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
+                                 + f"Added a column at ({_cdx:+g}, {_cdy:+g}) m from **{_rid_c}**. "
+                                   "Add a beam to connect it, then re-run analysis.")
+                    else:
+                        _resp = f"Couldn't add the column — **{_rid_c}** not found."
+            elif _tn == "add_beam":
+                from nodes.modify import add_beam as _add_beam
+                _ca, _cb = _ti.get("column_a", ""), _ti.get("column_b", "")
+                if _ca and _cb:
+                    _new_l = json.loads(_add_beam(json.dumps(layout_obj), _ca, _cb, None, _mat_now))
+                    if _count_elements(_new_l) != _count_elements(layout_obj):
+                        _push_version(_new_l)
+                        st.session_state.eval_result = None
+                        _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
+                                 + f"Added a beam between **{_ca}** and **{_cb}**. Re-run analysis to check it.")
+                    else:
+                        _resp = (f"Couldn't add a beam between **{_ca}** and **{_cb}** — they must share "
+                                 "an X or a Y (I never create diagonal beams). Pick two columns in the "
+                                 "same row or column, or add an aligned column first.")
         except Exception as _tex:
             _resp = f"Tool execution failed: {_tex}"
             st.session_state["_last_error"] = f"APPLY_TOOL: {_tex}"
@@ -1991,8 +2101,19 @@ with tab_mod:
                 st.rerun()
             _sel     = st.session_state.selected_el
             _sel_level = st.session_state.get("active_element_level", "")
-            _found_level, _found_el = find_element_in_layout(layout_obj, _sel) if _sel else (None, None)
-            _sel_obj = _found_el
+            # Element ids repeat across floors — resolve on the SELECTED level first so
+            # Design Details shows the element you clicked (and its live material/section),
+            # not the first id-match on level_01.
+            _sel_obj = None
+            _found_level = None
+            if _sel:
+                if (_sel_level and is_multilevel(layout_obj)
+                        and _sel_level in get_level_keys(layout_obj)):
+                    _sel_obj = next((e for e in get_structure(layout_obj, _sel_level)
+                                     if e.get("id") == _sel), None)
+                    _found_level = _sel_level if _sel_obj else None
+                if _sel_obj is None:
+                    _found_level, _sel_obj = find_element_in_layout(layout_obj, _sel)
             if _found_level:
                 _sel_level = _found_level
                 st.session_state.active_element_level = _found_level
@@ -2008,13 +2129,17 @@ with tab_mod:
                 )
 
             if _sel_obj:
-                st.markdown(_el_detail_html(_sel_obj, er), unsafe_allow_html=True)
+                _eff_mat = (layout_obj.get("meta") or {}).get("material") or _mat_now
+                st.markdown(_el_detail_html(_sel_obj, er, level=_sel_level,
+                                            fallback_mat=_eff_mat), unsafe_allow_html=True)
 
                 # ── Force & moment diagram (any selected beam — passing OR failing) ──
                 _sel_is_beam = len(_sel_obj.get("geometry", [])) == 2
                 if _sel_is_beam:
                     _bev = next((b for b in (er or {}).get("beams", [])
-                                 if b.get("id") == _sel), None)
+                                 if b.get("id") == _sel
+                                 and (not _sel_level or not b.get("level")
+                                      or b.get("level") == _sel_level)), None)
                     with st.expander("📐  Force & moment diagram", expanded=False):
                         try:
                             if _bev:
@@ -2044,9 +2169,11 @@ with tab_mod:
                                  width="stretch"):
                         try:
                             from nodes.modify import remove_element as _direct_rem
-                            _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel))
-                            # If the element is still present, removal was blocked (perimeter lock).
-                            if find_element_in_layout(_new_layout, _sel)[1] is not None:
+                            _new_layout = json.loads(_direct_rem(json.dumps(layout_obj), _sel,
+                                                                 level_key=_sel_level or None))
+                            # If the element is still present on that level, removal was blocked.
+                            if (next((e for e in get_structure(_new_layout, _sel_level or None)
+                                      if e.get("id") == _sel), None) is not None):
                                 st.session_state["_remove_blocked"] = _sel
                                 st.rerun()
                             else:
@@ -2086,7 +2213,8 @@ with tab_mod:
                                  width="stretch", type="primary"):
                         try:
                             from nodes.modify import remove_element as _force_rem
-                            _new_layout = json.loads(_force_rem(json.dumps(layout_obj), _sel, True))
+                            _new_layout = json.loads(_force_rem(json.dumps(layout_obj), _sel, True,
+                                                               level_key=_sel_level or None))
                             _push_version(_new_layout)
                             st.session_state.selected_el = ""
                             st.session_state.active_element_level = ""
@@ -2097,10 +2225,23 @@ with tab_mod:
 
                 st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
+            elif _sel:
+                # A selection is set but the element isn't in the current layout — it was
+                # removed/renamed by an edit. Clear it so the next click shows cleanly.
+                st.markdown(
+                    f'<div style="font-size:.68rem;color:{_FAIL};padding:4px 0">'
+                    f'<b>{_sel}</b> is no longer in the design (removed or renamed). '
+                    f'Select another element in the plan.</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("Clear selection", key="dd_clear_stale", width="stretch"):
+                    st.session_state.selected_el = ""
+                    st.session_state.active_element_level = ""
+                    st.rerun()
             else:
                 st.markdown(
                     f'<div style="font-size:.70rem;color:{_MUT};padding:4px 0">'
-                    f'Click an element in the plan to inspect it.</div>',
+                    f'Click an element in the plan, then press <b>⟳ Show details</b> above.</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -2478,50 +2619,64 @@ with tab_cmp:
                 unsafe_allow_html=True,
             )
         with _rp3:
-            with st.popover("🧾 AI Report", width="stretch"):
-                st.caption("Agent writes a structural report; the PDF includes the "
-                           "explanation, labelled plans and shear/moment diagrams.")
-                if st.button("Generate report", key="cmp_gen_report", width="stretch"):
-                    with st.spinner("Writing structural report…"):
-                        if _llm_is_reachable():
+            # Direct button (NOT inside a popover — a popover closes on the rerun and the
+            # result would never show). The report renders in a persistent panel below.
+            if st.button("🧾 AI Report", key="cmp_gen_report", width="stretch",
+                         help="Generate a structural report (shown below) + a downloadable PDF."):
+                with st.spinner("Writing structural report…"):
+                    _rep = ""
+                    if _llm_is_reachable():
+                        try:
                             _rep = _run_agent_chat(
                                 "Write a concise structural report for this layout: summarise the "
                                 "framing system, materials, spans, any failing elements and the "
                                 "recommended fixes. Plain prose, no JSON.",
                                 layout_obj, er,
                             )
-                            if (not _rep) or _rep.startswith(("APPLY_TOOL:", "GENERATE_GRID", "EVALUATE")):
-                                _rep = _structural_summary_text(layout_obj, er)
-                        else:
-                            _rep = _structural_summary_text(layout_obj, er)
-                    st.session_state["_cmp_report_txt"] = _rep
-                _rep_txt = st.session_state.get("_cmp_report_txt")
-                if _rep_txt:
-                    st.markdown(
-                        f'<div style="font-size:.66rem;color:{_MUT};max-height:140px;'
-                        f'overflow-y:auto;white-space:pre-wrap;line-height:1.5">{_rep_txt}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    try:
-                        _rep_pdf = _sheet_pdf_bytes(
-                            json.dumps(layout_obj), json.dumps(er) if er else "",
-                            str(_lid), str(_mat_now),
-                            tuple((h.get("prompt") or h.get("label") or "")
-                                  for h in st.session_state.get("history", [])[-7:]),
-                            True, _rep_txt,
-                        )
-                        st.download_button(
-                            "⤓ Download report (PDF)", data=_rep_pdf,
-                            file_name=f"{_lid}_structural_report.pdf",
-                            mime="application/pdf", width="stretch", key="cmp_dl_report",
-                        )
-                    except Exception as _re:
-                        st.caption(f"Report build failed: {_re}")
+                        except Exception as _rerr:
+                            st.session_state["_last_error"] = f"AI report: {_rerr}"
+                            _rep = ""
+                    if (not _rep) or _rep.startswith(("APPLY_TOOL:", "APPLY_MATERIAL:",
+                                                      "GENERATE_GRID", "EVALUATE", "FIX_FAILING")):
+                        _rep = _structural_summary_text(layout_obj, er)
+                st.session_state["_cmp_report_txt"] = _rep
+                st.rerun()
         with _rp4:
             if st.button("✕ Reset", width="stretch", key="btn_reset_cmp"):
                 st.session_state.snapshots = []
                 st.session_state.cmp_sel_indices = []
                 st.rerun()
+
+        # ── Structural report panel (persistent — shows after clicking AI Report) ──
+        _rep_txt = st.session_state.get("_cmp_report_txt")
+        if _rep_txt:
+            with st.expander("🧾 Structural report", expanded=True):
+                st.markdown(
+                    f'<div style="font-size:.66rem;color:{_MUT};white-space:pre-wrap;'
+                    f'line-height:1.55">{_rep_txt}</div>',
+                    unsafe_allow_html=True,
+                )
+                try:
+                    _rep_pdf = _sheet_pdf_bytes(
+                        json.dumps(layout_obj), json.dumps(er) if er else "",
+                        str(_lid), str(_mat_now),
+                        tuple((h.get("prompt") or h.get("label") or "")
+                              for h in st.session_state.get("history", [])[-7:]),
+                        True, _rep_txt,
+                    )
+                    _rpc1, _rpc2 = st.columns(2, gap="small")
+                    with _rpc1:
+                        st.download_button(
+                            "⤓ Download report (PDF)", data=_rep_pdf,
+                            file_name=f"{_lid}_structural_report.pdf",
+                            mime="application/pdf", width="stretch", key="cmp_dl_report",
+                        )
+                    with _rpc2:
+                        if st.button("Clear report", width="stretch", key="cmp_clear_report"):
+                            st.session_state["_cmp_report_txt"] = ""
+                            st.rerun()
+                except Exception as _re:
+                    st.caption(f"Report build failed: {_re}")
 
         # ── Comparison plans area ─────────────────────────────────────────────────
         st.markdown(f'<div style="margin-top:10px;border-top:1px solid {_BORD}"></div>',
@@ -2664,10 +2819,30 @@ with tab_cmp:
                                 height=_ph,
                                 before_layout=(_baseline_layout if _ci > 0 else None),
                                 labels=_cmp_ids,
+                                footings=st.session_state.footings_on,
                             ),
                             height=_ph + 8,
                             scrolling=False,
                         )
+                    # Diff summary vs baseline — makes added/removed/changed explicit
+                    # (and shows "identical to baseline" when a snapshot matches current).
+                    if _ci > 0:
+                        _dd = _compute_diff(_baseline_layout, _plan_ci)
+                        _na, _nr, _nc = len(_dd["added"]), len(_dd["removed"]), len(_dd["changed"])
+                        if _na or _nr or _nc:
+                            _dparts = []
+                            if _na: _dparts.append(f'<span style="color:{_add_c};font-weight:700">+{_na} added</span>')
+                            if _nr: _dparts.append(f'<span style="color:{_rem_c};font-weight:700">−{_nr} removed</span>')
+                            if _nc: _dparts.append(f'<span style="color:{_mod_c};font-weight:700">~{_nc} changed</span>')
+                            _dtxt = " · ".join(_dparts)
+                        else:
+                            _dtxt = '<span style="opacity:.7">identical to baseline</span>'
+                        st.markdown(
+                            f'<div style="font-size:.58rem;color:{_MUT};text-align:center;'
+                            f'padding:3px 2px;line-height:1.5">vs baseline: {_dtxt}</div>',
+                            unsafe_allow_html=True,
+                        )
+
                     # Per-plan footer metrics
                     _fw = _co_weight(_co)
                     _fc = _co_cost(_co)

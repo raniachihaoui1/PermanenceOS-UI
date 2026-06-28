@@ -494,15 +494,21 @@ def _remove_element_from_structure(element_id: str, structure: list) -> list:
     return new_structure
 
 
-def remove_element(layout_json_string: str, element_id: str, force: bool = False) -> str:
+def remove_element(layout_json_string: str, element_id: str, force: bool = False,
+                   level_key: str | None = None) -> str:
     """Remove a structural element. For columns: merge collinear beams through the removed point.
     For multilevel: also blocks removal if a column exists directly above (load path broken).
-    Perimeter elements are locked by default; pass force=True to remove them anyway."""
+    Perimeter elements are locked by default; pass force=True to remove them anyway.
+    `level_key` pins the removal to one floor (ids repeat across floors); omit to search all."""
     from nodes._layout import is_multilevel, find_element_in_layout, has_column_above
     data = json.loads(layout_json_string)
 
     if is_multilevel(data):
-        level_key, target = find_element_in_layout(data, element_id)
+        if level_key and level_key in data.get("levels", {}):
+            target = next((e for e in data["levels"][level_key].get("structure", [])
+                           if e.get("id") == element_id), None)
+        else:
+            level_key, target = find_element_in_layout(data, element_id)
         if target is None:
             return layout_json_string
         is_column = len(target.get("geometry", [])) == 1
@@ -579,6 +585,244 @@ def move_element(layout_json_string: str, element_id: str,
         return layout_json_string
 
     return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+def _next_id(all_ids: set, prefix: str) -> str:
+    n = 1
+    while f"{prefix}{n}" in all_ids:
+        n += 1
+    return f"{prefix}{n}"
+
+
+def _level_struct_for(data: dict, element_id: str, level_key):
+    """Return (level_key, structure_list) where element_id lives (level-aware)."""
+    from nodes._layout import is_multilevel, get_level_keys
+    if not is_multilevel(data):
+        return None, data.get("structure", [])
+    if level_key and level_key in data.get("levels", {}):
+        s = data["levels"][level_key].get("structure", [])
+        if any(e.get("id") == element_id for e in s):
+            return level_key, s
+    for lk in get_level_keys(data):
+        s = data["levels"][lk].get("structure", [])
+        if any(e.get("id") == element_id for e in s):
+            return lk, s
+    return None, None
+
+
+def add_column_at_offset(layout_json_string: str, reference_id: str,
+                         dx: float = 0.0, dy: float = 0.0,
+                         level_key: str | None = None,
+                         material: str | None = None) -> str:
+    """Add a new internal column offset (dx, dy) metres from a REFERENCE column, measured
+    along the axes from that column (dx → X, dy → Y). A column is a point, so this is
+    orthogonal by construction. Returns updated layout JSON (unchanged if ref not found)."""
+    data = json.loads(layout_json_string)
+    dx = float(dx or 0.0); dy = float(dy or 0.0)
+    lk, struct = _level_struct_for(data, reference_id, level_key)
+    if struct is None:
+        return layout_json_string
+    ref = next((e for e in struct if e.get("id") == reference_id
+                and len(e.get("geometry", [])) == 1), None)
+    if ref is None:
+        return layout_json_string
+    rx, ry = ref["geometry"][0]
+    nx, ny = round(rx + dx, 3), round(ry + dy, 3)
+    new_id = _next_id({e.get("id") for e in struct}, "NC")
+    mat = material or (ref.get("attributes") or {}).get("material")
+    struct.append({
+        "id": new_id,
+        "name": f"Col_{new_id}",
+        "geometry": [[nx, ny]],
+        "attributes": {"type": "internal", **({"material": mat} if mat else {})},
+    })
+    return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+def add_beam(layout_json_string: str, col_a_id: str, col_b_id: str,
+             level_key: str | None = None, material: str | None = None,
+             tol: float = 0.05) -> str:
+    """Add an ORTHOGONAL beam between two existing columns. The columns must share an X
+    (vertical beam) or a Y (horizontal beam); the beam is snapped to be perfectly
+    orthogonal. Diagonal pairs are REJECTED — returns the layout unchanged (so the caller
+    can detect the no-op). Both columns must be on the same level."""
+    from nodes._layout import is_multilevel, get_level_keys
+
+    def _find(struct, cid):
+        return next((e for e in struct if e.get("id") == cid
+                     and len(e.get("geometry", [])) == 1), None)
+
+    data = json.loads(layout_json_string)
+    if is_multilevel(data):
+        struct = None
+        for lk in ([level_key] if level_key else get_level_keys(data)):
+            s = data["levels"].get(lk, {}).get("structure", [])
+            if _find(s, col_a_id) and _find(s, col_b_id):
+                struct = s; break
+        if struct is None:
+            return layout_json_string
+    else:
+        struct = data.get("structure", [])
+        if not (_find(struct, col_a_id) and _find(struct, col_b_id)):
+            return layout_json_string
+
+    a = _find(struct, col_a_id)["geometry"][0]
+    b = _find(struct, col_b_id)["geometry"][0]
+    _dx, _dy = abs(a[0] - b[0]), abs(a[1] - b[1])
+    if _dx <= tol and _dy <= tol:
+        return layout_json_string           # same point
+    if _dx > tol and _dy > tol:
+        return layout_json_string           # diagonal — never allowed
+    if _dx <= tol:                          # vertical beam — share averaged x
+        x = round((a[0] + b[0]) / 2, 3)
+        geom = [[x, a[1]], [x, b[1]]]
+    else:                                   # horizontal beam — share averaged y
+        y = round((a[1] + b[1]) / 2, 3)
+        geom = [[a[0], y], [b[0], y]]
+    new_id = _next_id({e.get("id") for e in struct}, "NB")
+    mat = material or (_find(struct, col_a_id).get("attributes") or {}).get("material")
+    struct.append({
+        "id": new_id,
+        "name": f"Beam_{col_a_id}_{col_b_id}",
+        "geometry": geom,
+        "attributes": {"type": "internal", **({"material": mat} if mat else {})},
+    })
+    return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+# ── Opening-aware grid (orthogonal clash resolution) ──────────────────────────
+
+def _seg_pt_dist(p, a, b) -> float:
+    """Distance from point p to segment a-b."""
+    ax, ay = a; bx, by = b; px, py = p
+    dx, dy = bx - ax, by - ay
+    if dx == 0 and dy == 0:
+        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+    qx, qy = ax + t * dx, ay + t * dy
+    return ((px - qx) ** 2 + (py - qy) ** 2) ** 0.5
+
+
+def _level_openings(layout: dict, level_key) -> list:
+    """Door/window segments [(p0, p1), …] for a level (or single-level layout)."""
+    from nodes._layout import is_multilevel
+    lvl = layout["levels"].get(level_key, {}) if (is_multilevel(layout) and level_key) else layout
+    segs = []
+    for o in (lvl.get("doors", []) or []) + (lvl.get("windows", []) or []):
+        g = o.get("geometry", [])
+        if len(g) >= 2:
+            segs.append((g[0], g[1]))
+    return segs
+
+
+def _clashing_columns(struct: list, openings: list, tol: float) -> list:
+    return [el for el in struct
+            if len(el.get("geometry", [])) == 1
+            and any(_seg_pt_dist(el["geometry"][0], a, b) < tol for a, b in openings)]
+
+
+def resolve_clashes_orthogonal(layout_json_string: str, level_key: str | None = None,
+                               tol: float = 0.3, margin: float = 0.25,
+                               max_shift: float = 1.5) -> tuple[str, int]:
+    """Slide WHOLE grid-lines so columns/beams clear door/window openings while staying
+    perfectly orthogonal (never a diagonal single-column nudge).
+
+    A horizontal opening is cleared by shifting the clashing column's VERTICAL grid-line
+    in x (the column slides along its wall, past the opening); a vertical opening by
+    shifting the HORIZONTAL grid-line in y. Shifting a whole line moves every point at
+    that coordinate (columns + beam endpoints) across ALL levels, so beams stay
+    orthogonal (they just change length) and columns stay vertically stacked.
+
+    Returns (layout_json, n_lines_moved). A move is kept only if it lowers the total
+    clash count; otherwise it is reverted and the column is marked unresolvable."""
+    from nodes._layout import is_multilevel, get_level_keys
+    data = json.loads(layout_json_string)
+
+    if is_multilevel(data):
+        lks = [level_key] if level_key else get_level_keys(data)
+        structs = {lk: data["levels"][lk].get("structure", []) for lk in lks}
+        openings = {lk: _level_openings(data, lk) for lk in lks}
+    else:
+        structs = {None: data.get("structure", [])}
+        openings = {None: _level_openings(data, None)}
+
+    if not any(openings.values()):
+        return json.dumps(data, indent=2, ensure_ascii=False), 0
+
+    def total_clashes() -> int:
+        return sum(len(_clashing_columns(s, openings[lk], tol)) for lk, s in structs.items())
+
+    def shift_all(axis: str, coord: float, d: float) -> None:
+        i = 0 if axis == "x" else 1
+        for s in structs.values():
+            for el in s:
+                for pt in el.get("geometry", []):
+                    if abs(pt[i] - coord) < 0.02:
+                        pt[i] = round(pt[i] + d, 3)
+
+    def _is_perim(el: dict) -> bool:
+        return (el.get("attributes") or {}).get("type") == "perimeter"
+
+    def line_has_perimeter(axis: str, coord: float) -> bool:
+        """True if a perimeter column sits on this grid-line — shifting it would pull
+        the building envelope off the outline, so such lines are never moved."""
+        i = 0 if axis == "x" else 1
+        for s in structs.values():
+            for el in s:
+                g = el.get("geometry", [])
+                if len(g) == 1 and _is_perim(el) and abs(g[0][i] - coord) < 0.02:
+                    return True
+        return False
+
+    stuck: set = set()
+    moved = 0
+    for _ in range(80):
+        if total_clashes() == 0:
+            break
+        # next clashing INTERNAL column not already given up on (perimeter cols are
+        # envelope-locked — they define the outline and are never moved).
+        target = None
+        for lk, s in structs.items():
+            for c in _clashing_columns(s, openings[lk], tol):
+                if _is_perim(c):
+                    continue
+                if (lk, c.get("id")) not in stuck:
+                    target = (lk, c); break
+            if target:
+                break
+        if target is None:
+            break
+        lk, c = target
+        cx, cy = c["geometry"][0]
+        before = total_clashes()
+
+        cands = []
+        for (a, b) in openings[lk]:
+            if _seg_pt_dist([cx, cy], a, b) >= tol:
+                continue
+            if abs(a[1] - b[1]) < 1e-6:          # horizontal opening → slide column in x
+                lo = min(a[0], b[0]) - tol - margin
+                hi = max(a[0], b[0]) + tol + margin
+                cands += [("x", cx, lo - cx), ("x", cx, hi - cx)]
+            elif abs(a[0] - b[0]) < 1e-6:        # vertical opening → slide column in y
+                lo = min(a[1], b[1]) - tol - margin
+                hi = max(a[1], b[1]) + tol + margin
+                cands += [("y", cy, lo - cy), ("y", cy, hi - cy)]
+        # never shift a line that carries a perimeter column (would break the outline)
+        cands = [t for t in cands
+                 if 1e-6 < abs(t[2]) <= max_shift and not line_has_perimeter(t[0], t[1])]
+        cands.sort(key=lambda t: abs(t[2]))
+
+        applied = False
+        for axis, coord, d in cands:
+            shift_all(axis, coord, d)
+            if total_clashes() < before:
+                moved += 1; applied = True; break
+            shift_all(axis, coord + d, -d)       # revert
+        if not applied:
+            stuck.add((lk, c.get("id")))
+
+    return json.dumps(data, indent=2, ensure_ascii=False), moved
 
 
 # ── Modify node ───────────────────────────────────────────────────────────────

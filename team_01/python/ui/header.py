@@ -21,8 +21,11 @@ def render_header(s: AppState) -> None:
     is_multilevel = _f["is_multilevel"]
     get_level_count = _f["get_level_count"]
     _llm_is_reachable = _f["llm_is_reachable"]
+    _write_json = _f["write_json"]
+    EDITED_LAYOUT_PATH = s.edited_layout_path
     _cf_h  = st.session_state.get("cost_flexibility")
-    _hcols = st.columns([4.2, 0.9, 1.0, 1.15, 0.35], gap="small")
+    # Title takes the slack; the action buttons share equal widths so they line up.
+    _hcols = st.columns([3.4, 1.1, 1.1, 1.1, 1.1, 0.5], gap="small", vertical_alignment="center")
 
     with _hcols[0]:
         _rev_chip  = ('<span class="stat-chip needs-review">⚠ Review</span>'
@@ -45,6 +48,23 @@ def render_header(s: AppState) -> None:
             st.session_state.viewer_nonce += 1
             st.rerun()
     with _hcols[2]:
+        _undo_hist = st.session_state.get("versionHistory", [])
+        if st.button("↶ Back", width="stretch", key="btn_undo",
+                     disabled=not _undo_hist,
+                     help="Undo the last change — revert to the previous version."):
+            _hist = st.session_state.versionHistory
+            _prev = _hist.pop()
+            st.session_state.versionHistory = _hist
+            st.session_state.currentLayout  = _prev
+            st.session_state.currentVersion = max(1, st.session_state.get("currentVersion", 1) - 1)
+            st.session_state.eval_result = None   # geometry may have changed → re-run analysis
+            st.session_state.eval_alts   = []
+            st.session_state.selected_el = ""
+            st.session_state.active_element_level = ""
+            st.session_state["selected_opt_bar_idx"] = -1
+            _write_json(EDITED_LAYOUT_PATH, _prev)
+            st.rerun()
+    with _hcols[3]:
         st.download_button(
             "Export JSON",
             data=json.dumps(layout_obj, indent=2, ensure_ascii=False),
@@ -52,7 +72,7 @@ def render_header(s: AppState) -> None:
             mime="application/json",
             width="stretch",
         )
-    with _hcols[3]:
+    with _hcols[4]:
         _revs = tuple(
             (h.get("prompt") or h.get("label") or "")
             for h in st.session_state.get("history", [])[-7:]
@@ -85,7 +105,7 @@ def render_header(s: AppState) -> None:
                 )
             except Exception as _ee:
                 st.caption(f"Export failed: {_ee}")
-    with _hcols[4]:
+    with _hcols[5]:
         with st.popover("⋮", width="stretch"):
             st.markdown(
                 f'<div style="font-size:.72rem;font-weight:700;color:#c8eeed;'

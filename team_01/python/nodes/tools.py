@@ -75,6 +75,31 @@ def get_action_tools() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "add_column",
+            "description": "Add a NEW column at a distance from a reference column, measured along the axes from that column. Use for 'add a column 2 m in x from C3' or 'put a column 1.5 m below C5'. dx is along X (east +, west −), dy along Y (north +, south −). Stays orthogonal.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "reference_id": {"type": "string", "description": "Column to measure the offset from."},
+                    "dx": {"type": "number", "description": "Metres along X (east +, west −). 0 / omit for none."},
+                    "dy": {"type": "number", "description": "Metres along Y (north +, south −). 0 / omit for none."},
+                },
+                "required": ["reference_id"],
+            },
+        },
+        {
+            "name": "add_beam",
+            "description": "Add a beam connecting two existing columns. The two columns MUST share an X (vertical beam) or a Y (horizontal beam) — diagonal beams are rejected. Use for 'add a beam between C3 and C5'.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "column_a": {"type": "string", "description": "First column id."},
+                    "column_b": {"type": "string", "description": "Second column id."},
+                },
+                "required": ["column_a", "column_b"],
+            },
+        },
+        {
             "name": "move_element",
             "description": "Move a column (or beam) to clear a window/door clash or fine-tune grid spacing. Use dx/dy in metres to nudge it, or absolute x/y to place it. Keep moves axis-aligned (dx OR dy) so the grid stays orthogonal. Beams joined to a moved column follow it automatically.",
             "inputSchema": {
