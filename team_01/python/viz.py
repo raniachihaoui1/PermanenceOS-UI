@@ -29,13 +29,28 @@ def _el_spec(el: dict) -> tuple:
 def _compute_diff(before: dict, after: dict) -> dict:
     """Return sets of 'level|id' keys: added, removed, changed.
     'changed' = a MATERIAL or SECTION/dimension change ONLY (moving a column is not a
-    'change' for diff purposes). Keyed per-level because ids repeat across levels."""
+    'change' for diff purposes). Keyed per-level because ids repeat across levels.
+
+    Guard: if the baseline has NO element with material set (un-seeded grid — diff_baseline
+    was captured before apply_material_override ran) but the current layout IS seeded,
+    treat material as a non-diffable field so seeding doesn't look like a user change."""
     b_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(before)}
     a_els = {f"{lk}|{el['id']}": el for lk, el in iter_all_structure(after)}
     added   = set(a_els) - set(b_els)
     removed = set(b_els) - set(a_els)
-    changed = {k for k in (set(a_els) & set(b_els))
-               if _el_spec(a_els[k]) != _el_spec(b_els[k])}
+    common  = set(a_els) & set(b_els)
+    # If the baseline is completely un-seeded (all material=None/empty) and the current
+    # layout IS seeded, suppress material-only phantom diffs — only flag section/dims changes.
+    _b_has_mat = any((b_els[k].get("attributes") or {}).get("material") for k in common)
+    _a_has_mat = any((a_els[k].get("attributes") or {}).get("material") for k in common)
+    if not _b_has_mat and _a_has_mat:
+        # Baseline was un-seeded; compare only non-material fields (section/dims).
+        def _spec_no_mat(el):
+            s = _el_spec(el)
+            return s[1:]   # drop material (index 0), keep section/dims/width/depth/col_dims
+        changed = {k for k in common if _spec_no_mat(a_els[k]) != _spec_no_mat(b_els[k])}
+    else:
+        changed = {k for k in common if _el_spec(a_els[k]) != _el_spec(b_els[k])}
     return {"added": added, "removed": removed, "changed": changed}
 
 
@@ -456,10 +471,12 @@ def _render_3d_viewport(
         if eval_result:
                 for b in eval_result.get("beams", []):
                         b_ok = b.get("bend_PASS") and b.get("shear_PASS") and b.get("defl_TL_PASS") and b.get("defl_LL_PASS")
-                        status_by_id[b.get("id", "")] = "pass" if b_ok else "fail"
+                        _bid = b.get("id", ""); _blk = b.get("level", "")
+                        status_by_id[f"{_blk}|{_bid}" if _blk else _bid] = "pass" if b_ok else "fail"
                 for c in eval_result.get("columns", []):
                         c_ok = c.get("stress_PASS") and c.get("buckling_PASS")
-                        status_by_id[c.get("id", "")] = "pass" if c_ok else "fail"
+                        _cid = c.get("id", ""); _clk = c.get("level", "")
+                        status_by_id[f"{_clk}|{_cid}" if _clk else _cid] = "pass" if c_ok else "fail"
 
         # Diff vs a baseline (Compare windows): added/changed recolour, removed render as ghosts.
         # Keys are "level|id" because element ids repeat across levels.
@@ -610,7 +627,8 @@ def _render_3d_viewport(
                 // Clash with a door/window opening → magenta.
                 if ((DATA.clashByKey || {{}})[level + '|' + el.id]) return 0xff3df0;
                 // Failing elements show red; otherwise colour by material.
-                if ((statusById[el.id] || 'none') === 'fail') return 0xff5050;
+                const _skey = level ? (level + '|' + el.id) : el.id;
+                if ((statusById[_skey] || statusById[el.id] || 'none') === 'fail') return 0xff5050;
                 return matColor((el.attributes || {{}}).material);
             }}
 
@@ -804,8 +822,9 @@ def _render_3d_viewport(
             let hovered = null;
             let selectedObj = null;
 
-            function statusLabel(id) {{
-                const s = statusById[id] || 'none';
+            function statusLabel(id, level) {{
+                const key = level ? (level + '|' + id) : id;
+                const s = statusById[key] || statusById[id] || 'none';
                 if (s === 'pass') return ['PASS', '#40d090'];
                 if (s === 'fail') return ['FAIL', '#ff5050'];
                 return ['not evaluated', DATA.isLight ? '#5a7070' : '#9ab'];
@@ -816,7 +835,7 @@ def _render_3d_viewport(
             function showHud(obj) {{
                 if (!obj) {{ hud.innerHTML = HUD_DEFAULT; return; }}
                 const d = obj.userData || {{}};
-                const [stxt, scol] = statusLabel(d.id || '');
+                const [stxt, scol] = statusLabel(d.id || '', d.level || '');
                 hud.innerHTML =
                     '<div style="font-weight:700;font-size:12px;margin-bottom:1px">' + (d.id || '?') + '</div>' +
                     '<div style="opacity:.85">' + (d.type || '') + (d.level ? ' &middot; ' + d.level : '') + '</div>' +

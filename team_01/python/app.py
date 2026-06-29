@@ -456,6 +456,15 @@ def _run_grid_options(layout: dict, material: str) -> list[dict]:
                         lay_copy.setdefault("meta", {})["material"] = material
                 except Exception as _rce:
                     st.session_state["_last_error"] = f"respect_openings: {_rce}"
+            # Seed per-element material + sections so the option is material-complete: the
+            # diff baseline isn't null-material (no phantom "whole model changed" after
+            # analysis), and exports show the right material. Real edits still diff.
+            try:
+                from nodes.modify import apply_material_override as _ami
+                lay_copy = json.loads(_ami(json.dumps(lay_copy), material))
+                lay_copy.setdefault("meta", {})["material"] = material
+            except Exception as _mse:
+                st.session_state["_last_error"] = f"seed material: {_mse}"
             opts.append({"layout": lay_copy, "evaluation": None})
 
         return opts
@@ -862,6 +871,22 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
             st.session_state["_last_error"] = f"LLM parse fallback: {_llm_err}"
             result = {"action": "final", "final_response": ""}
 
+        # ── Question / hypothetical guard ────────────────────────────────────────
+        # Detect prompts that are asking for advice, opinion, or a "what if"
+        # simulation rather than issuing a command. When this flag is set,
+        # any tool call that mutates the structure (set_material, remove, upgrade)
+        # is ignored and the agent falls through to a text-only answer instead.
+        _prompt_lower = prompt.lower()
+        _is_question_prompt = any(k in _prompt_lower for k in (
+            "what if", "if i ", "if we ", "would it", "should i", "should we",
+            "is it", "is that", "is steel", "is timber", "is rcc", "is concrete",
+            "better than", " vs ", "versus", "or steel", "or timber", "or rcc",
+            "or concrete", "good option", "good choice", "a good", "opinion",
+            "advice", "recommend", "what do you think", "make sense", "worth it",
+            "is upgrading", "is switching", "which is better", "which material",
+            "what material", "does it make", "?",
+        ))
+
         if result.get("action") == "tool":
             calls = result.get("tool_calls", [])
             # Advisory text from the agent (explanation + alternatives)
@@ -876,6 +901,10 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 if _cname == "evaluate_structure":
                     return "EVALUATE"
                 if _cname == "set_material":
+                    # Block material change when user is asking a question/opinion.
+                    if _is_question_prompt:
+                        result = {"action": "final", "final_response": _advisory}
+                        break
                     _mt = str(_cinput.get("material") or _cinput.get("value") or "").upper()
                     if _mt:
                         _lvl = str(_cinput.get("level") or "").strip()
@@ -893,6 +922,9 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                              "advisory": _advisory}))
                     # material set via set_attribute → real material switch
                     if _ms_action == "set_attribute" and _ms_attr == "material" and _ms_val:
+                        if _is_question_prompt:
+                            result = {"action": "final", "final_response": _advisory}
+                            break
                         return f"APPLY_MATERIAL:{str(_ms_val).upper()}"
                     if _ms_action == "set_attribute" and _ms_eid and _ms_val:
                         return ("APPLY_TOOL:" + json.dumps(
@@ -945,13 +977,189 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                         "Save snapshots / options and I can compare their costs.")
             return "Generate a grid and run analysis first, then I can compare option costs."
 
+        # ── "Best option / which snapshot is best" — rank options + snapshots + current ──
+        def _best_answer() -> str:
+            _items = list(_opt_cw)   # grid options (label, w, c, pass)
+            for _sn in st.session_state.get("snapshots", []):
+                _ev = _sn.get("eval_result")
+                if _ev:
+                    _sw, _sc = _eval_weight_cost(_ev)
+                    _sp = (_ev.get("summary", {}) or {}).get("overall_PASS")
+                    _items.append((_sn.get("label", "Snapshot"), _sw, _sc, _sp))
+            if eval_result:
+                _cw0, _cc0 = _eval_weight_cost(eval_result)
+                _cp0 = (eval_result.get("summary", {}) or {}).get("overall_PASS")
+                _items.append(("Current design", _cw0, _cc0, _cp0))
+            if not _items:
+                return ("Generate grid options or save snapshots and run analysis — "
+                        "then I can rank them and tell you the best.")
+            _passing = [i for i in _items if i[3]]
+            _pool = _passing or _items
+            _best = min(_pool, key=lambda x: (x[2], x[1]))   # cheapest, then lightest
+            _parts = [f"{l}: ${c:,.0f} ({w:.0f} kN, {'PASS' if p else 'FAIL'})"
+                      for l, w, c, p in _items]
+            _why = ("cheapest option that passes" if _passing
+                    else "cheapest — but note NONE pass yet, so upgrade/fix before building")
+            return ("Comparison — " + "; ".join(_parts)
+                    + f". **Best: {_best[0]}** ({_why}) at ${_best[2]:,.0f}, {_best[1]:.0f} kN.")
+
+        _is_best = any(k in prompt.lower() for k in
+                       ("best option", "best one", "best snapshot", "which option",
+                        "which is best", "which is the best", "recommend",
+                        "compare the option", "compare options", "compare saved",
+                        "compare snapshot", "compare both", "which one is best",
+                        "compare the snapshot"))
+        if _is_best:
+            return _best_answer()
+
         _is_cost = any(k in prompt.lower() for k in
                        ("cheap", "cost", "price", "expensive", "budget", "carbon", "$"))
         _generic = bool(resp) and any(p in resp.lower() for p in (
             "we can analyz", "we can analys", "i suggest", "to determine",
-            "various factors", "difficult to recommend", "without further"))
+            "various factors", "difficult to recommend", "without further",
+            "evaluation: pass", "evaluation: fail", "0 beam failure", "0 column failure"))
         if _is_cost and (not resp or _generic):
             return _cost_answer()
+
+        # ── Material comparison / "what if" advice ────────────────────────────
+        def _material_advice() -> str:
+            _MAT_INFO = {
+                "RCC":    ("cheapest (~$120/m³)", "medium spans 4–8 m", "heaviest (~24 kN/m³)", "fire-resistant, easy to form"),
+                "STEEL":  ("most expensive (~$2 400/m³)", "longest spans 8–20 m", "lightest (~77 kN/m³ but tiny sections)", "fast to erect, fully recyclable"),
+                "TIMBER": ("low cost (~$400/m³)", "short–medium spans 3–6 m", "very light (~5 kN/m³)", "lowest carbon, natural aesthetic"),
+            }
+            _cur = _mat_now
+            _lines = ["**Material comparison for your design:**\n"]
+            for _m, (_cost, _span, _wt, _note) in _MAT_INFO.items():
+                _tag = " ← **current**" if _m == _cur else ""
+                _lines.append(f"- **{_m}**: {_cost} · {_span} · {_wt} · {_note}{_tag}")
+            if eval_result:
+                _w, _c = _eval_weight_cost(eval_result)
+                _sm_now = (eval_result.get("summary") or {})
+                _pass = _sm_now.get("overall_PASS")
+                _lines.append(f"\nYour current **{_cur}** design: ≈ **${_c:,.0f}** · **{_w:.0f} kN** — {'PASS ✓' if _pass else 'FAIL ✗'}")
+            _lines.append("\nTo actually switch: type **\"change to steel\"** (or timber / concrete).")
+            return "\n".join(_lines)
+
+        _is_mat_advice = any(k in _prompt_lower for k in (
+            "what if", "better than", " vs ", "versus", "which material", "what material",
+            "or steel", "or timber", "or rcc", "or concrete", "steel or", "timber or",
+            "which is better", "is steel", "is timber", "is rcc", "is concrete",
+        )) and any(m in _prompt_lower for m in ("steel", "timber", "rcc", "concrete", "wood"))
+        if _is_mat_advice and (not resp or _generic):
+            return _material_advice()
+
+        # ── Follow-up / "explain more" ────────────────────────────────────────
+        _is_explain_more = any(k in _prompt_lower for k in (
+            "explain more", "explain further", "tell me more", "more detail",
+            "why is that", "why that", "how so", "why option", "elaborate",
+            "can you explain", "expand on", "go into more", "what does that mean",
+            "why is it", "why did you", "why do you", "why is option",
+        ))
+        if _is_explain_more:
+            _hist = st.session_state.get("history", [])
+            _last_r = _hist[-1].get("response", "") if _hist else ""
+            # ── Case 1: last answer was a best-option comparison ──────────────
+            if _last_r and ("Best:" in _last_r or "Comparison —" in _last_r or
+                            "best option" in _last_r.lower() or
+                            "Option 1" in _last_r):
+                _explain_lines = ["**Here's the reasoning in more detail:**\n"]
+                # Collect all option items for ranking
+                _opt_items_ex = []
+                for _sn_ex in st.session_state.get("snapshots", []):
+                    _ev_ex = _sn_ex.get("eval_result")
+                    if _ev_ex:
+                        _sw_ex, _sc_ex = _eval_weight_cost(_ev_ex)
+                        _sp_ex = (_ev_ex.get("summary", {}) or {}).get("overall_PASS")
+                        _opt_items_ex.append((_sn_ex.get("label", "Snapshot"), _sw_ex, _sc_ex, _sp_ex))
+                if eval_result:
+                    _sw0_ex, _sc0_ex = _eval_weight_cost(eval_result)
+                    _sp0_ex = (eval_result.get("summary", {}) or {}).get("overall_PASS")
+                    _opt_items_ex.append(("Current design", _sw0_ex, _sc0_ex, _sp0_ex))
+                if _opt_items_ex:
+                    _pass_ex = [i for i in _opt_items_ex if i[3]]
+                    _pool_ex = _pass_ex if _pass_ex else _opt_items_ex
+                    _best_ex = min(_pool_ex, key=lambda x: (x[2], x[1]))
+                    _sorted_ex = sorted(_opt_items_ex, key=lambda x: (0 if x[3] else 1, x[2]))
+                    _explain_lines.append(
+                        f"**Cost is directly tied to material volume.** "
+                        f"Fewer elements and smaller sections = less material used = lower cost. "
+                        f"Weight follows the same pattern — a lighter structure uses less material overall.\n"
+                    )
+                    if _pass_ex:
+                        _explain_lines.append(
+                            f"All {len(_pass_ex)} of {len(_opt_items_ex)} option(s) that pass satisfy "
+                            f"the structural checks (bending, shear, deflection for beams; stress and "
+                            f"buckling safety factor ≥ 3.0 for columns). "
+                            f"Since they're structurally equivalent, **cost becomes the deciding factor**.\n"
+                        )
+                    else:
+                        _explain_lines.append(
+                            "None of the options currently pass — the cheapest is suggested as a "
+                            "starting point. Run analysis and fix failing elements before building.\n"
+                        )
+                    _explain_lines.append("**Full ranking:**")
+                    for _rank_i, (_lbl_e, _w_e, _c_e, _p_e) in enumerate(_sorted_ex, 1):
+                        _status_e = "PASS ✓" if _p_e else "FAIL ✗"
+                        _explain_lines.append(
+                            f"{_rank_i}. **{_lbl_e}** — ${_c_e:,.0f} · {_w_e:.0f} kN · {_status_e}"
+                        )
+                    _explain_lines.append(
+                        f"\n**{_best_ex[0]}** ranks first because it has the lowest cost "
+                        + ("among passing options. " if _pass_ex else "overall. ")
+                        + "To lock it in, press **Save Snapshot** and apply it."
+                    )
+                else:
+                    _explain_lines.append(
+                        "Generate options and run analysis first — then ask again and I can explain "
+                        "the ranking in full."
+                    )
+                return "\n".join(_explain_lines)
+
+            # ── Case 2: last answer was a structural evaluation ───────────────
+            elif _last_r and ("PASS" in _last_r or "FAIL" in _last_r or
+                              "beam failure" in _last_r.lower() or
+                              "column failure" in _last_r.lower()):
+                if eval_result:
+                    _er_sm_ex = eval_result.get("summary", {}) or {}
+                    _bf_ex = _er_sm_ex.get("beam_failures", 0)
+                    _cf_ex = _er_sm_ex.get("column_failures", 0)
+                    _pass_ex2 = _er_sm_ex.get("overall_PASS")
+                    _w_ex2, _c_ex2 = _eval_weight_cost(eval_result)
+                    if _pass_ex2:
+                        return (
+                            f"**Why it passes:**\n"
+                            f"- All beam spans are short enough that bending stress, shear, and "
+                            f"deflection stay within code limits for **{_mat_now}** sections.\n"
+                            f"- All column heights are within safe buckling limits "
+                            f"(Euler factor of safety ≥ 3.0).\n"
+                            f"- Total structural weight: **{_w_ex2:.0f} kN** · "
+                            f"Estimated material cost: **${_c_ex2:,.0f}**.\n\n"
+                            f"You can still optimise — ask me to **'fix failing beams'** after "
+                            f"reducing sections, or **'compare options'** to find a lighter/cheaper pass."
+                        )
+                    else:
+                        return (
+                            f"**Why it fails:**\n"
+                            f"- **{_bf_ex} beam(s) failing**: bending moment or deflection exceeds the "
+                            f"allowable limit for the current span and section size. "
+                            f"Long spans need deeper beams or a midspan column.\n"
+                            f"- **{_cf_ex} column(s) failing**: compressive stress or Euler buckling "
+                            f"safety factor is below 3.0. Tall slender columns need larger sections.\n\n"
+                            f"**Quick fixes**: ask me to *'fix failing beams'* or "
+                            f"*'add a midspan column on B5'* to split the longest spans."
+                        )
+                return _last_r + "\n\n(Run **Run Analysis** first for a detailed structural breakdown.)"
+
+            # ── Case 3: any other prior answer ───────────────────────────────
+            elif _last_r and not _generic:
+                # Re-use the prior answer and add a note
+                return (
+                    _last_r
+                    + "\n\n*(That's the full breakdown available — ask me 'what is the best option?' "
+                    "or 'run analysis' for fresh data.)*"
+                )
+            # Fall through: let the LLM try with history context
 
         if not resp:
             # LLM deferred to the in-app pipeline — handle based on intent.
@@ -979,13 +1187,36 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 m for m in _pat if _rid(m) and len(m) <= 14
             ))
 
+            # ── Level extractor: "level 02", "level_02", "floor 2", "second floor" ──
+            def _extract_level(text: str) -> str:
+                """Return canonical level key (e.g. 'level_02') or '' if not found."""
+                import re as _rre
+                _t = text.lower()
+                # "level_02", "level02", "level 02"
+                m = _rre.search(r'level[_ ]?0*(\d+)', _t)
+                if m:
+                    return f"level_{int(m.group(1)):02d}"
+                # "floor 2", "2nd floor", "second floor" …
+                _floor_words = {"first": 1, "second": 2, "third": 3, "fourth": 4,
+                                "fifth": 5, "ground": 1}
+                for word, num in _floor_words.items():
+                    if word in _t:
+                        return f"level_{num:02d}"
+                m2 = _rre.search(r'(\d+)(?:st|nd|rd|th)?\s*floor', _t)
+                if m2:
+                    return f"level_{int(m2.group(1)):02d}"
+                return ""
+
+            _prompt_level = _extract_level(prompt)
+
             # ── ADD a beam between two columns (orthogonal only) ──────────────
             if ("beam" in _lower and any(k in _lower for k in ("add", "connect", "between"))
                     and len(_ids_in_prompt) >= 2):
-                return ("APPLY_TOOL:" + json.dumps(
-                    {"name": "add_beam",
-                     "input": {"column_a": _rid(_ids_in_prompt[0]),
-                               "column_b": _rid(_ids_in_prompt[1])}}))
+                _ab_in = {"column_a": _rid(_ids_in_prompt[0]),
+                          "column_b": _rid(_ids_in_prompt[1])}
+                if _prompt_level:
+                    _ab_in["level_key"] = _prompt_level
+                return "APPLY_TOOL:" + json.dumps({"name": "add_beam", "input": _ab_in})
 
             # ── ADD a column at an offset from a reference column ──────────────
             if (any(k in _lower for k in ("add", "put", "place")) and "column" in _lower
@@ -997,10 +1228,11 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 _neg = any(k in _lower for k in ("left", "west", "south", "below",
                                                  "down", "minus", "negative"))
                 _amt = -_amt if _neg else _amt
-                return ("APPLY_TOOL:" + json.dumps(
-                    {"name": "add_column",
-                     "input": {"reference_id": _rid(_ids_in_prompt[0]),
-                               ("dy" if _is_y else "dx"): _amt}}))
+                _ac_in = {"reference_id": _rid(_ids_in_prompt[0]),
+                          ("dy" if _is_y else "dx"): _amt}
+                if _prompt_level:
+                    _ac_in["level_key"] = _prompt_level
+                return "APPLY_TOOL:" + json.dumps({"name": "add_column", "input": _ac_in})
 
             # ── ADD a midspan column (split a beam) ───────────────────────────
             if (any(k in _lower for k in ("add column", "add a column", "midspan",
@@ -1026,11 +1258,21 @@ def _run_agent_chat(prompt: str, layout: dict, eval_result: dict | None = None) 
                 return "APPLY_TOOL:" + json.dumps({"name": "move_element", "input": _mv_in})
 
             # ── MATERIAL switch (all elements) ────────────────────────────────
+            # Only execute if this is a command, NOT a question/opinion request.
+            # "is steel a good option?" or "should I upgrade to timber?" must NOT trigger
+            # a material change — the user is asking for advice, not issuing a command.
+            _is_opinion = any(k in _lower for k in (
+                "is it", "is that", "good option", "good choice", "a good", "better option",
+                "would it", "should i", "should we", "is steel", "is timber", "is rcc",
+                "is concrete", "opinion", "advice", "think about", "worth it",
+                "recommend", "what do you think", "is it worth", "is upgrading",
+                "is switching", "make sense", "does it make", "?",
+            ))
             _mat_kw = ("STEEL" if "steel" in _lower
                        else "TIMBER" if ("timber" in _lower or "wood" in _lower)
                        else "RCC" if ("rcc" in _lower or "concrete" in _lower)
                        else "")
-            if _mat_kw and any(k in _lower for k in
+            if _mat_kw and not _is_opinion and any(k in _lower for k in
                                ("switch", "change", "make it", "convert", "use ", "to ")):
                 return f"APPLY_MATERIAL:{_mat_kw}"
 
@@ -1512,17 +1754,24 @@ if submitted and prompt_input.strip():
                              + f"Moved **{_mid}** {_where}. Re-run analysis to confirm it still holds.")
             elif _tn == "add_column":
                 from nodes.modify import add_column_at_offset as _add_col
+                import re as _re_lk
+                def _parse_level_kw(text: str) -> str:
+                    m = _re_lk.search(r'level[_ ]?0*(\d+)', text.lower())
+                    return f"level_{int(m.group(1)):02d}" if m else ""
                 _rid_c = _ti.get("reference_id", "") or _ti.get("element_id", "")
                 if _rid_c:
                     _cdx = float(_ti.get("dx") or 0.0)
                     _cdy = float(_ti.get("dy") or 0.0)
+                    _col_lk = (_ti.get("level_key") or _ti.get("level") or
+                               _parse_level_kw(prompt))
                     _new_l = json.loads(_add_col(json.dumps(layout_obj), _rid_c,
-                                                 _cdx, _cdy, _mat_now))
+                                                 _cdx, _cdy, _col_lk, _mat_now))
                     if _count_elements(_new_l) != _count_elements(layout_obj):
                         _push_version(_new_l)
-                        _status = _auto_eval_after_change(_new_l)   # see effect immediately
+                        _status = _auto_eval_after_change(_new_l)
+                        _on_lk = f" on **{_col_lk}**" if _col_lk else ""
                         _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
-                                 + f"Added a column at ({_cdx:+g}, {_cdy:+g}) m from **{_rid_c}** — {_status}. "
+                                 + f"Added a column at ({_cdx:+g}, {_cdy:+g}) m from **{_rid_c}**{_on_lk} — {_status}. "
                                  "Note: a free-standing column carries no load until a **beam sits on it** — "
                                  "to actually fix a failing beam, put the column under it "
                                  "(*\"add a midspan column on <beam>\"*) or connect it (*\"add a beam between …\"*).")
@@ -1530,14 +1779,22 @@ if submitted and prompt_input.strip():
                         _resp = f"Couldn't add the column — **{_rid_c}** not found."
             elif _tn == "add_beam":
                 from nodes.modify import add_beam as _add_beam
+                import re as _re_lk2
+                def _parse_level_kw2(text: str) -> str:
+                    m = _re_lk2.search(r'level[_ ]?0*(\d+)', text.lower())
+                    return f"level_{int(m.group(1)):02d}" if m else ""
                 _ca, _cb = _ti.get("column_a", ""), _ti.get("column_b", "")
                 if _ca and _cb:
-                    _new_l = json.loads(_add_beam(json.dumps(layout_obj), _ca, _cb, None, _mat_now))
+                    _beam_lk = (_ti.get("level_key") or _ti.get("level") or
+                                _parse_level_kw2(prompt))
+                    _new_l = json.loads(_add_beam(json.dumps(layout_obj), _ca, _cb,
+                                                  _beam_lk or None, _mat_now))
                     if _count_elements(_new_l) != _count_elements(layout_obj):
                         _push_version(_new_l)
                         _status = _auto_eval_after_change(_new_l)
+                        _on_lk2 = f" on **{_beam_lk}**" if _beam_lk else ""
                         _resp = ((f"{_advisory_txt}\n\n" if _advisory_txt else "")
-                                 + f"Added a beam between **{_ca}** and **{_cb}** — {_status}.")
+                                 + f"Added a beam between **{_ca}** and **{_cb}**{_on_lk2} — {_status}.")
                     else:
                         _resp = (f"Couldn't add a beam between **{_ca}** and **{_cb}** — they must share "
                                  "an X or a Y (I never create diagonal beams). Pick two columns in the "
@@ -1742,7 +1999,11 @@ with tab_mod:
             else:
                 from nodes.modify import apply_material_override
                 _ls2 = apply_material_override(json.dumps(layout_obj), _mat_now)
-                _push_version(json.loads(_ls2))
+                _seeded = json.loads(_ls2)
+                _push_version(_seeded)
+                # Keep diff_baseline in sync: if it was un-seeded, updating it here
+                # prevents ALL elements from appearing "changed" in the diff view.
+                st.session_state.diff_baseline = json.loads(json.dumps(_seeded))
             with st.spinner("Evaluating structure…"):
                 _ev2 = _run_evaluate(_ls2, sdl=_sdl_now, ll=_ll_now)
             if _ev2:
